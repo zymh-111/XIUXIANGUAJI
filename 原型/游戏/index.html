@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>秘境录 · 挂机刷宝</title>
+<!--
+  ★ 布局依据：美术资源\极简竖窗_可点击.html（设计稿，当前主方案）
+    窗口 400×648 竖窗 · 取消面板方框 · 只留留白 + 一条 #ffffff14 细线
+    修仙感靠四样：霞鹜文楷 / 大面积留白 / 细分隔线 / 一枚朱砂印
+    配色收敛四个：墨 #0c0d0e · 纸白 #cfc8ba · 金 #c9a227 · 朱砂 #a8392c
+    四页签：境（战斗）· 装（部位+背包）· 宗（宗门/传承/功法/法宝）· 录（日志）
+-->
+<style>
+  @font-face{font-family:'WenKai';src:url('../../美术资源/02_字体/LXGWWenKai-Regular.ttf') format('truetype');font-display:swap}
+  @font-face{font-family:'WenKaiM';src:url('../../美术资源/02_字体/LXGWWenKai-Medium.ttf') format('truetype');font-display:swap}
+  @font-face{font-family:'Smiley';src:url('../../美术资源/02_字体/SmileySans_得意黑/SmileySans-Oblique.ttf') format('truetype');font-display:swap}
+
+  :root{
+    /* ★ 四色收敛（设计稿定义） */
+    --ink:#0c0d0e; --paper:#cfc8ba; --gold:#c9a227; --cinnabar:#a8392c;
+    /* 派生色 */
+    --bg:#101113; --line:#ffffff14; --line2:#ffffff0f;
+    --dim:#7e7768; --dim2:#5d574c; --txt:#d8d1c3; --bright:#e6ded0;
+    --green:#63b394; --red:#c0604f;
+    /* 品质色（保留，装备需要） */
+    --q0:#8b93a3; --q1:#5fb8a0; --q2:#4a7fbf; --q3:#a45ec0; --q4:#d4a53a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--paper); overflow:hidden;
+    font:13px/1.6 "WenKai","KaiTi","Songti SC",serif;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  /* ============ 窄窗 ============ */
+  #win{
+    width:400px; height:648px; position:relative;
+    border-radius:9px; overflow:hidden; background:var(--ink);
+    border:1px solid #ffffff17;
+    box-shadow:0 26px 70px #000000e0,0 0 0 1px #00000090;
+    display:flex; flex-direction:column;
+  }
+  #win .grain{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.04;
+    mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E")}
+
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;z-index:1}
+  .screen.on{display:flex}
+
+  /* ============ 顶部（世代 + 印章） ============ */
+  .top{display:flex;align-items:flex-start;justify-content:space-between;padding:15px 18px 0;flex:0 0 auto}
+  .gen{font-size:11px;color:var(--dim);letter-spacing:2px;padding-top:3px}
+  .gen b{color:var(--paper);font-weight:400;font-size:12px}
+  .seal{width:26px;height:26px;border:1px solid var(--cinnabar);color:var(--cinnabar);
+    display:flex;align-items:center;justify-content:center;border-radius:2px;
+    opacity:.85;flex:0 0 auto}
+  .seal span{writing-mode:vertical-rl;font-size:9px;line-height:1.05;letter-spacing:1px}
+
+  /* ★ 事件横幅 */
+  #eventBar{margin:10px 18px 0;padding:7px 10px;border:1px solid var(--cinnabar);
+    border-radius:3px;font-size:11px;letter-spacing:1px;color:#d9705f;
+    background:#a8392c14;display:flex;justify-content:space-between;align-items:baseline}
+  #eventBar b{color:var(--cinnabar);font-weight:400;letter-spacing:2px}
+  #eventBar .left{color:#8c8574;font-size:10px}
+
+  /* ============ 境 · 场景 ============ */
+  .scene{position:relative;isolation:isolate;margin:14px 18px 0;height:246px;border-radius:3px;
+    overflow:hidden;background:#0a0b0c;flex:0 0 auto}
+  .scene img{width:100%;height:100%;object-fit:cover;object-position:center 30%;
+    filter:brightness(.5) saturate(.42) contrast(1.05)}
+  .scene .veil{position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 42%,transparent 0%,rgba(8,9,10,.72) 100%),
+               linear-gradient(180deg,rgba(10,11,12,.5),rgba(10,11,12,.86))}
+  .qilabel{position:absolute;z-index:3;left:14px;bottom:11px;font-size:10.5px;color:#8c8574;letter-spacing:2px}
+  .qilabel b{color:var(--gold);font-weight:400}
+  #battleInfo{position:absolute;z-index:3;right:14px;bottom:11px;font-size:10.5px;color:#8c8574;
+    letter-spacing:1px;text-align:right;line-height:1.7}
+  #battleInfo b{color:var(--paper);font-weight:400}
+  #battleInfo b.low{color:var(--red)}
+  #battleInfo .dim{color:var(--dim2)}
+
+  /* 战斗角色（保留原有观感，缩到窄窗里） */
+  #battleWrap{position:absolute;inset:0;z-index:4}
+  #reachRing{position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);
+    border-radius:50%;z-index:2;pointer-events:none;border:1px solid #5aa9e64d}
+  #hero{position:absolute;left:50%;top:56%;width:34px;height:46px;
+    transform:translate(-50%,-50%);z-index:5;pointer-events:none;
+    transition:left .18s linear, top .18s linear}
+  #hero .halo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:44px;height:44px;border-radius:50%;border:1px solid #c9a2273d;
+    animation:halo 2.4s ease-out infinite}
+  @keyframes halo{0%{transform:translate(-50%,-50%) scale(.6);opacity:.8}
+    100%{transform:translate(-50%,-50%) scale(1.5);opacity:0}}
+  #hero .head{position:absolute;left:50%;top:2px;transform:translateX(-50%);
+    width:10px;height:10px;border-radius:50%;background:#cfc8ba}
+  #hero .torso{position:absolute;left:50%;top:13px;transform:translateX(-50%);
+    width:14px;height:20px;border-radius:3px;background:linear-gradient(180deg,#cfc8ba,#8c8574)}
+  #hero .legs{position:absolute;left:50%;top:34px;transform:translateX(-50%);
+    width:12px;height:12px;background:linear-gradient(180deg,#8c8574,#5d574c)}
+  #hero .hpwrap{position:absolute;left:50%;top:-9px;transform:translateX(-50%);
+    width:30px;height:2px;background:#ffffff1a;overflow:hidden}
+  #hero .hpwrap i{display:block;height:100%;width:100%;
+    background:linear-gradient(90deg,#7d6118,#d9b84a)}
+  #hero.dodge .torso{box-shadow:0 0 18px #63b394cc;background:linear-gradient(180deg,#7fd8bc,#2f9e58)}
+  #hero.dash{filter:brightness(1.8)}
+  #arena{position:absolute;inset:0}
+  /* ★ 敌人（Round 14 补全：此前重写 HTML 时把这段写残了，
+       只剩 position/border-radius、没有尺寸 ⇒ 宽高 0 ⇒ 完全看不见怪） */
+  .mob{position:absolute;width:12px;height:12px;border-radius:50%;
+    background:radial-gradient(circle at 35% 32%,#ff9a8a,#b8332a);
+    border:1px solid #ff6b5a;transform:translate(-50%,-50%);
+    transition:left .28s linear, top .28s linear, opacity .15s;z-index:3}
+  .mob.elite{width:20px;height:20px;border-radius:5px;
+    background:radial-gradient(circle at 35% 32%,#ffdf90,#c9871b);
+    border:1px solid #ffc84a;z-index:4}
+  .mob.hit{filter:brightness(2.6)}
+  .mob .hpbar{position:absolute;left:50%;top:-6px;transform:translateX(-50%);
+    width:90%;height:2px;background:#00000090;overflow:hidden}
+  .mob .hpbar i{display:block;height:100%;width:100%;background:#ffffffcc}
+  /* 敌人在【场景之上】（否则会被 .veil 的暗角盖住） */
+  #battleWrap{z-index:4}
+  #battleBarWrap{position:absolute;left:0;right:0;bottom:0;height:1px;background:#ffffff1a}
+  #battleBar{height:100%;width:0;background:linear-gradient(90deg,#7d6118,#d9b84a)}
+  #battleWrap.breaking{box-shadow:inset 0 0 60px #c9a22766}
+
+  /* 飘字 */
+  .pop{position:absolute;font-size:11px;pointer-events:none;z-index:9;
+    text-shadow:0 1px 3px #000}
+  .pop.crit{color:#e8cc72;font-size:14px;font-weight:700}
+  .pop.ke{color:#7fd8bc;font-size:15px;font-weight:800}
+  .pop.dmg{color:#d8d1c3} .pop.miss{color:#7e7768}
+  .pop.dodge{color:#63b394} .pop.break{color:#f0d080;font-size:16px;font-weight:800}
+
+  /* ============ 修为条 ============ */
+  #qiWrap{margin:16px 18px 0;flex:0 0 auto}
+  #qiWrap .qi-lbl{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:11px;color:var(--dim);letter-spacing:1px;margin-bottom:7px}
+  #qiWrap .qi-lbl b{color:var(--bright);font-size:15px;letter-spacing:2px;font-weight:400}
+  #qiTierTxt{color:#8c8574;font-size:11px}
+  #qiBarOuter{height:1px;background:#ffffff1a;position:relative}
+  #qiBar{position:absolute;left:0;top:0;height:1px;width:0;
+    background:linear-gradient(90deg,#7d6118,#d9b84a);transition:width .25s}
+  #qiBar::after{content:'';position:absolute;right:-2px;top:-2px;width:5px;height:5px;
+    border-radius:50%;background:#d9b84a;box-shadow:0 0 7px #d9b84a}
+  #qiTxt{display:block;margin-top:7px;font-size:10px;color:var(--dim2);
+    letter-spacing:1px;text-align:right;font-variant-numeric:tabular-nums}
+
+  /* ============ 属性行（.stat 风格） ============ */
+  #hud{padding:0 18px;margin-top:12px;flex:1 1 auto;overflow-y:auto}
+  #hud .stat{display:flex;justify-content:space-between;align-items:baseline;
+    padding:7px 0;border-top:1px solid var(--line2);font-size:12px}
+  #hud .stat .k{color:var(--dim);letter-spacing:2px;font-size:11px}
+  #hud .stat .v{color:var(--bright);font-variant-numeric:tabular-nums;letter-spacing:1px}
+  #hud .stat .v.gold{color:var(--gold)} #hud .stat .v.low{color:var(--red)}
+  #hud .stat .v small{color:#6d675b;font-size:10.5px;margin-left:5px;letter-spacing:0}
+
+  /* ============ 按钮（细边 · 无方框感） ============ */
+  .btns{display:flex;gap:7px;padding:12px 18px 0;flex:0 0 auto;flex-wrap:wrap}
+  button{flex:1;padding:8px 10px;border:1px solid #ffffff2b;border-radius:4px;
+    cursor:pointer;background:#ffffff0a;color:#b9c2d0;font-size:12px;
+    font-family:"WenKai",serif;letter-spacing:1px;transition:.15s;white-space:nowrap}
+  button:hover{border-color:#ffffff66;color:#fff}
+  button.primary{border-color:var(--gold);color:#e0c464;background:#c9a22722}
+  button.primary:hover{background:#c9a22733}
+  button.danger{border-color:var(--cinnabar);color:#d9705f;background:#a8392c1a}
+  button.wide{flex-basis:100%}
+
+  /* ============ 底部页签 ============ */
+  .nav{display:flex;border-top:1px solid var(--line);flex:0 0 auto;margin-top:auto}
+  .nav div{flex:1;text-align:center;padding:13px 0 14px;font-size:12.5px;
+    color:var(--dim2);letter-spacing:4px;cursor:pointer;position:relative;
+    user-select:none;transition:color .16s}
+  .nav div:hover{color:#8c8574}
+  .nav div.on{color:var(--gold)}
+  .nav div.on::before{content:'';position:absolute;top:-1px;left:50%;transform:translateX(-50%);
+    width:22px;height:1px;background:var(--gold)}
+
+  /* ============ 滚动区 ============ */
+  .scroll{flex:1 1 auto;overflow-y:auto;padding:0 18px 12px}
+  .scroll::-webkit-scrollbar{width:3px}
+  .scroll::-webkit-scrollbar-thumb{background:#ffffff1f}
+
+  /* ============ 装 · 身体分区 ============ */
+  #zones{position:relative}
+  .zone{border:1px dashed #ffffff1f;border-radius:3px;position:relative}
+  .zone .zname{font-size:10px;color:var(--dim2);padding:3px 5px;letter-spacing:1px;
+    display:flex;justify-content:space-between;align-items:baseline}
+  .zone .zname em{font-style:normal;color:var(--gold);font-variant-numeric:tabular-nums}
+  .zone .zgrid{position:relative}
+  .zone .zgrid .cell{position:absolute;border:1px solid var(--line2);border-radius:1px}
+  .zone .zgrid .cell.filled{border-color:transparent}
+  .zone .zgrid .it{border:1px solid;border-radius:1px;display:flex;
+    align-items:center;justify-content:center;font-size:9px;line-height:1.1;
+    overflow:hidden;text-align:center;word-break:break-all;cursor:pointer}
+  .zone.dragover{border-color:var(--gold);background:#c9a2270f}
+
+  /* ============ 背包 / 掉落 ============ */
+  .flt{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px;
+    color:var(--dim);padding:7px 0;border-top:1px solid var(--line2)}
+  select{background:#141517;color:var(--paper);border:1px solid #ffffff1f;
+    border-radius:3px;font-size:11px;padding:2px 4px;font-family:"WenKai",serif}
+  label{display:inline-flex;align-items:center;gap:3px;font-size:11px}
+  #bagList{max-height:none}
+  .bag-i{display:flex;align-items:baseline;gap:7px;padding:7px 0;
+    border-top:1px solid var(--line2);font-size:12px;cursor:pointer;position:relative}
+  .bag-i .q{flex:0 0 auto;font-size:10.5px;letter-spacing:1px}
+  .bag-i .nm{flex:1;color:var(--txt);letter-spacing:1px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .bag-i .nm b{font-weight:400;color:var(--bright)}
+  .bag-i .dim{color:var(--dim2);font-size:10.5px}
+  .bag-i .af{font-size:9.5px;color:#8a95a8;letter-spacing:-0.5px}
+  .bag-i .sg{font-size:9.5px;color:var(--gold)}
+  .bag-i .sz{font-size:10px;color:var(--dim2);font-variant-numeric:tabular-nums}
+  .bag-i .up{color:var(--green);font-size:11px;font-variant-numeric:tabular-nums}
+  .bag-i .down{color:var(--red);font-size:11px;font-variant-numeric:tabular-nums}
+  .bag-i .same{color:var(--dim2);font-size:11px}
+  .bag-i.good{background:#63b3940a}
+  .bag-i.spec{border-left:2px dashed;padding-left:7px;margin-left:-9px}
+  .bag-i.spec .nm b{font-weight:600}
+  .spec-desc{font-size:9.5px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #cmpBox{font-size:11px;color:var(--dim)}
+
+  /* ============ 宗 · 竖窗（保留"极简竖窗"语汇） ============ */
+  .vwin-row{display:flex;gap:8px;align-items:stretch;padding:8px 0 0}
+  .vwin{flex:1;min-width:0;border:1px solid var(--line2);border-radius:3px;
+    padding:8px 7px;position:relative;display:flex;flex-direction:column}
+  .vwin-t{writing-mode:vertical-rl;font-size:11.5px;color:#8c8574;letter-spacing:4px;
+    height:22px;margin:0 auto}
+  .vwin-b{flex:1;min-width:0;font-size:11px;margin-top:6px;
+    border-top:1px solid var(--line2);padding-top:6px}
+  .sc-head{display:flex;flex-direction:column;gap:2px;font-size:10.5px}
+  .sc-head .rank{color:var(--gold);font-weight:400;letter-spacing:1px}
+  .sc-head .honor{color:#c9a227;font-size:10px}
+  .sc-pool{font-size:9.5px;color:var(--dim2);margin-top:3px;line-height:1.6}
+  .sc-up{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px;font-size:10px;
+    padding:4px 0;border-top:1px solid var(--line2)}
+  .sc-up .nm{color:#9aa5b8;width:100%}
+  .sc-up .lv{color:#6ea8fe;font-size:9.5px}
+  .sc-up .dsc{flex:1;color:var(--dim2);font-size:9.5px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .sc-up button{flex:0 0 auto;font-size:9px;padding:1px 5px;border-radius:3px}
+  .sc-up button:disabled{opacity:.35;cursor:default}
+  .lc{display:flex;flex-direction:column;gap:1px;padding:3px 0;font-size:10.5px}
+  .lc b{font-variant-numeric:tabular-nums;font-weight:400}
+  .lc b.gold{color:var(--gold)} .lc b.ok{color:var(--green)} .lc b.bad{color:var(--red)}
+  .lc .hint{font-size:9.5px;color:var(--dim2)}
+  .gf-row{display:flex;gap:3px;align-items:center;font-size:10px;padding:3px 0}
+  .gf-row .tp{width:24px;color:var(--dim2);flex:0 0 auto;font-size:9.5px}
+  .gf-row select{flex:1;font-size:10px;padding:1px 2px;min-width:0}
+  .gf-stack{font-size:9.5px;color:var(--gold);padding-left:27px}
+  .prio{display:inline-flex;align-items:center;gap:1px;font-size:9.5px;color:#9aa5b8;
+    background:#161c26;border:1px solid #ffffff12;border-radius:3px;
+    padding:0 3px;margin:1px 2px 1px 0}
+  .prio b{cursor:pointer;color:#5a6478;font-size:9px;padding:0 1px;user-select:none}
+  .prio b:hover{color:var(--gold)}
+  /* ★ Round 24：法宝面板改为「只显示已装 + 折叠切换」（用户选 B） */
+  .fb-slot{display:flex;gap:4px;align-items:baseline;font-size:10.5px;padding:3px 0}
+  .fb-slot .lb{color:#66708a;font-size:9.5px;flex:0 0 auto}
+  .fb-swap{margin-top:3px}
+  .fb-swap summary{font-size:10px;color:#66708a;cursor:pointer;padding:2px 0;
+    list-style:none;user-select:none}
+  .fb-swap summary::-webkit-details-marker{display:none}
+  .fb-swap summary:before{content:"▸ ";color:var(--gold)}
+  .fb-swap[open] summary:before{content:"▾ "}
+  .fb-swap summary:hover{color:var(--paper)}
+
+  .fb-row{display:flex;gap:3px;align-items:center;font-size:10px;padding:3px 0}
+  .fb-row .nm{flex:1;cursor:pointer;padding:1px 3px;border-radius:3px;
+    border:1px solid transparent;font-size:10px}
+  .fb-row .nm.on{background:#1a2230;border-color:var(--gold)}
+  .fb-row .nm .wx{font-size:9.5px;margin-left:3px}
+  .fb-stack{font-size:9.5px;color:var(--gold);padding-left:3px}
+  .lg-rule{display:flex;gap:3px;align-items:center;font-size:10px;padding:3px 0}
+  .lg-rule select{flex:1;font-size:10px;min-width:0}
+
+  /* 传承池条目（★ 新增：可花荣誉点提取） */
+  .pool-it{display:flex;align-items:baseline;gap:4px;font-size:10px;padding:4px 0;
+    border-top:1px solid var(--line2)}
+  .pool-it .nm{flex:1;color:var(--txt);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
+  .pool-it button{flex:0 0 auto;font-size:9px;padding:1px 4px}
+
+  /* ★ Boss（Round 29）：复用 AOE 系统，只是【更大 + 金边 + 会呼吸】 */
+  .mob.boss{width:26px !important;height:26px !important;border-radius:5px;
+    border:2px solid var(--gold) !important;
+    box-shadow:0 0 10px #c9a22788, inset 0 0 6px #c9a22744;
+    animation:bossBreath 1.4s ease-in-out infinite;z-index:8}
+  @keyframes bossBreath{0%,100%{transform:scale(1);box-shadow:0 0 8px #c9a22766}
+    50%{transform:scale(1.12);box-shadow:0 0 16px #c9a227cc}}
+  .mob.boss .bossTag{position:absolute;left:50%;top:-13px;transform:translateX(-50%);
+    font-size:9px;color:var(--gold);white-space:nowrap;letter-spacing:1px;
+    text-shadow:0 1px 3px #000}
+  /* Boss 出场：一次性闪屏 */
+  #battleWrap.boss-in::after{content:'';position:absolute;inset:0;z-index:9;
+    background:radial-gradient(ellipse at 50% 50%, #c9a22755, transparent 70%);
+    animation:bossFlash .8s ease-out forwards;pointer-events:none}
+  @keyframes bossFlash{from{opacity:1}to{opacity:0}}
+
+/* ★ 功法面板的稳定子容器（Round 24）*/
+.gf-main{display:block}
+.gf-prio-box{display:flex;align-items:baseline;gap:4px;flex-wrap:wrap}
+.gf-cd-box{margin-top:3px}
+
+/* ★ 门规（训话的上锁版 · Round 34）*/
+.rl-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:4px;display:flex;justify-content:space-between}
+.rl-hd .n{color:#5d574c}
+.rl-row{display:flex;gap:5px;align-items:baseline;font-size:10px;padding:2px 0}
+.rl-row .ax{color:var(--gold);flex:0 0 auto}
+.rl-row .v{color:var(--paper);flex:0 0 auto}
+.rl-row .by{color:#5d574c;font-size:9px;flex:1;text-align:right}
+.rl-row button{font-size:9px;padding:0 4px;background:transparent;border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;cursor:pointer}
+.rl-row button:hover{border-color:#c0604f;color:#e08a72}
+.rl-row.neg .ax{color:#c08070}
+.rl-row.neg button:hover{border-color:var(--gold);color:var(--gold)}
+.rl-add{font-size:10px;color:#5d574c;margin-top:3px}
+.rl-add button{font-size:9px;padding:1px 5px;margin-left:4px;background:transparent;border:1px solid #c9a22755;border-radius:2px;color:var(--gold);cursor:pointer}
+.rl-add button:hover{background:#1a2230;border-color:var(--gold)}
+.rl-note{font-size:9px;color:#5d574c;margin-top:4px;line-height:1.6}
+
+/* ★ 重新开始（Round 30）*/
+.rs-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:4px}
+.rs-warn{font-size:9.5px;color:#c0604f;line-height:1.5;margin-bottom:6px}
+.rs-row{display:flex;gap:6px}
+.rs-row button{flex:1;font-size:10px;padding:4px 0;background:transparent;border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer}
+.rs-row button:hover{border-color:#ffffff44;color:var(--paper)}
+.rs-row button#btnReset{border-color:#c0604f55;color:#c08070}
+.rs-row button#btnReset:hover{border-color:#c0604f;background:#2a1414;color:#e08a72}
+.rs-row button#btnReset.armed{border-color:#e05555;background:#3a1414;color:#ff8a6a;animation:rsArmed .5s infinite alternate}
+@keyframes rsArmed{from{opacity:.75}to{opacity:1}}
+
+/* ★ 编年史（Round 35）*/
+.cr-empty{color:#5d574c;font-size:11px;margin:6px 0}
+.cr-ch{margin:0 0 12px;padding:0 0 10px;border-bottom:1px solid #ffffff0f}
+.cr-ch:last-child{border-bottom:none}
+.cr-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:5px;gap:6px}
+.cr-hd b{color:var(--gold);font-weight:400;letter-spacing:1px;flex:0 0 auto}
+.cr-grow{font-size:9.5px;color:#8fd8b8;text-align:right}
+.cr-body{padding-left:2px}
+.cr-li{font-size:10.5px;color:#9a9284;line-height:1.75;padding:1px 0;font-variant-numeric:tabular-nums}
+.cr-li.cr-break{color:var(--paper)}
+.cr-li.cr-myth{color:#c9a227}
+.cr-li.cr-legend{color:#b08ad0}
+.cr-li.cr-ascend{color:#ffd85c}
+.cr-li.cr-bad{color:#c08070}
+.cr-li.cr-dujie{color:#8fd8b8}
+.cr-ft{font-size:9.5px;color:#5d574c;margin-top:5px}
+.cr-sect{margin-top:14px;padding-top:10px;border-top:1px solid #ffffff1a}
+.cr-sect-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:5px}
+.cr-si{font-size:10px;color:#7e7768;line-height:1.8;font-variant-numeric:tabular-nums}
+.cr-si.cr-rank{color:var(--gold)}
+.cr-si.cr-rule{color:#8fd8b8}
+.cr-si.cr-neg{color:#c08070}
+.cr-si.cr-recruit{color:#66708a}
+
+/* ★ 宝库处置策略（Round 27） */
+  .vp-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:4px}
+  .vp-row{display:flex;align-items:center;gap:3px;padding:2px 0;font-size:10px}
+  .vp-row .q{width:30px;flex:0 0 auto;font-size:10px}
+  .vp-row button{font-size:9px;padding:1px 4px;background:transparent;
+    border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;cursor:pointer}
+  .vp-row button:hover{border-color:#ffffff33;color:var(--paper)}
+  .vp-row button.on{background:#1a2230;border-color:var(--gold);color:var(--gold)}
+  .vp-stat{font-size:9.5px;color:#5d574c;margin-top:4px}
+
+  /* ★ 徽记（神话传承的封印开关 · Round 25） */
+  .pool-it.sealed{opacity:.72}
+  .pool-it.sealed .nm{text-decoration:line-through;text-decoration-color:#5d574c}
+  .seal-b{font-size:10px;padding:0 3px;margin-right:2px;
+    background:transparent;border:1px solid #ffffff1a;border-radius:2px;
+    color:#c9a227;cursor:pointer;line-height:1.4}
+  .seal-b:hover{border-color:var(--gold)}
+
+  /* ★ 日志的【第几代】标签（Round 24） */
+  .lg .gen-tag{display:inline-block;min-width:26px;margin-right:5px;padding:0 3px;
+    border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;font-size:9px;
+    font-weight:400;text-align:center;vertical-align:1px}
+  .lg.gen-sep{color:var(--gold);font-size:10px;letter-spacing:3px;
+    margin:5px 0 3px;text-align:center;opacity:.75}
+
+  /* ★ 弟子名册（Round 22） */
+  .rs-row{display:flex;align-items:baseline;gap:5px;font-size:10px;padding:3px 0;
+    border-top:1px solid var(--line2)}
+  .rs-row .role{width:26px;flex:0 0 auto;font-size:9.5px}
+  .rs-row .role.front{color:var(--gold)}
+  .rs-row .role.back{color:#7fb8f0}
+  .rs-row .role.idle{color:var(--dim2)}
+  .rs-row .nm{color:var(--txt);flex:0 0 auto}
+  .rs-row .tal{color:#9aa5b8;font-size:9.5px}
+  .rs-row .life{flex:1;text-align:right;color:#8c8574;font-variant-numeric:tabular-nums}
+  .rs-row .post{color:#c9a86e;font-size:9.5px}
+  .rs-fac{display:flex;align-items:baseline;gap:4px;font-size:9.5px;padding:2px 0;color:var(--dim)}
+  .rs-fac .fn{width:52px;color:#9aa5b8}
+  .rs-fac .fp{color:var(--gold);font-variant-numeric:tabular-nums}
+  .rs-fac .fo{flex:1;text-align:right;color:#66708a}
+
+  /* ★ 锻造 / 训话 / 模板（Round 18） */
+  .fg-row{display:flex;align-items:baseline;gap:5px;font-size:10.5px;padding:4px 0;
+    border-top:1px solid var(--line2)}
+  .fg-row .nm{flex:1;color:var(--txt)}
+  .fg-row .ct{color:var(--dim2);font-size:9.5px}
+  .fg-row button{flex:0 0 auto;font-size:9px;padding:1px 6px}
+  .fg-row button:disabled{opacity:.3;cursor:default}
+  .cs-hd{font-size:10px;color:var(--gold);letter-spacing:2px;margin-bottom:4px}
+  .cs-row{display:flex;align-items:baseline;gap:4px;font-size:10px;padding:3px 0;
+    border-top:1px solid var(--line2)}
+  .cs-row .lb{width:26px;color:#9aa5b8;flex:0 0 auto}
+  .cs-row select{flex:1;font-size:9.5px;min-width:0}
+  .cs-row button{flex:0 0 auto;font-size:9px;padding:1px 5px}
+  .cs-row button:disabled{opacity:.3;cursor:default}
+  .cs-row .ct{color:var(--dim2);font-size:9px;flex:0 0 auto}
+  .sp-row{display:flex;gap:4px;flex-wrap:wrap;padding:3px 0}
+  .sp-row button{font-size:10px;padding:3px 8px;flex:0 0 auto}
+  .sp-row button.on{border-color:var(--gold);color:#e0c464;background:#c9a22722}
+  .sp-axis{display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0;color:var(--dim)}
+  .sp-axis input{flex:1;accent-color:#c9a227}
+  .sp-axis b{color:var(--gold);font-weight:400;width:24px;text-align:right}
+  .tm-row{display:flex;align-items:center;gap:4px;font-size:10px;padding:3px 0;
+    border-top:1px solid var(--line2)}
+  .tm-row .nm{width:30px;color:#9aa5b8;flex:0 0 auto}
+  .tm-row select{flex:0 0 auto;font-size:9.5px;padding:0 2px}
+  .tm-row .ax{color:var(--dim2);font-size:9px}
+
+  /* ============ 录 · 日志 ============ */
+  #logBox{padding:0}
+  .lg{font-size:11px;padding:6px 0;border-bottom:1px solid var(--line2);
+    color:#9a9284;display:flex;gap:8px}
+  .lg.sys{color:var(--dim)}
+  .lg.ok{color:var(--green)} .lg.warn{color:var(--gold)} .lg.bad{color:var(--red)}
+  .lg.break{color:#f0d080;font-weight:600}
+
+  /* ============ 挂机报告（浮层） ============ */
+  #reportPanel{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;
+    background:linear-gradient(180deg,#141517f2,#0c0d0ef7);padding:16px 18px;
+    overflow-y:auto;backdrop-filter:blur(2px)}
+  .rp-hd{font-size:12px;color:var(--gold);margin-bottom:8px;
+    padding-bottom:6px;border-bottom:1px solid #c9a22733}
+  #reportBody{font:14px/2 "WenKai","KaiTi","Songti SC",serif;color:#e8e0cc;text-indent:2em}
+  #reportBody p{margin:6px 0}
+  #reportBody b{color:var(--gold)}
+  #btnCloseRp{float:right;flex:0 0 auto;width:auto;padding:2px 10px;font-size:11px}
+
+  /* 报错 */
+  #bootErr{position:absolute;left:0;right:0;top:0;z-index:40;
+    background:#3a1e1e;border-bottom:1px solid var(--cinnabar);
+    padding:8px 12px;font-size:11px;color:#f0c0c0}
+</style>
+</head>
+<body>
+
+<div id="win">
+  <div class="grain"></div>
+
+  <div id="bootErr" style="display:none"></div>
+
+  <!-- ==================== 境 ==================== -->
+  <div class="screen on" data-v="jing">
+    <div class="top">
+      <div class="gen" id="genLabel">第一代</div>
+      <div class="seal"><span>秘境</span></div>
+    </div>
+
+    <!-- ★ 事件横幅（域外天魔入侵中 / 比武擂台预告） -->
+    <div id="eventBar" style="display:none"></div>
+
+    <!-- 场景（含战斗） -->
+    <div class="scene">
+      <img src="../../美术资源/04_水墨背景/asian-mountain-forest-bg__sprite_northWindShrineBG.png" alt="">
+      <div class="veil"></div>
+      <div id="battleWrap">
+        <div id="reachRing"></div>
+        <div id="hero">
+          <div class="halo"></div>
+          <div class="hpwrap"><i id="heroHp"></i></div>
+          <div class="head"></div>
+          <div class="torso"></div>
+          <div class="legs"></div>
+        </div>
+        <div id="arena"></div>
+        <div id="battleBarWrap"><div id="battleBar"></div></div>
+      </div>
+      <div class="qilabel" id="sceneLabel">秘境 · <b>待入</b></div>
+      <div id="battleInfo"></div>
+    </div>
+
+    <!-- 修为条 -->
+    <div id="qiWrap">
+      <div class="qi-lbl">
+        <b id="qiRealm">炼气期</b>
+        <span id="qiTierTxt"></span>
+      </div>
+      <div id="qiBarOuter"><div id="qiBar"></div></div>
+      <span id="qiTxt"></span>
+    </div>
+
+    <!-- 属性（.stat 风格） -->
+    <div id="hud"></div>
+
+    <div class="btns">
+      <button id="btnRun" class="primary">进入秘境</button>
+      <button id="btnFast">快进 12 秒</button>
+      <button id="btnExtract" class="danger">提前交接传承</button>
+    </div>
+
+    <div class="nav">
+      <div class="on" data-go="jing">境</div>
+      <div data-go="zhuang">装</div>
+      <div data-go="zong">宗</div>
+      <div data-go="lu">录</div>
+    </div>
+  </div>
+
+  <!-- ==================== 装 ==================== -->
+  <div class="screen" data-v="zhuang">
+    <div class="top">
+      <div class="gen">身体分区 · <b>拖动背包到这里</b></div>
+      <div class="seal"><span>装</span></div>
+    </div>
+    <div class="scroll">
+      <div id="zones"></div>
+      <div class="btns" style="padding:10px 0 0">
+        <button id="btnClear">全部卸下</button>
+        <button id="btnEquipAll" class="primary">一键穿上所有提升</button>
+        <button id="btnScrap">分解无提升</button>
+      </div>
+      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;
+          font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:4px">
+          <span>掉落</span><span>素材 <b id="mats" style="color:var(--gold);font-weight:400">0</b></span>
+        </div>
+        <div class="flt">
+          <span>自动分解低于</span>
+          <select id="fltQ">
+            <option value="0">不分解</option>
+            <option value="1">精良</option>
+            <option value="2">史诗</option>
+            <option value="3">传奇</option>
+          </select>
+          <label><input type="checkbox" id="fltUp"> 只看有提升</label>
+          <select id="sortBy">
+            <option value="score">按提升</option>
+            <option value="q">按品质</option>
+            <option value="slot">按部位</option>
+          </select>
+        </div>
+        <!-- ★ 功法 / 法宝（Round 24：从「宗」页移来，用户要求） -->
+        <div style="margin-top:10px;border-top:1px solid var(--line2);padding-top:8px">
+          <div class="vwin-t" style="margin-bottom:3px">功法</div>
+          <div id="gongfaBox"></div>
+        </div>
+        <div style="margin-top:10px;border-top:1px solid var(--line2);padding-top:8px">
+          <div class="vwin-t" style="margin-bottom:3px">法宝</div>
+          <div id="fabaoBox"></div>
+        </div>
+
+        <div id="cmpBox"></div>
+        <div id="bagList"></div>
+      </div>
+    </div>
+    <div class="nav">
+      <div data-go="jing">境</div>
+      <div class="on" data-go="zhuang">装</div>
+      <div data-go="zong">宗</div>
+      <div data-go="lu">录</div>
+    </div>
+  </div>
+
+  <!-- ==================== 宗（原「承」页 → 宗门） ==================== -->
+  <div class="screen" data-v="zong">
+    <div class="top">
+      <div class="gen">宗门 · <b id="sectName">小宗门</b></div>
+      <div class="seal"><span>宗门</span></div>
+    </div>
+    <div class="scroll">
+      <!-- ★ 极简竖窗：五条窄长竖窗并列 -->
+      <div class="vwin-row">
+        <div class="vwin">
+          <div class="vwin-t">宗门</div>
+          <div id="sectBox" class="vwin-b"></div>
+        </div>
+        <div class="vwin">
+          <div class="vwin-t">传承</div>
+          <div id="legacyBox" class="vwin-b">
+            <div class="lg-rule">
+              <select id="legacyRule">
+                <option value="power">均衡</option>
+                <option value="weapon">武器</option>
+                <option value="small">小件</option>
+                <option value="speed">速度</option>
+                <option value="quality">品质</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="vwin">
+          <div class="vwin-t">给赠</div>
+          <div id="giftBox" class="vwin-b"></div>
+        </div>
+      </div>
+
+      <!-- ★ 宝库处置策略（Round 27） -->
+      <div style="margin-top:12px;border-top:1px solid var(--line2);padding-top:8px">
+        <div id="vaultPolicyBox"></div>
+        <div id="resetBox" style="margin-top:14px"></div>
+      </div>
+
+      <!-- ★ 传承池（可花荣誉点提取） -->
+      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;
+          font-size:10.5px;color:var(--dim);letter-spacing:2px">
+          <span>传承池</span>
+          <span>荣誉 <b id="honorTxt" style="color:var(--gold);font-weight:400">0</b></span>
+        </div>
+        <div id="poolList"></div>
+      </div>
+
+      <!-- ★ 弟子名册 + 后勤岗位（Round 22） -->
+      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;
+          font-size:10.5px;color:var(--dim);letter-spacing:2px">
+          <span>弟子名册</span>
+          <span id="rosterStat" style="color:#8c8574;font-size:10px"></span>
+        </div>
+        <div id="rosterBox"></div>
+      </div>
+
+      <!-- ★ 锻造部（Round 18） -->
+      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;
+          font-size:10.5px;color:var(--dim);letter-spacing:2px">
+          <span>锻造部</span>
+          <span>素材 <b id="sectMat" style="color:var(--gold);font-weight:400">0</b></span>
+        </div>
+        <div id="forgeBox"></div>
+        <!-- ★ 铸造四层（Round 19）：重铸 / 转移 / 定向 -->
+        <div id="castBox" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:7px"></div>
+      </div>
+
+      <!-- ★ 训话（Round 18） -->
+      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+        <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+          训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
+        <div id="speechBox"></div>
+        <!-- ★ 门规（训话的上锁版 · Round 34） -->
+        <div id="ruleBox" style="margin-top:10px"></div>
+      </div>
+
+      <!-- ★ 门装模板（Round 18） -->
+      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+        <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+          门装模板 <span style="color:var(--dim2);font-size:9.5px">（弟子出去后按这个挑装备）</span></div>
+        <div id="tmplBox"></div>
+      </div>
+
+      <!-- ★ 擂台战报（异步 PVP） -->
+      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;
+          font-size:10.5px;color:var(--dim);letter-spacing:2px">
+          <span>擂台战报</span>
+          <span id="pvpStat" style="color:#8c8574;font-size:10px"></span>
+        </div>
+        <div id="pvpBox"></div>
+      </div>
+
+      <!-- 历代弟子 -->
+      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+        <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">历代弟子</div>
+        <div id="genList"></div>
+      </div>
+    </div>
+    <div class="nav">
+      <div data-go="jing">境</div>
+      <div data-go="zhuang">装</div>
+      <div class="on" data-go="zong">宗</div>
+      <div data-go="lu">录</div>
+    </div>
+  </div>
+
+  <!-- ==================== 录 ==================== -->
+  <div class="screen" data-v="lu">
+    <div class="top">
+      <div class="gen">宗门 · <b id="sectName2">小宗门</b></div>
+      <div class="seal"><span>录</span></div>
+    </div>
+    <div class="scroll">
+      <div id="logBox"></div>
+    </div>
+    <div class="nav">
+      <div data-go="jing">境</div>
+      <div data-go="zhuang">装</div>
+      <div data-go="zong">宗</div>
+      <div class="on" data-go="lu">录</div>
+    </div>
+  </div>
+
+  <!-- 挂机报告（浮层，默认隐藏） -->
+  <div id="reportPanel" style="display:none">
+    <div class="rp-hd"><b>你不在的时候</b><button id="btnCloseRp">知道了</button></div>
+    <div id="reportBody"></div>
+  </div>
+</div>
+
+<script>
+// ============ 页签切换（含 hash 深链：#jing / #zhuang / #zong / #lu）============
+function goTab(v){
+  document.querySelectorAll('#win .screen').forEach(function(s){
+    s.classList.toggle('on', s.getAttribute('data-v') === v);
+  });
+}
+document.querySelectorAll('#win .nav div').forEach(function(d){
+  d.addEventListener('click', function(){
+    var v = d.getAttribute('data-go');
+    goTab(v);
+    try { history.replaceState(null, '', '#' + v); } catch (e) { }
+  });
+});
+(function(){
+  var views = ['jing','zhuang','zong','lu'];
+  var h = location.hash.replace('#','');
+  if (views.indexOf(h) >= 0) goTab(h);
+  else if (h === 'cheng') goTab('zong');   // 旧链接兼容
+})();
+</script>
+<script src="_game.js?v=1791884750"></script>
+</body>
+</html>

@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>秘境录</title>
+  <style>
+    :root {
+      --bg: #0e1116;
+      --panel: #161b22;
+      --panel2: #1c2230;
+      --line: #2a3140;
+      --txt: #d7dee8;
+      --dim: #8892a4;
+      --gold: #d9a441;
+      --water: #4a9fd8;
+      --fire: #e0603a;
+      --metal: #c9b45c;
+      --wood: #4fa86a;
+      --earth: #a8825c;
+      --green: #4ec97a;
+      --red: #e05555;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0; padding: 18px;
+      background: var(--bg); color: var(--txt);
+      font: 13px/1.55 "Microsoft YaHei", "PingFang SC", sans-serif;
+    }
+
+    h1 { font-size: 17px; margin: 0 0 2px; letter-spacing: 2px; }
+    h2 { font-size: 13px; margin: 0 0 10px; color: var(--gold); letter-spacing: 1px; font-weight: 600; }
+    .sub { color: var(--dim); font-size: 11.5px; margin-bottom: 16px; }
+    .wrap { max-width: 1180px; margin: 0 auto; }
+
+    .panel {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 8px; padding: 14px 16px; margin-bottom: 14px;
+    }
+
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .grid3, .grid2 { grid-template-columns: 1fr; } }
+
+    /* ---- BD 卡 ---- */
+    .bd { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .bd.act { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(217,164,65,.25); }
+    .bd h3 { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--panel2); border-bottom: 1px solid var(--line); }
+    .bd h3 small { color: var(--dim); font-weight: 400; margin-left: 6px; font-size: 11px; }
+    .bd .body { padding: 11px 12px; }
+
+    label.sel { display: block; font-size: 11px; color: var(--dim); margin: 9px 0 3px; letter-spacing: .5px; }
+    label.sel:first-child { margin-top: 0; }
+    select {
+      width: 100%; background: #0d1117; color: var(--txt);
+      border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px; font-size: 12px;
+      font-family: inherit;
+    }
+    select:focus { outline: 1px solid var(--gold); }
+
+    .stats { margin-top: 11px; border-top: 1px dashed var(--line); padding-top: 9px; font-size: 11.5px; }
+    .stat { display: flex; justify-content: space-between; padding: 2px 0; }
+    .stat b { color: var(--gold); font-weight: 600; }
+    .stat .hi { color: var(--green); }
+    .stat .lo { color: var(--red); }
+
+    .tags { margin-top: 9px; display: flex; gap: 5px; flex-wrap: wrap; }
+    .tag {
+      font-size: 10.5px; padding: 2px 7px; border-radius: 3px;
+      background: #222a38; border: 1px solid var(--line); color: var(--dim);
+    }
+    .tag.e-金 { color: #111; background: var(--metal); border-color: var(--metal); font-weight: 700; }
+    .tag.e-水 { color: #fff; background: var(--water); border-color: var(--water); font-weight: 700; }
+    .tag.e-火 { color: #fff; background: var(--fire); border-color: var(--fire); font-weight: 700; }
+    .tag.e-金 { color: #111; }
+    .tag.win { color: var(--green); border-color: var(--green); }
+    .tag.lose { color: var(--red); border-color: var(--red); }
+
+    /* ---- 敌人 ---- */
+    .enemy { background: linear-gradient(180deg, #241318, var(--panel)); border-color: #4a2a28; }
+    .enemy h3 { background: #2c171a; border-bottom-color: #4a2a28; color: #ff9a7a; }
+    .passive {
+      margin-top: 10px; padding: 8px 10px; background: #2a1a14;
+      border-left: 3px solid var(--fire); border-radius: 3px; font-size: 11.5px;
+    }
+    .passive b { color: #ff9a7a; }
+
+    /* ---- 按钮 ---- */
+    button {
+      background: var(--panel2); color: var(--txt); border: 1px solid var(--line);
+      border-radius: 5px; padding: 8px 16px; font-size: 12.5px; cursor: pointer;
+      font-family: inherit; letter-spacing: .5px; transition: .15s;
+    }
+    button:hover { background: #252d3d; border-color: var(--gold); }
+    button.pri { background: var(--gold); color: #14181f; border-color: var(--gold); font-weight: 700; }
+    button.pri:hover { background: #e8b556; }
+    .bar { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+    .hint { color: var(--dim); font-size: 11.5px; }
+
+    /* ---- 结果 ---- */
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--dim); font-weight: 500; font-size: 11px; letter-spacing: .5px; }
+    tr.rv td { background: rgba(224,85,85,.10); }
+    tr.rg td { background: rgba(78,201,122,.10); }
+
+    .big { font-size: 15px; font-weight: 700; }
+    .wn { color: var(--green); }
+    .ls { color: var(--red); }
+
+    /* 血量时间轴 */
+    .tl { margin-top: 4px; }
+    .tl .row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+    .tl .t { width: 42px; color: var(--dim); font-size: 11px; text-align: right; }
+    .tl .track { flex: 1; height: 15px; background: #0d1117; border-radius: 2px; overflow: hidden; position: relative; }
+    .tl .fill { height: 100%; transition: width .06s linear; }
+    .tl .fill.p { background: linear-gradient(90deg, #2f6ea8, var(--water)); }
+    .tl .fill.e { background: linear-gradient(90deg, #8a3a24, var(--fire)); }
+    .tl .lbl { width: 44px; font-size: 11px; color: var(--dim); }
+
+    .log { max-height: 230px; overflow-y: auto; font-size: 11.5px; font-family: Consolas, monospace; margin-top: 8px; }
+    .log div { padding: 1.5px 6px; border-bottom: 1px solid #1b2029; }
+    .log .p { color: var(--water); }
+    .log .e { color: var(--fire); }
+    .log .c { color: var(--gold); font-weight: 700; }
+    .log .m { color: #5a6475; }
+    .log .k { color: var(--green); font-weight: 700; }
+
+    /* 结论 */
+    .verdict { border-left: 4px solid var(--gold); }
+    .verdict h2 { color: var(--gold); }
+    .verdict ol { margin: 8px 0; padding-left: 20px; }
+    .verdict li { margin: 5px 0; }
+    .kbd { background: #0d1117; border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; font-family: Consolas, monospace; font-size: 11.5px; color: var(--gold); }
+    .note { color: var(--dim); font-size: 11.5px; margin-top: 8px; }
+    .flag { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 10.5px; font-weight: 700; }
+    .flag.ok { background: rgba(78,201,122,.18); color: var(--green); }
+    .flag.no { background: rgba(224,85,85,.18); color: var(--red); }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <h1>秘境录 · 阶段 0 验证原型</h1>
+  <div class="sub">
+    验证目标：设计文档 §4.4 —— <b>「纸面综合属性更高」的 BD，对同一对手胜率显著更低</b>。
+    战斗全自动、确定性重放；唯一随机来源是命中判定与暴击。
+  </div>
+
+  <!-- ============ 配置区 ============ -->
+  <div class="grid3">
+    <div class="bd act" id="bdA">
+      <h3>张三 <small>攻高血少的对照组</small></h3>
+      <div class="body"></div>
+    </div>
+    <div class="bd" id="bdB">
+      <h3>李四 <small>换了更"强"的装备</small></h3>
+      <div class="body"></div>
+    </div>
+    <div class="bd enemy">
+      <h3>相柳 <small>火 · 固定对手</small></h3>
+      <div class="body">
+        <div class="stats" style="margin-top:0;border-top:none;padding-top:0">
+          <div class="stat"><span>生命</span><b>3400</b></div>
+          <div class="stat"><span>攻击</span><b>145</b></div>
+          <div class="stat"><span>出手间隔</span><b>2.40s</b></div>
+          <div class="stat"><span>防御</span><b>20</b></div>
+          <div class="stat"><span>主属性</span><span class="tag e-火">火</span></div>
+        </div>
+        <div class="passive">
+          <b>被动 · 御水</b><br />
+          受到 <b>水系</b> 伤害 ×0.80
+        </div>
+        <div class="passive" style="border-left-color:var(--metal);background:#221f14">
+          <b>五行 · 火克金</b><br />
+          相柳对 <b>金系</b> 出手 ×1.30，对 <b>水系</b> 出手 ×0.80
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 操作 ============ -->
+  <div class="panel bar">
+    <div class="bar">
+      <button class="pri" onclick="runOnce()">打一场（详细战报）</button>
+      <button onclick="runBatch()">对拼 1000 场（统计胜率）</button>
+      <button onclick="loadPreset('A')">还原张三</button>
+      <button onclick="loadPreset('B')">还原李四</button>
+      <span class="hint" id="opHint"></span>
+    </div>
+  </div>
+
+  <!-- ============ 统计结果 ============ -->
+  <div class="panel" id="batchPanel" style="display:none">
+    <h2>对拼统计（1000 场 · 同一批随机种子，双方配对可比）</h2>
+    <table id="batchTable"></table>
+    <div class="note" id="batchNote"></div>
+  </div>
+
+  <!-- ============ 详细战报 ============ -->
+  <div class="panel" id="reportPanel" style="display:none">
+    <h2>详细战报</h2>
+    <div class="grid2">
+      <div>
+        <div style="font-size:12px;margin-bottom:6px" id="rpTitle"></div>
+        <div class="tl" id="timeline"></div>
+      </div>
+      <div>
+        <div style="font-size:12px;margin-bottom:4px;color:var(--dim)">事件日志（命中 / 暴击 / 失手）</div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 结论 ============ -->
+  <div class="panel verdict" id="verdictPanel" style="display:none">
+    <h2>验证结论</h2>
+    <div id="verdictBody"></div>
+  </div>
+
+  <div class="panel">
+    <h2>本原型刻意保留的三个"反直觉"设计</h2>
+    <ol style="padding-left:20px;margin:6px 0;font-size:12px">
+      <li><b>法宝可以改变主属性。</b>李四带上火系法宝后，<span class="kbd">焚身佩</span> 的"血−50%"和"攻+12%"看起来只是换数值，实际把主属性从水拉成了火 —— 而相柳是火系，五行关系整个反转。这是「装备更强反而更弱」的机制根源。</li>
+      <li><b>不显示"战力"总评分。</b>界面上只有攻击力、间隔、防御、血量四项原始属性，玩家得自己判断。一旦给出综合评分，BD 深度立刻归零。</li>
+      <li><b>战报只指出问题，不给建议。</b>战报告诉你"你在第几秒进入输出低谷"，但不会说"建议换某某装备"。</li>
+    </ol>
+  </div>
+
+</div>
+
+<script>
+/* ==================================================================
+   战斗引擎（与 _engine.js 完全一致，只是内联进页面）
+   ================================================================== */
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const GONGFA = {
+  yunlei:   { name: '云雷诀', elem: '金', base: 72, speed: 1.00, desc: '单体·高攻慢速' },
+  canglang: { name: '沧浪诀', elem: '水', base: 40, speed: 1.15, desc: '单体·高频' },
+  lihuo:    { name: '离火诀', elem: '火', base: 52, speed: 0.85, desc: '单体·慢速重击' },
+};
+const GONGFA_REF_BASE = 40;
+
+const FABAO = {
+  jifeng:  { name: '疾风符', elem: '水', atk: 0.08, hp: 0.00,  spd: 0.18,  def: 0.05,  critRate: 0.05, critDmg: 0, desc: '攻+8% 速+18% 防+5% 暴+5%' },
+  pojun:   { name: '破军符', elem: '火', atk: 0.28, hp: -0.06, spd: -0.10, def: -0.20, critRate: 0,    critDmg: 0, desc: '攻+28% 速-10% ｜ 血-6% 防-20%' },
+  fenshen: { name: '焚身佩', elem: '火', atk: 0.12, hp: -0.50, spd: 0.00,  def: 0.00,  critRate: 0,    critDmg: 0, desc: '攻+12% ｜ 血-50%（极高上限、极低容错）' },
+  wuxiang: { name: '无相劫', elem: '水', atk: 0.00, hp: 0.00,  spd: 0.00,  def: 0.08,  critRate: 0,    critDmg: 0, desc: '防+8%（水）' },
+};
+
+const ENEMY = {
+  name: '相柳', elem: '火', atk: 145, hp: 3400, def: 20, cd: 2.4,
+  critRate: 0.05, critDmg: 0.5,
+  passive: { name: '御水', against: '水', dmgTaken: 0.80, dmgDealt: 1.00 },
+};
+
+const ELEM = { 金: '木', 木: '土', 土: '水', 水: '火', 火: '金' };
+const ADV = { same: 1.0, adv: 1.30, dis: 0.80 };
+const BASE = { atk: 140, def: 60, critRate: 0.05, critDmg: 0.5, k: 2.4 };
+const MISS_BASE = 0.08;
+const PLAYER_HP = 1400;
+
+function buildBD(gongfaId, fabaoIds) {
+  const gf = GONGFA[gongfaId];
+  const fbs = fabaoIds.map(id => FABAO[id]);
+  const atkMul = (gf.base / GONGFA_REF_BASE) * (1 + fbs.reduce((s, f) => s + f.atk, 0));
+  const hpMul = 1 + fbs.reduce((s, f) => s + f.hp, 0);
+  const spdAdd = fbs.reduce((s, f) => s + f.spd, 0);
+  const defAdd = fbs.reduce((s, f) => s + f.def, 0);
+  const critRate = BASE.critRate + fbs.reduce((s, f) => s + f.critRate, 0);
+  const critDmg = BASE.critDmg + fbs.reduce((s, f) => s + f.critDmg, 0);
+  const cyc = gf.speed * (1 + spdAdd);
+  const atk = BASE.atk * atkMul;
+  const hp = PLAYER_HP * hpMul;
+  const def = BASE.def * (1 + defAdd);
+  // 纯输出参考值：对「无相性、无被动」的中性靶子的每秒伤害
+  const critMul = 1 + critRate * critDmg;
+  const defR = ENEMY.def / (ENEMY.def + 200 + 80 * BASE.k);
+  const miss = Math.min(0.35, MISS_BASE + (cyc - 1) * 0.05);
+  const baseDps = atk * critMul * (1 - defR) * (1 - miss) / cyc;
+  return {
+    gf, fbs, mainElem: gf.elem, atkMul, hpMul, defAdd, critRate, critDmg, cyc,
+    sheet: { atk, hp, def, cyc }, baseDps,
+  };
+}
+
+function simulate(bd, seed) {
+  const EN = ENEMY;
+  const rng = mulberry32(seed);
+  const dt = 0.05, t0 = 15, simEnd = 120;
+
+  const p = {
+    hp: bd.sheet.hp, maxHp: bd.sheet.hp, def: bd.sheet.def, atk: bd.sheet.atk,
+    crit: bd.critRate, critDmg: bd.critDmg, cyc: bd.cyc,
+    prog: 0, dealt: 0, taken: 0, hits: 0, crits: 0, misses: 0,
+  };
+  const e = { hp: EN.hp, maxHp: EN.hp, def: EN.def, prog: 0, hits: 0, misses: 0, hitsTaken: 0 };
+
+  const events = [], timeline = [];
+  let t = 0;
+  const defReduce = d => Math.min(0.75, d / (d + 200 + 80 * BASE.k));
+
+  const playerMult = () => {
+    let m = 1;
+    if (p.cyc < 1) m *= 1.15;                     // 高频武器补偿
+    if (t < t0) m *= 1.30;                        // 先手：开场 15 秒
+    let el = ADV.same;
+    if (ELEM[bd.mainElem] === EN.elem) el = ADV.adv;
+    else if (ELEM[EN.elem] === bd.mainElem) el = ADV.dis;
+    m *= el;
+    if (EN.passive && bd.mainElem === EN.passive.against) m *= EN.passive.dmgTaken;
+    return m;
+  };
+  const enemyMult = () => {
+    let m = 1;
+    if (t < t0) m *= 1.30;
+    let el = ADV.same;
+    if (ELEM[EN.elem] === bd.mainElem) el = ADV.adv;
+    else if (ELEM[bd.mainElem] === EN.elem) el = ADV.dis;
+    m *= el;
+    if (EN.passive && bd.mainElem === EN.passive.against) m *= EN.passive.dmgDealt;
+    return m;
+  };
+
+  let lastSample = 0;
+  while (t < simEnd && p.hp > 0 && e.hp > 0) {
+    // 玩家出手
+    p.prog += dt / p.cyc;
+    while (p.prog >= 1 && e.hp > 0) {
+      p.prog -= 1;
+      const pMiss = Math.min(0.35, MISS_BASE + (p.cyc - 1) * 0.05);
+      if (rng() < pMiss) {
+        p.misses++;
+        events.push({ t, side: 'P', kind: 'miss', dmg: 0 });
+        continue;
+      }
+      const isCrit = rng() < p.crit;
+      const variance = 0.9 + rng() * 0.2;
+      let dmg = p.atk * (isCrit ? 1 + p.critDmg : 1) * playerMult() * variance;
+      dmg *= (1 - defReduce(e.def));
+      e.hp -= dmg; p.dealt += dmg; p.hits++; if (isCrit) p.crits++;
+      events.push({ t, side: 'P', kind: isCrit ? 'crit' : 'hit', dmg: Math.round(dmg), target: Math.max(0, Math.round(e.hp)) });
+    }
+    if (e.hp <= 0) break;
+
+    // 敌人出手
+    e.prog += dt / EN.cd;
+    if (e.prog >= 1) {
+      e.prog -= 1;
+      if (rng() < MISS_BASE) {
+        e.misses++;
+        events.push({ t, side: 'E', kind: 'miss', dmg: 0 });
+      } else {
+        const isCrit = rng() < EN.critRate;
+        const variance = 0.9 + rng() * 0.2;
+        let dmg = EN.atk * (isCrit ? 1 + EN.critDmg : 1) * enemyMult() * variance;
+        dmg *= (1 - defReduce(p.def));
+        p.hp -= dmg; p.taken += dmg; e.hitsTaken++;
+        events.push({ t, side: 'E', kind: isCrit ? 'crit' : 'hit', dmg: Math.round(dmg), target: Math.max(0, Math.round(p.hp)) });
+      }
+    }
+
+    t += dt;
+    if (t - lastSample >= 1) {
+      timeline.push({ t: Math.round(t), p: Math.max(0, p.hp) / p.maxHp, e: Math.max(0, e.hp) / e.maxHp });
+      lastSample = t;
+    }
+  }
+
+  return {
+    win: e.hp <= 0 && p.hp > 0,
+    time: +t.toFixed(2),
+    pHpPct: Math.max(0, p.hp) / p.maxHp,
+    eHpPct: Math.max(0, e.hp) / e.maxHp,
+    dealt: Math.round(p.dealt), taken: Math.round(p.taken),
+    hits: p.hits, crits: p.crits, misses: p.misses,
+    eHits: e.hitsTaken, eMisses: e.misses,
+    dps: p.dealt / t, timeline, events, bd,
+  };
+}
+
+/* ==================================================================
+   UI
+   ================================================================== */
+
+const PRESETS = {
+  A: { gf: 'canglang', fb: ['jifeng', 'wuxiang'], name: '张三' },
+  B: { gf: 'canglang', fb: ['pojun', 'fenshen'], name: '李四' },
+};
+const ELEM_CLASS = { 金: 'e-金', 木: 'e-木', 土: 'e-土', 水: 'e-水', 火: 'e-火' };
+
+const state = { A: { ...PRESETS.A }, B: { ...PRESETS.B } };
+
+function gfOptions(cur) {
+  return Object.entries(GONGFA).map(([k, v]) =>
+    `<option value="${k}" ${k === cur ? 'selected' : ''}>${v.name}（${v.elem}·${v.desc}）</option>`).join('');
+}
+function fbOptions(cur, slot) {
+  const opts = ['<option value="">— 空 —</option>'].concat(
+    Object.entries(FABAO).map(([k, v]) =>
+      `<option value="${k}" ${k === cur ? 'selected' : ''}>${v.name}（${v.desc}）</option>`));
+  return opts.join('');
+}
+
+function renderCard(key) {
+  const st = state[key];
+  const bd = buildBD(st.gf, st.fb.filter(Boolean));
+  const host = document.querySelector('#' + (key === 'A' ? 'bdA' : 'bdB') + ' .body');
+  const dAtk = bd.sheet.atk - buildBD(PRESETS.A.gf, PRESETS.A.fb).sheet.atk;
+  const cls = (v, inv) => (inv ? (v > 0 ? 'lo' : 'hi') : (v > 0 ? 'hi' : 'lo'));
+
+  host.innerHTML = `
+    <label class="sel">功法（决定主属性与出手形态）</label>
+    <select onchange="pick('${key}','gf',this.value)">${gfOptions(st.gf)}</select>
+    <label class="sel">法宝一</label>
+    <select onchange="pick('${key}',0,this.value)">${fbOptions(st.fb[0], 0)}</select>
+    <label class="sel">法宝二</label>
+    <select onchange="pick('${key}',1,this.value)">${fbOptions(st.fb[1], 1)}</select>
+    <div class="stats">
+      <div class="stat"><span>攻击力</span><b class="${dAtk > 0.5 ? 'hi' : ''}">${bd.sheet.atk.toFixed(0)}${dAtk > 0.5 ? ' ↑' : ''}</b></div>
+      <div class="stat"><span>出手间隔</span><b>${bd.sheet.cyc.toFixed(2)}s</b></div>
+      <div class="stat"><span>防御</span><b>${bd.sheet.def.toFixed(0)}</b></div>
+      <div class="stat"><span>生命值</span><b>${bd.sheet.hp.toFixed(0)}</b></div>
+      <div class="stat"><span>暴击率 / 暴伤</span><b>${(bd.critRate * 100).toFixed(0)}% / ${(bd.critDmg * 100).toFixed(0)}%</b></div>
+      <div class="stat"><span>纯输出参考（中性靶）</span><b>${bd.baseDps.toFixed(1)}/s</b></div>
+    </div>
+    <div class="tags">
+      <span class="tag ${ELEM_CLASS[bd.mainElem]}">主属性 ${bd.mainElem}</span>
+      ${bd.fbs.filter(Boolean).map(f => `<span class="tag">${f.name.split('（')[0]}</span>`).join('')}
+    </div>`;
+}
+
+function pick(key, slot, val) {
+  if (slot === 'gf') state[key].gf = val;
+  else state[key].fb[slot] = val || '';
+  renderCard(key);
+}
+
+function loadPreset(k) {
+  state[k] = JSON.parse(JSON.stringify(PRESETS[k]));
+  renderCard(k);
+  document.getElementById('opHint').textContent = '已还原 ' + PRESETS[k].name;
+}
+
+function bdOf(k) { return buildBD(state[k].gf, state[k].fb.filter(Boolean)); }
+
+/* ---------- 单场详细战报 ---------- */
+function runOnce() {
+  const A = bdOf('A'), B = bdOf('B');
+  const rA = simulate(A, 1000), rB = simulate(B, 1000);
+
+  document.getElementById('reportPanel').style.display = '';
+  document.getElementById('rpTitle').innerHTML =
+    `<b>张三</b> ${rA.win ? '<span class="wn">胜</span>' : '<span class="ls">败</span>'} ${rA.time}s · 输出 ${rA.dealt} · 承伤 ${rA.taken} &nbsp;|&nbsp; ` +
+    `<b>李四</b> ${rB.win ? '<span class="wn">胜</span>' : '<span class="ls">败</span>'} ${rB.time}s · 输出 ${rB.dealt} · 承伤 ${rB.taken}`;
+
+  // 时间轴：用二者的时间轴并排显示血量
+  const tl = document.getElementById('timeline');
+  const maxT = Math.max(rA.timeline.length, rB.timeline.length);
+  let h = '';
+  for (let i = 0; i < maxT; i++) {
+    const a = rA.timeline[i], b = rB.timeline[i];
+    if (!a && !b) break;
+    h += `<div class="row">
+      <div class="t">${a ? a.t + 's' : ''}</div>
+      <div class="track"><div class="fill p" style="width:${a ? (a.p * 100).toFixed(1) : 0}%"></div></div>
+      <div class="lbl">张 ${a ? (a.p * 100).toFixed(0) : 0}%</div>
+      <div class="track"><div class="fill e" style="width:${b ? (b.p * 100).toFixed(1) : 0}%"></div></div>
+      <div class="lbl">李 ${b ? (b.p * 100).toFixed(0) : 0}%</div>
+    </div>`;
+  }
+  tl.innerHTML = h + `<div class="note">左：张三血量（蓝）· 右：李四血量（红）</div>`;
+
+  // 日志：合并两边，只列关键时刻
+  const all = [];
+  rA.events.forEach(e => all.push({ ...e, who: '张三' }));
+  rB.events.forEach(e => all.push({ ...e, who: '李四' }));
+  all.sort((x, y) => x.t - y.t);
+  const shown = all.filter(e => e.t < 20 || e.kind === 'crit' || e.kind === 'miss');
+  document.getElementById('log').innerHTML = shown.slice(0, 400).map(e => {
+    const side = e.side === 'P' ? 'p' : 'e';
+    const who = e.side === 'P' ? e.who + '→相柳' : '相柳→' + e.who;
+    const k = e.kind === 'crit' ? '<span class="c">暴击</span>' : e.kind === 'miss' ? '<span class="m">失手</span>' : '命中';
+    const d = e.kind === 'miss' ? '' : ` <b>${e.dmg}</b>` + (e.target !== undefined ? `（余${e.target}）` : '');
+    return `<div class="${side}">${e.t.toFixed(2)}s ${who} ${k}${d}</div>`;
+  }).join('');
+
+  document.getElementById('verdictPanel').style.display = 'none';
+}
+
+/* ---------- 千场统计 ---------- */
+function runBatch() {
+  const A = bdOf('A'), B = bdOf('B');
+  const N = 1000;
+  const res = { A: { w: 0, t: 0, hp: 0 }, B: { w: 0, t: 0, hp: 0 } };
+  for (let i = 0; i < N; i++) {
+    for (const [k, bd] of [['A', A], ['B', B]]) {
+      const r = simulate(bd, 5000 + i);
+      if (r.win) { res[k].w++; res[k].hp += r.pHpPct; }
+      res[k].t += r.time;
+    }
+  }
+  const wr = k => res[k].w / N;
+
+  document.getElementById('batchPanel').style.display = '';
+  document.getElementById('batchTable').innerHTML = `
+    <tr><th>BD</th><th>攻击力</th><th>生命值</th><th>纯输出参考</th><th>胜率</th><th>平均时长</th><th>胜时剩余血</th></tr>
+    <tr class="${wr('A') > wr('B') ? 'rg' : ''}">
+      <td>张三 · ${A.gf.name}</td><td>${A.sheet.atk.toFixed(0)}</td><td>${A.sheet.hp.toFixed(0)}</td>
+      <td>${A.baseDps.toFixed(1)}/s</td><td class="big wn">${(wr('A') * 100).toFixed(1)}%</td>
+      <td>${(res.A.t / N).toFixed(1)}s</td><td>${(res.A.hp / Math.max(1, res.A.w) * 100).toFixed(0)}%</td>
+    </tr>
+    <tr class="${wr('B') > wr('A') ? 'rg' : 'rv'}">
+      <td>李四 · ${B.gf.name}</td><td>${B.sheet.atk.toFixed(0)}</td><td>${B.sheet.hp.toFixed(0)}</td>
+      <td>${B.baseDps.toFixed(1)}/s</td><td class="big ${wr('B') > 0.5 ? 'wn' : 'ls'}">${(wr('B') * 100).toFixed(1)}%</td>
+      <td>${(res.B.t / N).toFixed(1)}s</td><td>${(res.B.hp / Math.max(1, res.B.w) * 100).toFixed(0)}%</td>
+    </tr>`;
+
+  const atkGap = (B.sheet.atk / A.sheet.atk - 1) * 100;
+  document.getElementById('batchNote').innerHTML =
+    `李四攻击力比张三高 <b>${atkGap.toFixed(0)}%</b>，生命值低 <b>${(100 - B.sheet.hp / A.sheet.hp * 100).toFixed(0)}%</b>，` +
+    `胜率却是 <b>${(wr('B') * 100).toFixed(1)}%</b> vs <b>${(wr('A') * 100).toFixed(1)}%</b>。`;
+
+  buildVerdict(A, B, wr('A'), wr('B'));
+  document.getElementById('verdictPanel').style.display = '';
+}
+
+function buildVerdict(A, B, wA, wB) {
+  const atkUp = (B.sheet.atk / A.sheet.atk - 1) * 100;
+  const dpsUp = (B.baseDps / A.baseDps - 1) * 100;
+  const hpDown = (1 - B.sheet.hp / A.sheet.hp) * 100;
+  const ok = wB < wA - 0.2;
+
+  document.getElementById('verdictBody').innerHTML = `
+    <p><span class="flag ${ok ? 'ok' : 'no'}">${ok ? '判据通过' : '判据未通过'}</span>
+    &nbsp;文档 §7 判据 3「存在反向优化」：<i>更强的装备导致更低输出</i></p>
+    <ol>
+      <li><b>纸面：</b>李四攻击力 <b>${B.sheet.atk.toFixed(0)}</b>，比张三的 <b>${A.sheet.atk.toFixed(0)}</b> 高 <b>${atkUp.toFixed(0)}%</b>；纯输出参考也高 <b>${dpsUp.toFixed(0)}%</b>。单看这两项，他"更强"。</li>
+      <li><b>实战：</b>胜率 <b>${(wB * 100).toFixed(1)}%</b>，比张三的 <b>${(wA * 100).toFixed(1)}%</b> 低 <b>${((wA - wB) * 100).toFixed(0)} 个百分点</b>。</li>
+      <li><b>败因链：</b><br />
+        · <span class="kbd">焚身佩</span> 攻击加成把主属性从<b>水</b>拉成了<b>火</b>（法宝也携带属性）<br />
+        · 相柳的主属性也是<b>火</b> → 五行关系由「水克火」变成「火金同源、无克制」<br />
+        · 更致命：<span class="kbd">焚身佩</span> 的血量代价 <b>−50%</b>，李四只有 <b>${B.sheet.hp.toFixed(0)}</b> 血，比张三低 <b>${hpDown.toFixed(0)}%</b><br />
+        · 于是他的输出窗口还不到张三的一半，虽然打得快，但撑不到打完</li>
+      <li><b>结论：</b>「综合属性更高」不等于「更强」。胜负由 <b>属性相性 × 有效存活时间</b> 共同决定 —— 这正是本作 BD 深度的来源。</li>
+    </ol>
+    <div class="note">
+      注：本原型只验证机制是否成立，数值为一次性手调结果，不代表最终平衡。
+      若要用于正式设计，需要按文档 §6.4 的「阶段化天花板」重新分配数值。
+    </div>`;
+}
+
+/* ---------- 初始化 ---------- */
+renderCard('A');
+renderCard('B');
+document.getElementById('opHint').textContent = '可直接改功法/法宝，再点「对拼 1000 场」看变化';
+runBatch();
+</script>
+</body>
+
+</html>
