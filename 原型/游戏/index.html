@@ -103,8 +103,16 @@
   #btnDisciple:hover{border-color:#ffffff44;color:var(--paper)}
   #btnDisciple.on{border-color:var(--gold);color:var(--gold);background:#c9a22714}
   #disciplePanel{margin:8px 18px 0;border-top:1px solid var(--line2);padding-top:7px;
-    flex:0 0 auto;display:none}
+    flex:0 0 auto;display:none}   /* 由 .on 控制显示（Round 39：按钮切换仍有效）*/
   #disciplePanel.on{display:block}
+/* ★ Round 39：当前弟子面板 —— 六项战斗摘要（hud 里没单独列的）*/
+#disciplePanel .dp-grid{display:grid;grid-template-columns:repeat(3,1fr);
+  gap:4px 8px;margin:7px 0 2px}
+#disciplePanel .dp-cell{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:10px;padding:2px 0;border-bottom:1px dashed #ffffff0f}
+#disciplePanel .dp-cell .k{color:var(--dim2)}
+#disciplePanel .dp-cell .v{color:var(--paper);font-variant-numeric:tabular-nums}
+#disciplePanel .dp-note{font-size:9.5px;color:#5d574c;margin-top:5px;line-height:1.6}
   #disciplePanel .dp-hd{display:flex;justify-content:space-between;align-items:baseline;
     font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:5px}
   #disciplePanel .dp-hd em{font-style:normal;color:var(--gold);
@@ -147,14 +155,23 @@
   #hero.dodge .torso,#hero.dash{filter:brightness(1.6)}
   #arena{position:absolute;inset:0}
   /* ★ 敌人（Round 14 补全：此前重写 HTML 时把这段写残了，
-       只剩 position/border-radius、没有尺寸 ⇒ 宽高 0 ⇒ 完全看不见怪） */
-  .mob{position:absolute;width:12px;height:12px;border-radius:50%;
-    background:radial-gradient(circle at 35% 32%,#ff9a8a,#b8332a);
-    border:1px solid #ff6b5a;transform:translate(-50%,-50%);
+       只剩 position/border-radius、没有尺寸 ⇒ 宽高 0 ⇒ 完全看不见怪）
+     ★ Round 38（用户要求）：小怪放大 12→16px，并改用【妖怪贴图】
+       （assets/妖怪/妖_<名>.png）。贴图挂 ::before，不影响 hpbar / bossTag / hit */
+  .mob{position:absolute;width:16px;height:16px;border-radius:50%;
+    transform:translate(-50%,-50%);
     transition:left .28s linear, top .28s linear, opacity .15s;z-index:3}
-  .mob.elite{width:20px;height:20px;border-radius:5px;
-    background:radial-gradient(circle at 35% 32%,#ffdf90,#c9871b);
-    border:1px solid #ffc84a;z-index:4}
+  /* 贴图层：有 sprite 时用它，没有则退回纯色块（兜底样式在上面被覆盖） */
+  .mob .sprite{position:absolute;inset:0;background-repeat:no-repeat;
+    background-position:center;background-size:contain;
+    filter:drop-shadow(0 1px 2px #000000aa)}
+  /* 无贴图的怪（如域外天魔）：用回五行色块 */
+  .mob.nosprite{border-radius:50%;border:1px solid #ff6b5a;
+    background:radial-gradient(circle at 35% 32%,#ff9a8a,#b8332a)}
+  .mob.nosprite .sprite{display:none}
+  .mob.elite{width:24px;height:24px;z-index:4}
+  .mob.elite.nosprite{border-radius:5px;border:1px solid #ffc84a;
+    background:radial-gradient(circle at 35% 32%,#ffdf90,#c9871b)}
   .mob.hit{filter:brightness(2.6)}
   .mob .hpbar{position:absolute;left:50%;top:-6px;transform:translateX(-50%);
     width:90%;height:2px;background:#00000090;overflow:hidden}
@@ -451,16 +468,23 @@
     white-space:nowrap}
   .pool-it button{flex:0 0 auto;font-size:9px;padding:1px 4px}
 
-  /* ★ Boss（Round 29）：复用 AOE 系统，只是【更大 + 金边 + 会呼吸】 */
-  .mob.boss{width:26px !important;height:26px !important;border-radius:5px;
-    border:2px solid var(--gold) !important;
-    box-shadow:0 0 10px #c9a22788, inset 0 0 6px #c9a22744;
+  /* ★ Boss（Round 29）：复用 AOE 系统，只是【更大 + 金边 + 会呼吸】
+     ★ Round 38：26→36px（用户要求"Boss 要更难看不清一点"= 更醒目），
+       并在贴图外圈加金环 —— 一眼能和精英/小怪区分 */
+  .mob.boss{width:36px !important;height:36px !important;
     animation:bossBreath 1.4s ease-in-out infinite;z-index:8}
-  @keyframes bossBreath{0%,100%{transform:scale(1);box-shadow:0 0 8px #c9a22766}
-    50%{transform:scale(1.12);box-shadow:0 0 16px #c9a227cc}}
-  .mob.boss .bossTag{position:absolute;left:50%;top:-13px;transform:translateX(-50%);
+  .mob.boss .sprite{border-radius:50%;
+    box-shadow:0 0 0 1.5px #c9a227cc, 0 0 12px #c9a22788}
+  .mob.boss.nosprite{border-radius:5px;border:2px solid var(--gold) !important;
+    box-shadow:0 0 10px #c9a22788, inset 0 0 6px #c9a22744}
+  @keyframes bossBreath{0%,100%{transform:translate(-50%,-50%) scale(1);
+      filter:drop-shadow(0 0 6px #c9a22766)}
+    50%{transform:translate(-50%,-50%) scale(1.10);
+      filter:drop-shadow(0 0 14px #c9a227cc)}}
+  .mob.boss .hpbar{top:-9px;height:3px}
+  .mob.boss .bossTag{position:absolute;left:50%;top:-15px;transform:translateX(-50%);
     font-size:9px;color:var(--gold);white-space:nowrap;letter-spacing:1px;
-    text-shadow:0 1px 3px #000}
+    text-shadow:0 1px 3px #000;z-index:2}
   /* Boss 出场：一次性闪屏 */
   #battleWrap.boss-in::after{content:'';position:absolute;inset:0;z-index:9;
     background:radial-gradient(ellipse at 50% 50%, #c9a22755, transparent 70%);
@@ -681,8 +705,8 @@
     <div id="battleInfo"></div>
 
     <!-- ★ 弟子数据控件（默认收起；点了才展开详细数据） -->
-    <button id="btnDisciple">弟子名录 ▾</button>
-    <div id="disciplePanel">
+    <button id="btnDisciple" class="on">当前弟子 ▴</button>
+    <div id="disciplePanel" class="on">
       <div class="dp-hd"><span>随行弟子</span><em id="dpStat"></em></div>
       <div id="discipleBox"></div>
     </div>

@@ -1445,6 +1445,16 @@ const AV_DISC = [
 const AV_LG_SHORT = { dan: '单', shuang: '双', san: '三', si: '四', wu: '五', wei: '伪' };
 // 场景主角当前用的是哪个形象编号（避免每帧重复写 DOM）
 let HERO_AV = 0;
+// ★ 妖怪贴图映射（Round 38 · assets/妖怪/妖_<名>.png）
+//   键 = MOB_KINDS 的 id；没有映射的（域外天魔 3 种）自动退回五行色块。
+//   小怪用 妖_<名>.png（16px），精英用 妖_<名>_精英.png（24px），Boss 用 _Boss.png（36px）
+const MOB_SPRITE = {
+  m_jin_a:  '金甲狮', m_jin_b:  '金角鼠',
+  m_mu_a:   '万灵鹿', m_mu_b:   '滕蔓兔',
+  m_shui_a: '碧波龟', m_shui_b: '沧澜蛟',
+  m_huo_a:  '赤焰狐', m_huo_b:  '焚天雀',
+  m_tu_a:   '辟地熊', m_tu_b:   '岩壳蝎',
+};
 // ★ 宗门设施图标映射（assets/宗门/设施_<名>.png）
 //   ⚠️ 文件名必须与 assets/宗门/ 里实际存在的图标一致！
 //   没有映射的项（入门礼 / 传承殿 / 延寿丹房）自动不显示图标，只显示文字 ——
@@ -1538,8 +1548,25 @@ function makeDisciple(opts) {
   return d;
 }
 // ---- 分派（按规则，一次性）----
-function assignDisciple(d) {
+// ★★ Round 39 修正：本函数【只分派后勤】，不再自动产生前线
+//
+//   ⚠️ 为什么改：`endDisciple` 的顺序是
+//        generationalTurnover()（同步：清空前线 → 结算后勤 → recruit 补人 → 分岗位）
+//        setTimeout(newDisciple, 800)（异步：建立新一代前线）
+//      而 generationalTurnover 里已经 `ROSTER.front = null` 了
+//      ⇒ recruit 招进来的【第一个】会被分派成前线
+//      ⇒ 800ms 后 newDisciple 又建一个 ⇒ **同代出现 2 个前线**
+//      实测：第 4 代时前线数 = 4、名册 26 人（超过上限 24）
+//
+//   ⇒ 职责拆开（用一个开关表达，而不是废掉规则）：
+//        newDisciple()  → assignDisciple(d, true)   允许产生前线（一代一个）
+//        recruit()      → assignDisciple(d, false)  只补后勤（不抢前线的位置）
+//     这样【玩家的分派规则仍然有效】—— 它决定的就是"这一代谁上前线"，
+//     只不过现在由 newDisciple 在建立新一代时执行，而不是由补员时顺手决定。
+function assignDisciple(d, allowFront) {
+  if (allowFront === undefined) allowFront = true;   // 默认保留旧行为（测试与外部调用）
   const r = ROSTER.rule;
+  if (!allowFront) { d.role = 'back'; return d; }
   if (r.kind === 'back_only') { d.role = 'back'; return d; }
   // 前线已有 ⇒ 其余全后勤（A 底座：一次只派 1 个前线）
   if (ROSTER.front && ROSTER.front.alive) { d.role = 'back'; return d; }
@@ -1558,12 +1585,19 @@ function recruit(deaths) {
   const want = baseRecruit();
   const alive = ROSTER.list.filter(x => x.alive);
   const slots = totalSlots();
-  const room = Math.max(0, slots - alive.length) + (deaths || 0);
-  const n = Math.min(want, Math.max(0, room));
+  // ⚠️⚠️ Round 39：这里原来只看【活着的】数量，没管名册总人数
+  //   ⇒ 上一代死掉的人还留在 list 里占位，加上"按死亡数补人"
+  //   ⇒ 名册会涨到 28（超过 ROSTER_CAP = 24）
+  //   ⇒ 用【两个上限】同时约束：
+  //        ① 岗位数（slots）：活人不超过后勤岗位总数
+  //        ② 名册总量（ROSTER_CAP）：list 总长度不超过 24
+  const roomBySlot = Math.max(0, slots - alive.length) + (deaths || 0);
+  const roomByCap = Math.max(0, ROSTER_CAP - ROSTER.list.length);
+  const n = Math.min(want, Math.max(0, Math.min(roomBySlot, roomByCap)));
   const got = [];
   for (let i = 0; i < n; i++) {
     const d = makeDisciple({ tier: trainStartTier() });
-    assignDisciple(d);
+    assignDisciple(d, false);   // ★ recruit 只补后勤，不抢前线
     ROSTER.list.push(d);
     got.push(d);
   }
@@ -2596,7 +2630,9 @@ const SECT_MAP = [
 // 当前选中的设施（点建筑切换）
 let SECT_SEL = 'script';
 // ★ 境 · 弟子数据面板是否展开（用户要求：单独控件控制）
-let DP_OPEN = false;
+// ★ Round 39：改为【默认展开】—— 用户要看的"当前历练弟子的数据"就应该是默认可见的，
+//   而不是藏在一个"弟子名录 ▾"按钮后面（用户报："我肯定是要看当前历练的弟子的各项数据啊"）
+let DP_OPEN = true;
 // 当前地图用的是哪一档图（避免每帧改 src）
 let SECT_MAP_TIER = 0;
 
@@ -2968,6 +3004,71 @@ function newDisciple(carried, opts) {
   } else {
     log('第 ' + SECT.generation + ' 代弟子入门 · 从零开始', 'sys');
   }
+
+  // ★★ Round 39 修复（用户报："看不到历练的弟子图片 + 下面怎么是弟子名册"）
+  //   根因：本函数只设全局 `DISCIPLE`，【从不把它加进 ROSTER.list】；
+  //         而 recruit() 只在 generationalTurnover（弟子死后）调用
+  //         ⇒ 开局 ROSTER.list = 0 · ROSTER.front = null
+  //         ⇒ ① 「境」页立绘被隐藏（render 里 front 空就 display:none）
+  //            ② 「宗」页弟子名册空白　③ 后勤岗位一个都没有
+  //   ⇒ 这里把【前线弟子】注册进名册
+  registerFrontDisciple();
+  //   ⚠️⚠️ 但【不能无条件 recruit】：`generationalTurnover` 已经在弟子死时
+  //       "清空前线 → settleBackline → recruit(死亡数)" 补过人了。
+  //       newDisciple 由 endDisciple 的 setTimeout 在 turnover 之后调用
+  //       ⇒ 这里再 recruit 会【重复招人】（实测：一代招 11 人、出现 2~3 个前线、突破上限 24）
+  //   现在 assignDisciple 只分后勤 ⇒ 这里可以安全地补人：
+  //     recruit 内部有 room = max(0, slots - alive) + deaths 的上限保护，
+  //     满了就一个都不招，不会膨胀。
+  recruit(0);
+}
+
+// ★ 把当前这一代（全局 DISCIPLE）注册为名册里的【前线弟子】
+//   ⚠️ 名册对象与全局 DISCIPLE 是两个分离的对象，各管一半字段：
+//        ROSTER 侧：id / name / talent / role / alive / post
+//        DISCIPLE 侧：lifespanLeft（秒）/ peakTier / runs / deathCause
+//      ⇒ 注册时要双向同步一次（见 syncDisciple()）
+const DISC_TO_YEARS = (P.LIFESPAN_HOURS * 3600) / P.LIFESPAN_YEARS;
+function registerFrontDisciple() {
+  const d = makeDisciple({ name: DISCIPLE.name, tier: DISCIPLE.peakTier | 0 });
+  // ★ 这一代的前线弟子由【玩家的分派规则】决定（不再是"无条件当前线"）
+  //   规则判它不合适 ⇒ 它去后勤，前线留空等下一批
+  assignDisciple(d, true);
+  if (d.role !== 'front') { d.role = 'front'; }   // 但新一代必须有人挂前线（否则无人历练）
+  ROSTER.front = d;
+  d.talent = TAL.id; d.talentName = TAL.name; d.talentSpeed = TAL.speed;
+  d.linggen = LG.id; d.linggenName = (LINGGEN.find(x => x.id === LG.id) || {}).name;
+  d.bornGen = SECT.generation;
+  ROSTER.list.push(d);
+  ROSTER.front = d;
+  DISCIPLE._rosterId = d.id;
+  syncDisciple();
+  // ★★ Round 39：清理【早已死去】的旧弟子
+  //   ⚠️ 死者只被标记 alive=false，【从不从 list 里移除】⇒ 名册只增不减
+  //      实测 6 代后名册 27 人（超过 ROSTER_CAP = 24）
+  //   ⇒ 前台弟子交接完成后，死者保留在 list 里没有任何用途
+  //      （他们的记录已经进了 SECT.history，那是永久的）
+  //   ⇒ 这里剪掉所有 !alive 的旧条目，名册回到"当前编制"
+  //      注意：不动刚建立的前线（它是 alive 的），历史记录不受影响
+  if (ROSTER.list.length > ROSTER_CAP) {
+    const keep = ROSTER.list.filter(function (v) { return v.alive; });
+    const pruned = ROSTER.list.length - keep.length;
+    ROSTER.list.length = 0;
+    for (const v of keep) ROSTER.list.push(v);
+    if (pruned > 0) ROSTER._pruned = (ROSTER._pruned || 0) + pruned;
+  }
+  return d;
+}
+
+// ★ 把全局 DISCIPLE 的字段同步到名册对象（值变化时调用）
+function syncDisciple() {
+  const f = ROSTER.front;
+  if (!f || !DISCIPLE._rosterId || f.id !== DISCIPLE._rosterId) return;
+  f.peakTier = DISCIPLE.peakTier | 0;
+  f.runs = DISCIPLE.runs | 0;
+  f.tier = Math.max(f.tier | 0, DISCIPLE.peakTier | 0);
+  // 寿元：DISCIPLE 用秒，名册用年
+  if (DISC_TO_YEARS > 0) f.lifespanLeft = DISCIPLE.lifespanLeft / DISC_TO_YEARS;
 }
 
 // ★ 弟子结束：结算传承，自动接下一代
@@ -6296,44 +6397,76 @@ function render() {
     if (ht) ht.textContent = SECT.honor;
   }
 
-  // ★ 境 · 弟子数据面板（用户要求：单独控件控制展开/收起）
-  //   数据来源与「宗」的弟子名册同一套；这里只做"随行弟子"精简版
-  if (DP_OPEN) {
+  // ★★ 境 · 当前历练弟子的数据（Round 39 重做）
+  //
+  //   用户原话："你下面怎么是弟子名册，我肯定是要看当前历练的弟子的各项数据啊"
+  //
+  //   ⚠️ 原来这里是【「宗」页名册的复制品】（列出所有弟子）——
+  //      既与「宗」页重复，又没有回答"当前这个弟子怎么样"。
+  //   ⚠️ 详细战力（境界/气血/杀伐/护体/天赋/寿元…）已经在下面的 #hud 里了，
+  //      这里只补 hud 没有的：【身份】（谁在历练）+【六项战斗摘要】。
+  {
     const dpb = document.getElementById('discipleBox');
     const dps = document.getElementById('dpStat');
+    const f = ROSTER.front;
+    const dfl = (f && f.alive) ? f : null;      // 前线弟子
+    if (dps) {
+      dps.textContent = dfl
+        ? ('第 ' + SECT.generation + ' 代 · ' + (ROLES[dfl.role] || ''))
+        : '前线空缺（等宗门补员）';
+    }
     if (dpb) {
-      const dz = ROSTER.list.filter(v => v.alive);
-      if (dps) {
-        const f = ROSTER.front;
-        dps.textContent = '在册 ' + dz.length + ' · 前线 ' + (f && f.alive ? f.name : '空缺');
-      }
-      let dh = '';
-      let di = 0;
-      for (const x of dz) {
-        const rc = x.role === 'front' ? 'front' : (x.role === 'back' ? 'back' : 'idle');
-        const post = x.post ? (FAC_BY_ID[x.post] || {}).name : '';
-        const avNo = 1 + ((x.id || di) % AV_COUNT);
-        const [c1, c2] = AV_DISC[((x.id || di) + AV_DISC.length - 1) % AV_DISC.length];
-        const lgShort = AV_LG_SHORT[x.linggen] || (x.linggen ? '灵' : '—');
-        const lgDot = WX_COLOR[WUXING[(x.id || 0) % WUXING.length]] || '#888';
+      if (!dfl) {
+        dpb.innerHTML = '<div class="rs-row" style="color:#5d574c">前线空缺 —— 弟子交接中，' +
+          '稍后会有新的前线弟子入门。</div>';
+      } else {
+        const avNo = 1 + ((dfl.id || 0) % AV_COUNT);
+        const [c1, c2] = AV_DISC[((dfl.id || 0) + AV_DISC.length - 1) % AV_DISC.length];
+        const lgShort = AV_LG_SHORT[dfl.linggen] || (dfl.linggen ? '灵' : '—');
+        const lgDot = WX_COLOR[WUXING[(dfl.id || 0) % WUXING.length]] || '#888';
+        const lifeWarn = DISCIPLE.lifespanLeft < 1800;
+        // 六项战斗摘要（hud 里没有单独列的）
+        const cells = [
+          ['杀伐', st.atk.toFixed(0)],
+          ['气血', Math.round(st.hp)],
+          ['护体', st.def.toFixed(0)],
+          ['出手', st.actFreq.toFixed(1) + '/s'],
+          ['闪避', (st.evade * 100).toFixed(0) + '%'],
+          ['暴击', (st.crit * 100).toFixed(0) + '%'],
+        ];
+        let dh = '';
+        // —— 身份卡 ——
         dh += '<div class="rs-row has-av">' +
-          '<span class="av" style="--c1:' + c1 + ';--c2:' + c2 +
-            ';margin-top:' + ((di % 3) * 0.6).toFixed(1) + 'px">' +
+          '<span class="av" style="--c1:' + c1 + ';--c2:' + c2 + '">' +
           '<img src="assets/弟子/弟子_' + avNo + '.png" ' +
-            'srcset="assets/弟子/弟子_' + avNo + '@2x.png 2x" alt="" loading="lazy" ' +
-            'draggable="false" style="animation-delay:-' +
-            ((di * 0.23) % 2.2).toFixed(2) + 's"></span>' +
-          '<span class="role ' + rc + '">' + ROLES[x.role] + '</span>' +
-          '<span class="nm">' + x.name + '</span>' +
-          '<span class="lg" title="' + (x.linggenName || '') + '">' +
+            'srcset="assets/弟子/弟子_' + avNo + '@2x.png 2x" alt="" draggable="false"></span>' +
+          '<span class="role front">前线</span>' +
+          '<span class="nm">' + dfl.name + '</span>' +
+          '<span class="lg" title="' + (dfl.linggenName || '') + '">' +
             '<i style="background:' + lgDot + '"></i>' + lgShort + '</span>' +
-          '<span class="tal">' + x.talentName + '</span>' +
-          '<span class="post">' + post + '</span>' +
-          '<span class="life">' + Math.round(x.lifespanLeft) + ' 年</span></div>';
-        di++;
+          '<span class="tal">' + (dfl.talentName || '') + '</span>' +
+          '<span class="life' + (lifeWarn ? ' low' : '') + '">' +
+            fmtLife(DISCIPLE.lifespanLeft) + '</span></div>';
+        // —— 六项战斗摘要 ——
+        dh += '<div class="dp-grid">';
+        for (const [k, v] of cells) {
+          dh += '<div class="dp-cell"><span class="k">' + k + '</span>' +
+            '<span class="v">' + v + '</span></div>';
+        }
+        dh += '</div>';
+        // —— 本局进度（hud 的秘境行只有名字，这里给"打到哪了"）——
+        dh += '<div class="dp-note">本局 ' + G.t.toFixed(0) + ' / ' + P.RUN_SECONDS + ' 息' +
+          ' · 击杀 ' + G.kills + ' · 场上 ' + G.field.length +
+          (G.spawned >= G.budget ? ' · 预算已尽' : '') + '</div>';
+        // —— 后勤编制（一句话，不是名册）——
+        const backs = ROSTER.list.filter(function (v) { return v.alive && v.role === 'back'; });
+        if (backs.length) {
+          dh += '<div class="dp-note">后勤 ' + backs.length + ' 人 · ' +
+            (backs.slice(0, 4).map(function (v) { return v.name; }).join('、')) +
+            (backs.length > 4 ? ' 等' : '') + '</div>';
+        }
+        dpb.innerHTML = dh;
       }
-      if (!dz.length) dh = '<div class="rs-row" style="color:#5d574c">（尚无弟子）</div>';
-      dpb.innerHTML = dh;
     }
   }
 
@@ -6500,12 +6633,35 @@ function render() {
     el.style.top = (e.y * 100) + '%';
     el.style.opacity = 0.5 + 0.5 * Math.max(0, e.hp / e.maxHp);
     el.classList.toggle('hit', e.hit > 0);
-    // ★ 怪物按【自身五行】着色（土=土黄、木=青绿…）
-    //    不做克制/被克的额外视觉 —— 五行相克是常识，玩家自己会判断
-    if (e.wx) {
-      const c = WX_COLOR[e.wx] || '#888';
-      el.style.borderColor = c;
-      el.style.background = 'radial-gradient(circle at 35% 30%, ' + c + 'cc, ' + c + '55)';
+    // ★ 妖怪贴图（Round 38）：有图的用图，没图的（域外天魔）退回五行色块
+    //   贴图挂 .sprite（::before 会挡住 hpbar，所以用真实子元素更好控制层级）
+    const spName = MOB_SPRITE[e.mk];
+    if (spName) {
+      let sp = el._sp;
+      if (!sp) {
+        sp = document.createElement('div');
+        sp.className = 'sprite';
+        // ⚠️ 用 appendChild 而不是 insertBefore —— .sprite 是绝对定位，
+        //    放在子元素最后不影响布局；而测试桩的 DOM 没实现 insertBefore。
+        el.appendChild(sp);
+        el._sp = sp;
+      }
+      // 精英 / Boss 换用更大的贴图（尺寸差异由 CSS 决定）
+      const suf = e.kind === 'boss' ? '_Boss' : (e.kind === 'elite' ? '_精英' : '');
+      const url = 'url(assets/妖怪/妖_' + spName + suf + '.png)';
+      if (el._spUrl !== url) {
+        el._spUrl = url;
+        sp.style.backgroundImage = url;
+      }
+      if (el._noSprite) { el.classList.remove('nosprite'); el._noSprite = false; }
+    } else {
+      // 无贴图 ⇒ 用五行色块兜底
+      if (!el._noSprite) { el.classList.add('nosprite'); el._noSprite = true; }
+      if (e.wx) {
+        const c = WX_COLOR[e.wx] || '#888';
+        el.style.borderColor = c;
+        el.style.background = 'radial-gradient(circle at 35% 30%, ' + c + 'cc, ' + c + '55)';
+      }
     }
     const bar = el.querySelector('.hpbar i');
     if (bar) bar.style.width = Math.max(0, e.hp / e.maxHp * 100) + '%';

@@ -3888,6 +3888,67 @@ chk('★ 读档后门规的轴/值/署名都对',
   A.SECT_DOCTRINE.rules[0].axis === 'profit' && A.SECT_DOCTRINE.rules[0].value === 70 &&
   !!A.SECT_DOCTRINE.rules[0].by,
   A.SECT_DOCTRINE.rules[0].axis + '=' + A.SECT_DOCTRINE.rules[0].value);
+// ============================================================
+hdr('测试 50：开局名册 + 编制稳定（Round 39 用户报）');
+//
+//   用户原话：① 看不到历练的弟子图片　② 下面怎么是弟子名册
+//   根因：newDisciple() 只设全局 DISCIPLE，【从不进 ROSTER.list】；
+//         而 recruit() 只在 generationalTurnover（弟子死后）调用
+//         ⇒ 开局 ROSTER.list = 0 · front = null
+//         ⇒ ① 立绘被隐藏　② 名册空白　③ 后勤一个都没有
+A.SECT.up = {}; A.SECT_RES.materials = 0; A.doctrineReset();
+A.SECT.honor = 0; A.SECT.rank = 0; A.SECT.history.length = 0;
+A.ROSTER.list.length = 0; A.ROSTER.front = null; A.ROSTER.nextId = 1;
+A.newDisciple([A.makeSlotItem('主手', 6, 1, 'sword')]);
+
+chk('★ 开局名册非空', A.ROSTER.list.length > 0, A.ROSTER.list.length + ' 人');
+chk('★ 开局有前线弟子', !!(A.ROSTER.front && A.ROSTER.front.alive),
+  A.ROSTER.front ? A.ROSTER.front.name : 'null');
+chk('★ 开局有后勤编制', A.ROSTER.list.filter(x => x.alive && x.role === 'back').length >= 1,
+  A.ROSTER.list.filter(x => x.alive && x.role === 'back').length + ' 人');
+chk('★ 开局只有 1 个前线（A 底座）',
+  A.ROSTER.list.filter(x => x.alive && x.role === 'front').length === 1);
+chk('★ 前线就是这一代（id 已记录）', A.DISCIPLE._rosterId === A.ROSTER.front.id,
+  'DISCIPLE._rosterId=' + A.DISCIPLE._rosterId + ' front.id=' + A.ROSTER.front.id);
+
+// ---- 立绘能拿到图（render 里会写 heroImg.src）----
+A.render();
+const _hi = global.document.getElementById('heroImg');
+chk('★ 立绘 src 已设置（不是空）', !!(_hi && _hi.src), String(_hi && _hi.src).slice(-30));
+chk('★ 立绘未被隐藏', !(_hi && _hi.style && _hi.style.display === 'none'));
+
+// ---- 弟子面板显示当前弟子而不是名册 ----
+const _db = global.document.getElementById('discipleBox');
+const _dh = (_db && (_db.innerHTML || _db._html)) || '';
+chk('★ 弟子面板有内容', _dh.length > 0, _dh.length + ' 字符');
+chk('★ 弟子面板只列当前弟子一行（不是名册）',
+  (_dh.match(/rs-row/g) || []).length === 1,
+  (_dh.match(/rs-row/g) || []).length + ' 行');
+chk('★ 弟子面板有六项战斗摘要（dp-grid）', _dh.indexOf('dp-grid') >= 0);
+chk('★ 弟子面板有本局进度（dp-note）', _dh.indexOf('dp-note') >= 0);
+
+// ---- 连绵多代：名册不膨胀、前线恒为 1 ----
+let _maxRoster = 0, _frontOk = true;
+for (let gen = 2; gen <= 6; gen++) {
+  A.endDisciple('old_age');
+  A.newDisciple([]);
+  const al = A.ROSTER.list.filter(x => x.alive);
+  _maxRoster = Math.max(_maxRoster, A.ROSTER.list.length);
+  if (al.filter(x => x.role === 'front').length !== 1) _frontOk = false;
+}
+chk('★ 多代后名册不超过上限', _maxRoster <= A.ROSTER_CAP,
+  _maxRoster + ' <= ' + A.ROSTER_CAP);
+chk('★ 多代后前线恒为 1（不累积）', _frontOk);
+chk('★ 玩家分派规则仍有效（assignDisciple 保留规则）', (function () {
+  A.ROSTER.list.length = 0;
+  A.ROSTER.front = null;          // ⚠️ 必须清空 —— 否则"前线已有人⇒全去后勤"先命中
+  A.ROSTER.rule = { kind: 'talent', minTalent: 'yao' };
+  // ⚠️ makeDisciple 的 talent 要【对象】不是字符串（我第一版传了 'yao' ⇒ talent=undefined）
+  const hi = A.makeDisciple({ talent: A.TALENTS.find(x => x.id === 'yao') });
+  const lo = A.makeDisciple({ talent: A.TALENTS.find(x => x.id === 'fan') });
+  A.assignDisciple(hi, true); A.assignDisciple(lo, true);
+  return hi.role === 'front' && lo.role === 'back';
+})(), '妖孽→前线 · 凡骨→后勤');
 hdr('测试 47：名册进存档（审计发现的严重缺口）');
 //
 //   ★ Round 33：ROSTER 原来【完全没进存档】⇒ 刷新即丢
