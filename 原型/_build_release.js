@@ -58,6 +58,30 @@ if (fs.existsSync(bg)) {
   console.log('  ⚠️ 背景图缺失，画面会少一层山景');
 }
 
+// ---- ③之二 弟子立绘（AI 生成，54 KB，是游戏必需资源）----
+//   ⚠️ 不加这段，发布版的弟子头像会全部裂图
+const avDir = SRC + '/assets/弟子';
+if (fs.existsSync(avDir)) {
+  mk(PKG + '/assets/弟子');
+  let avN = 0;
+  for (const f of fs.readdirSync(avDir)) {
+    copy(avDir + '/' + f, PKG + '/assets/弟子/' + f);
+    avN++;
+  }
+  console.log('  ✅ 弟子立绘已打包（' + avN + ' 个）');
+} else {
+  console.log('  ⚠️ 找不到 assets/弟子/，发布版立绘会裂');
+}
+
+// ---- ③之三 经络图（装页的人体剪影 + 穴位）----
+//   ⚠️ 校验脚本抓出来的：index.html 引用 assets/经络图_*.png，
+//      但打包时只拷了背景图 ⇒ 发布版的「装」页会缺人体
+for (const n of ['经络图_剪影.png', '经络图_穴位.png']) {
+  const s = ROOT + '/美术资源/04_水墨背景/' + n;
+  if (fs.existsSync(s)) { copy(s, PKG + '/assets/' + n); console.log('  ✅ ' + n + ' 已打包'); }
+  else console.log('  ⚠️ 找不到 ' + n);
+}
+
 // ---- ④ 校验 ----
 const files = [];
 (function walk(p, rel) {

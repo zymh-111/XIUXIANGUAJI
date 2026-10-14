@@ -66,17 +66,25 @@
   #eventBar .left{color:#8c8574;font-size:10px}
 
   /* ============ 境 · 场景 ============ */
-  .scene{position:relative;isolation:isolate;margin:14px 18px 0;height:246px;border-radius:3px;
+  /* ★ Round 35：场景加高（用户选定"方案C"）246px → 380px，战斗区更宽敞 */
+  .scene{position:relative;isolation:isolate;margin:14px 18px 0;height:380px;border-radius:3px;
     overflow:hidden;background:#0a0b0c;flex:0 0 auto}
+  /* ★ 亮度/饱和度放宽（原 .5/.42 把场景压得几乎看不见） */
   .scene img{width:100%;height:100%;object-fit:cover;object-position:center 30%;
-    filter:brightness(.5) saturate(.42) contrast(1.05)}
+    filter:brightness(.7) saturate(.5) contrast(1.05)}
   .scene .veil{position:absolute;inset:0;z-index:1;pointer-events:none;
     background:radial-gradient(ellipse at 50% 42%,transparent 0%,rgba(8,9,10,.72) 100%),
                linear-gradient(180deg,rgba(10,11,12,.5),rgba(10,11,12,.86))}
   .qilabel{position:absolute;z-index:3;left:14px;bottom:11px;font-size:10.5px;color:#8c8574;letter-spacing:2px}
   .qilabel b{color:var(--gold);font-weight:400}
-  #battleInfo{position:absolute;z-index:3;right:14px;bottom:11px;font-size:10.5px;color:#8c8574;
-    letter-spacing:1px;text-align:right;line-height:1.7}
+  /* ★ Round 36 修复：这里原本有 6 个 <span> 但【没有任何布局规则】
+     ⇒ 它们全挤在同一行上重叠，字糊成一团（截图里能看到 "40旅...900...900" 这种）
+     ⇒ 改为 flex 两行 + 右对齐 + 换行间距 */
+  #battleInfo{position:absolute;z-index:3;left:14px;right:14px;bottom:11px;
+    font-size:10.5px;color:#8c8574;letter-spacing:1px;line-height:1.7;
+    display:flex;flex-wrap:wrap;justify-content:flex-end;
+    gap:0 10px;align-items:baseline}
+  #battleInfo span{white-space:nowrap}
   #battleInfo b{color:var(--paper);font-weight:400}
   #battleInfo b.low{color:var(--red)}
   #battleInfo .dim{color:var(--dim2)}
@@ -85,26 +93,37 @@
   #battleWrap{position:absolute;inset:0;z-index:4}
   #reachRing{position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);
     border-radius:50%;z-index:2;pointer-events:none;border:1px solid #5aa9e64d}
-  #hero{position:absolute;left:50%;top:56%;width:34px;height:46px;
+  /* ★ 主角 = 当前前线弟子（立绘换成 <img>），尺寸随场景加高一起放大
+     旧版是 34×46 的纯 CSS 小人；现在用 72×72 的弟子头像 */
+  #hero{position:absolute;left:50%;top:56%;width:72px;height:72px;
     transform:translate(-50%,-50%);z-index:5;pointer-events:none;
     transition:left .18s linear, top .18s linear}
+  #hero img{width:100%;height:100%;display:block;
+    filter:drop-shadow(0 3px 5px #000000b3);transform-origin:50% 82%;
+    animation:heroBreath 3.4s ease-in-out infinite}
+  @keyframes heroBreath{0%,100%{transform:scale(1) translateY(0)}
+    50%{transform:scale(1.025) translateY(-1.6px)}}
+  /* 动作钩子：加 class 即触发（攻击/受击/闪避） */
+  #hero.attacking img{animation:heroAttack .34s ease-out}
+  #hero.hurt img{animation:heroHurt .22s ease-out}
+  #hero.dodge img{animation:heroDodge .3s ease-out}
+  @keyframes heroAttack{0%{transform:scale(1)}
+    34%{transform:scale(1.05) translateY(-3px) rotate(-2.4deg)}100%{transform:scale(1)}}
+  @keyframes heroHurt{0%,100%{transform:translateX(0)}
+    28%{transform:translateX(-3.5px) rotate(1.6deg)}
+    62%{transform:translateX(3.5px) rotate(-1.2deg)}}
+  @keyframes heroDodge{0%{transform:scale(1)}
+    40%{transform:scale(.94) translateY(2px)}100%{transform:scale(1)}}
   #hero .halo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:44px;height:44px;border-radius:50%;border:1px solid #c9a2273d;
+    width:88px;height:88px;border-radius:50%;border:1px solid #c9a2273d;
     animation:halo 2.4s ease-out infinite}
   @keyframes halo{0%{transform:translate(-50%,-50%) scale(.6);opacity:.8}
     100%{transform:translate(-50%,-50%) scale(1.5);opacity:0}}
-  #hero .head{position:absolute;left:50%;top:2px;transform:translateX(-50%);
-    width:10px;height:10px;border-radius:50%;background:#cfc8ba}
-  #hero .torso{position:absolute;left:50%;top:13px;transform:translateX(-50%);
-    width:14px;height:20px;border-radius:3px;background:linear-gradient(180deg,#cfc8ba,#8c8574)}
-  #hero .legs{position:absolute;left:50%;top:34px;transform:translateX(-50%);
-    width:12px;height:12px;background:linear-gradient(180deg,#8c8574,#5d574c)}
-  #hero .hpwrap{position:absolute;left:50%;top:-9px;transform:translateX(-50%);
-    width:30px;height:2px;background:#ffffff1a;overflow:hidden}
+  #hero .hpwrap{position:absolute;left:50%;top:-10px;transform:translateX(-50%);
+    width:64px;height:2px;background:#ffffff1a;overflow:hidden}
   #hero .hpwrap i{display:block;height:100%;width:100%;
     background:linear-gradient(90deg,#7d6118,#d9b84a)}
-  #hero.dodge .torso{box-shadow:0 0 18px #63b394cc;background:linear-gradient(180deg,#7fd8bc,#2f9e58)}
-  #hero.dash{filter:brightness(1.8)}
+  #hero.dodge .torso,#hero.dash{filter:brightness(1.6)}
   #arena{position:absolute;inset:0}
   /* ★ 敌人（Round 14 补全：此前重写 HTML 时把这段写残了，
        只剩 position/border-radius、没有尺寸 ⇒ 宽高 0 ⇒ 完全看不见怪） */
@@ -188,13 +207,51 @@
   .zone .zname{font-size:10px;color:var(--dim2);padding:3px 5px;letter-spacing:1px;
     display:flex;justify-content:space-between;align-items:baseline}
   .zone .zname em{font-style:normal;color:var(--gold);font-variant-numeric:tabular-nums}
-  .zone .zgrid{position:relative}
-  .zone .zgrid .cell{position:absolute;border:1px solid var(--line2);border-radius:1px}
-  .zone .zgrid .cell.filled{border-color:transparent}
-  .zone .zgrid .it{border:1px solid;border-radius:1px;display:flex;
-    align-items:center;justify-content:center;font-size:9px;line-height:1.1;
-    overflow:hidden;text-align:center;word-break:break-all;cursor:pointer}
-  .zone.dragover{border-color:var(--gold);background:#c9a2270f}
+
+  /* ============ 装 · 经络图（还原原始设计）============
+     布局：左右两栏放 6 个部位格，中间是经络图人体（剪影 + 穴位）
+     每个部位格内部仍是【网格拼装】（保持 Backpack Hero 玩法不变） */
+  .body-area{position:relative;margin:12px 18px 0;flex:0 0 auto;
+    display:grid;grid-template-columns:1fr 186px 1fr;gap:8px;align-items:start}
+  /* #zones 作为子网格铺满 3 列，内部再分左右两栏 ——
+     这样左栏的格子不会把右栏挤出去 */
+  #zones{grid-column:1/4;display:grid;grid-template-columns:1fr 186px 1fr;
+    gap:8px 8px;align-items:start;position:relative;z-index:2}
+  /* 引线：从部位格指向人体对应位置（纯装饰，不挡点击） */
+  .leaders{position:absolute;inset:0;width:100%;height:100%;
+    pointer-events:none;z-index:1;overflow:visible}
+  /* 人体：跨 3 列，放最底层当背景 */
+  .fig-wrap{position:absolute;left:50%;top:0;transform:translateX(-50%);
+    width:220px;height:340px;pointer-events:none;z-index:0}
+  .fig-glow{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:210px;height:300px;
+    background:radial-gradient(ellipse at 50% 42%,#c9a22738 0%,#c9a22718 38%,transparent 70%)}
+  .fig-sil,.fig-pts{position:absolute;left:50%;top:4px;transform:translateX(-50%);
+    height:332px;width:auto}
+  .fig-sil{filter:drop-shadow(1px 0 0 #d9b84ab3) drop-shadow(-1px 0 0 #d9b84ab3)
+    drop-shadow(0 1px 0 #d9b84ab3) drop-shadow(0 -1px 0 #d9b84ab3)}
+  .fig-pts{opacity:.92}
+  /* 灵气粒子 */
+  .fig-qi{position:absolute;inset:0;width:100%;height:100%;
+    animation:qiBreath 5.5s ease-in-out infinite}
+  @keyframes qiBreath{0%,100%{opacity:.5}50%{opacity:1}}
+
+  /* 部位格：左右两栏 */
+  .ztile{position:relative;z-index:2;min-width:0}
+  .ztile.left{grid-column:1}.ztile.right{grid-column:3}
+  .ztile .zh{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:4px;white-space:nowrap}
+  .ztile .zh b{color:#bbb4a6;font-weight:400;font-size:11px}
+  .ztile .zh em{font-style:normal;color:var(--dim2);font-variant-numeric:tabular-nums;font-size:9.5px}
+  .ztile .zh em.full{color:var(--gold)}
+  /* 格内网格（沿用原有 cell / it 视觉，只是格子变小） */
+  .zg{display:grid;gap:2px;justify-content:start}
+  .zg .cell{width:14px;height:14px;border:1px solid var(--line2);border-radius:2px;
+    display:flex;align-items:center;justify-content:center;font-size:8px;
+    overflow:hidden;position:relative}
+  .zg .cell.item{border-width:1px;border-style:solid}
+  .zg .cell.empty{border-style:dashed;border-color:#ffffff0d}
+  .zg .cell.dragover{border-color:var(--gold);background:#c9a2270f}
 
   /* ============ 背包 / 掉落 ============ */
   .flt{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px;
@@ -390,6 +447,33 @@
   .rs-row .tal{color:#9aa5b8;font-size:9.5px}
   .rs-row .life{flex:1;text-align:right;color:#8c8574;font-variant-numeric:tabular-nums}
   .rs-row .post{color:#c9a86e;font-size:9.5px}
+
+  /* ★ 弟子头像（AI 生成，assets/弟子/）
+     角色多为浅色袍 ⇒ 深底上会"隐形"，必须给圆盘衬托。
+     圆盘配色由 JS 按弟子 id 分配（--c1 亮部 / --c2 暗部），同代弟子各不相同 */
+  .rs-row .av{flex:0 0 auto;width:42px;height:42px;align-self:center;
+    border-radius:50%;position:relative;flex-shrink:0;
+    background:radial-gradient(circle at 40% 32%,
+      var(--c1,#f2ece0) 0%, var(--c2,#d5cdbe) 72%, var(--c2,#b8ae9c) 100%);
+    box-shadow:0 0 0 1px #ffffff1c, inset 0 -2px 3px #00000030, 0 1px 3px #00000055}
+  .rs-row .av img{position:absolute;left:0;top:0;width:100%;height:100%;
+    user-select:none;pointer-events:none;transform-origin:50% 82%;
+    will-change:transform;animation:avBob 2.2s ease-in-out infinite}
+  @keyframes avBob{
+    0%,100%{transform:translateY(0)   scale(1)}
+    50%    {transform:translateY(-2.5px) scale(1.03)}
+  }
+  .rs-row.has-av{align-items:center;padding:5px 0}
+  /* ★ 灵根小标：色点 + 灵根档位 */
+  .rs-row .lg{flex:0 0 auto;font-size:9px;padding:0 3px;border-radius:2px;
+    border:1px solid #ffffff1a;color:#9a9284;white-space:nowrap;
+    display:inline-flex;align-items:center;gap:2px}
+  .rs-row .lg i{display:inline-block;width:6px;height:6px;border-radius:50%;
+    font-style:normal}
+  @media (prefers-reduced-motion: reduce){
+    .rs-row .av img{animation:none}
+  }
+
   .rs-fac{display:flex;align-items:baseline;gap:4px;font-size:9.5px;padding:2px 0;color:var(--dim)}
   .rs-fac .fn{width:52px;color:#9aa5b8}
   .rs-fac .fp{color:var(--gold);font-variant-numeric:tabular-nums}
@@ -466,16 +550,14 @@
 
     <!-- 场景（含战斗） -->
     <div class="scene">
-      <img src="../../美术资源/04_水墨背景/asian-mountain-forest-bg__sprite_northWindShrineBG.png" alt="">
+      <img src="assets/asian-mountain-forest-bg__sprite_northWindShrineBG.png" alt="">
       <div class="veil"></div>
       <div id="battleWrap">
         <div id="reachRing"></div>
         <div id="hero">
           <div class="halo"></div>
           <div class="hpwrap"><i id="heroHp"></i></div>
-          <div class="head"></div>
-          <div class="torso"></div>
-          <div class="legs"></div>
+          <img id="heroImg" src="assets/弟子/弟子_2@2x.png" alt="">
         </div>
         <div id="arena"></div>
         <div id="battleBarWrap"><div id="battleBar"></div></div>
@@ -518,8 +600,42 @@
       <div class="seal"><span>装</span></div>
     </div>
     <div class="scroll">
-      <div id="zones"></div>
-      <div class="btns" style="padding:10px 0 0">
+      <!-- ★ 装 · 经络图（还原原始设计：人体 + 左右 6 个部位格）
+           每个部位格内部仍是网格拼装，drag & drop 玩法不变 -->
+      <div class="body-area">
+        <div class="fig-wrap">
+          <div class="fig-glow"></div>
+          <img class="fig-sil" src="assets/经络图_剪影.png" alt="">
+          <img class="fig-pts" src="assets/经络图_穴位.png" alt="">
+          <svg class="fig-qi" viewBox="0 0 220 340" aria-hidden="true">
+            <g fill="#d9b84a">
+              <circle cx="72" cy="86" r="1.7" opacity=".50"/>
+              <circle cx="150" cy="118" r="1.3" opacity=".36"/>
+              <circle cx="66" cy="176" r="1.5" opacity=".44"/>
+              <circle cx="158" cy="208" r="1.8" opacity=".48"/>
+              <circle cx="80" cy="266" r="1.3" opacity=".34"/>
+              <circle cx="146" cy="296" r="1.5" opacity=".40"/>
+              <circle cx="110" cy="60" r="1.2" opacity=".30"/>
+              <circle cx="110" cy="322" r="1.6" opacity=".42"/>
+              <circle cx="90" cy="130" r="1.1" opacity=".28"/>
+              <circle cx="136" cy="250" r="1.1" opacity=".28"/>
+            </g>
+          </svg>
+        </div>
+        <div id="zones"></div>
+        <!-- 引线：从左右部位格指向人体对应部位（viewBox 按 body-area 实际宽度 364 估） -->
+        <svg class="leaders" viewBox="0 0 364 356" fill="none" preserveAspectRatio="none">
+          <g stroke="#ffffff1c" stroke-width="1">
+            <path d="M96,26 L152,44"/>
+            <path d="M96,140 L142,130"/>
+            <path d="M96,252 L128,192"/>
+            <path d="M268,252 L232,110"/>
+            <path d="M268,300 L236,246"/>
+            <path d="M268,344 L228,290"/>
+          </g>
+        </svg>
+      </div>
+      <div class="btns" style="padding:10px 18px 0">
         <button id="btnClear">全部卸下</button>
         <button id="btnEquipAll" class="primary">一键穿上所有提升</button>
         <button id="btnScrap">分解无提升</button>

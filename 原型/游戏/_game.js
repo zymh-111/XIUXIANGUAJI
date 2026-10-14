@@ -1426,6 +1426,26 @@ const ROSTER = {
 };
 const ROLES = { front: '前线', back: '后勤', idle: '候补' };
 
+// ★ 弟子头像素材表（AI 生成 · assets/弟子/ 弟子_1..7.png）
+//   形象与圆盘配色各自独立散列 ⇒ 同代弟子外观不重复，且同一弟子始终不变。
+//   ⚠️ 素材按【角色高度归一化】过（都占画布 80%），所以不同来源的图大小一致。
+//   ⚠️ AV_COUNT 必须与 assets/弟子/ 里的形象数一致；AV_DISC 数量 = AV_COUNT 时，
+//      (id-1) 取模可保证同批弟子的形象与颜色【同时】不重复。
+const AV_COUNT = 7;
+const AV_DISC = [
+  ['#f2ece0', '#cdc4b4'],   // 宣纸
+  ['#d6e8d8', '#96ba9e'],   // 竹青
+  ['#d6e4f2', '#92b0d2'],   // 天水
+  ['#f4dcd6', '#d0968a'],   // 胭脂
+  ['#f0e8ce', '#cab680'],   // 秋香
+  ['#e4d8ea', '#ac96c2'],   // 紫檀
+  ['#dce8e0', '#9cb8a8'],   // 苍青
+];
+// 灵根档位缩写（用于名册小标；完整名在 title 提示里）
+const AV_LG_SHORT = { dan: '单', shuang: '双', san: '三', si: '四', wu: '五', wei: '伪' };
+// 场景主角当前用的是哪个形象编号（避免每帧重复写 DOM）
+let HERO_AV = 0;
+
 // ---- 分派规则（玩家定义 · 一次性）----
 const ASSIGN_RULES = [
   { id: 'talent', name: '按天赋', desc: '天赋 ≥ X 的上前线', levels: ['shang', 'tian', 'yao'] },
@@ -2684,6 +2704,11 @@ function newDisciple(carried, opts) {
   dujieReset();      // ★ 渡劫状态随新弟子重置（Round 20）
   gfResetAll();      // ★ 功法释放计数随新弟子清零（Round 24）
   GF.gfLock = {};    // ★ Round 31：新弟子重新决定功法（锁不继承）
+  // ★★ Round 36：开局把【已学会的功法】填进空槽
+  //   `GF_KNOWN` 开局送了每类第 1 个（注释："保证开局可玩"），但 `GF.eq` 是空的
+  //   ⇒ 5 个技能槽全空 ⇒ "开局可玩"的意图没达成，玩家还得自己选 5 次
+  //   ⇒ 这里自动装填；玩家之后手动改会打锁（gfLock），自动逻辑不再覆盖
+  try { autoPickGongfa(); } catch (e) { }
   DISCIPLE.lifeGain = 0;
   DISCIPLE.lifeMax = (P.LIFESPAN_YEARS * talLifeMul() + sectBonus().lifeYear) / P.LIFESPAN_YEARS * (P.LIFESPAN_HOURS * 3600);
   SECT.peers = null; // ★ 同门（每代重抽）
@@ -5226,6 +5251,7 @@ function startRun() {
   G.origin = 0;
   G.heroX = 0.5; G.heroY = 0.56; G.wanderT = 0; G.wanderTarget = null;
   G.dodgeAcc = 0; G.dodgeFlash = 0; G.dashT = 0;
+  G.attackT = 0;                        // ★ Round 36：攻击动画标记
   G.dodgeCount = 0; G.lastDodgeT = -99;
   G.pressureAcc = 0; G.pressureN = 0;
   log('进入秘境 · ' + P.REALMS[realm()] + ' · 难度 ' + (G.tier + 1), 'sys');
@@ -5340,6 +5366,8 @@ function step(st, dt) {
   G.actAcc += st.actFreq * dt;
   let swings = 0;
   while (G.actAcc >= 1 && swings++ < 20) {   // ★ 加保险：单步最多 20 次出手，防死循环
+      // ★ Round 36：玩家出手 ⇒ 打攻击动画标记（#hero.attacking，原来从未触发）
+      G.attackT = 0.34;
     // 候选 = 攻击距离内，按距离升序
     const cand = G.field
       .map((e) => ({ e, d: distToHero(e) }))
@@ -6001,6 +6029,23 @@ function render() {
         ? ('秘境 · <b>' + place + '</b> · 已入 ' + G.t.toFixed(0) + ' 息')
         : ('秘境 · <b>待入</b>');
     }
+    // ★ 主角立绘 = 当前【前线弟子】的形象（本来就是弟子在历练，不是抽象主角）
+    //   形象编号与名册用同一套散列 ⇒ 名册里"前线 凌霄"和场景里站着的必定是同一个人。
+    //   ⚠️ 只在编号变化时才写 DOM（避免每帧改 src，也避开测试桩没有 getAttribute 的问题）
+    const heroImg = document.getElementById('heroImg');
+    if (heroImg) {
+      const hf = ROSTER.front;
+      if (hf && hf.alive) {
+        const n = 1 + ((hf.id || 0) % AV_COUNT);
+        if (HERO_AV !== n) {
+          HERO_AV = n;
+          heroImg.src = 'assets/弟子/弟子_' + n + '@2x.png';
+        }
+        if (heroImg.style) heroImg.style.display = '';
+      } else {
+        if (heroImg.style) heroImg.style.display = 'none';   // 前线空缺 ⇒ 不显示立绘
+      }
+    }
     const sn = document.getElementById('sectName');
     if (sn) sn.textContent = SECT_RANKS[SECT.rank].n;
     const sn2 = document.getElementById('sectName2');
@@ -6119,6 +6164,20 @@ function render() {
     hero.style.top = (G.heroY * 100) + '%';
     hero.classList.toggle('hurt', G.shake > 0);
     hero.classList.toggle('dodge', G.dodgeFlash > 0);
+    // ★ Round 36：出手动画（#hero.attacking）
+    //   ⚠️ 不能只用 toggle(..., G.attackT>0)：连续出手时类名一直是 true
+    //      ⇒ CSS 动画不会重播。必须【先移除、强制重排、再加回】。
+    //   收尾交给 animationend（比定时器可靠，切页签回来也不会卡住动画）
+    const wantAtk = G.attackT > 0;
+    if (wantAtk && !hero._atk) {
+      hero._atk = true;
+      hero.classList.remove('attacking');
+      void hero.offsetWidth;                 // 强制重排 ⇒ 动画重新开始
+      hero.classList.add('attacking');
+    } else if (!wantAtk && hero._atk) {
+      hero._atk = false;
+      hero.classList.remove('attacking');
+    }
   }
   // 突破闪光（0.5 秒）
   if (breakoutFlash > 0) {
@@ -6222,9 +6281,10 @@ function render() {
       if (c && c._anchor) used += c.cells;
     }
     hd.innerHTML =
-      `<b>${z}</b><span class="${used >= zoneCap(z) ? 'full' : ''}">${used}/${zoneCap(z)}</span>`;
+      `<b>${z}</b><em class="${used >= zoneCap(z) ? 'full' : ''}">${used}/${zoneCap(z)}</em>`;
     grid.innerHTML = '';
-    grid.style.gridTemplateColumns = `repeat(${zc.w}, 22px)`;
+    // 格子尺寸由 CSS 定（.zg .cell 是 14px），这里只给列数
+    grid.style.gridTemplateColumns = `repeat(${zc.w}, 14px)`;
     for (let y = 0; y < zc.h; y++) for (let x = 0; x < zc.w; x++) {
       const c = zc.cells[y][x];
       const cell = document.createElement('div');
@@ -6243,6 +6303,9 @@ function render() {
         cell.addEventListener('dragstart', ev => { ev.dataTransfer.setData('text', JSON.stringify({ from: 'zone', zone: z, x, y })); });
       } else if (c && c._part) {
         cell.style.visibility = 'hidden';
+      } else {
+        // 空格：用虚线边框区分"可放"的位置（原网格版所有格子一样，看不出空隙）
+        cell.classList.add('empty');
       }
       cell.dataset.gx = x; cell.dataset.gy = y;
       // ★ 右键 = 卸下该件装备（放回背包）
@@ -6526,14 +6589,37 @@ function render() {
           }
           if (rb) {
             let h7 = '';
+            // ★ 弟子头像：AI 生成素材（assets/弟子/）
+            //   形象 + 圆盘配色按弟子 id 稳定散列选取 ⇒ 同一弟子每次渲染外观不变，
+            //   同代弟子之间各不相同。错峰延迟做出"一排人在各自活动"的观感。
+            let avIdx = 0;
             for (const x of alive) {
               const rc = x.role === 'front' ? 'front' : (x.role === 'back' ? 'back' : 'idle');
               const post = x.post ? (FAC_BY_ID[x.post] || {}).name : '';
-              h7 += '<div class="rs-row"><span class="role ' + rc + '">' + ROLES[x.role] + '</span>' +
+              const avNo = 1 + ((x.id || avIdx) % AV_COUNT);
+              // ⚠️ 圆盘索引不能再用 id*3+1：它与 6 不互质 ⇒ 周期只有 2，颜色会重复。
+              //    直接用 (id-1) 取模，相邻 id 必然拿到不同颜色。
+              const [dc1, dc2] = AV_DISC[((x.id || 0) + AV_DISC.length - 1) % AV_DISC.length];
+              const lgShort = AV_LG_SHORT[x.linggen] || (x.linggen ? '灵' : '—');
+              const lgDot = WX_COLOR[WUXING[(x.id || 0) % WUXING.length]] || '#888';
+              // 错峰：每行延迟不同 + 轻微垂直相位差，避免整齐划一
+              const avDelay = (avIdx * 0.23) % 2.2;
+              const avShift = (avIdx % 3) * 0.6;
+              h7 += '<div class="rs-row has-av">' +
+                '<span class="av" style="--c1:' + dc1 + ';--c2:' + dc2 +
+                  ';margin-top:' + avShift.toFixed(1) + 'px">' +
+                '<img src="assets/弟子/弟子_' + avNo + '.png" ' +
+                  'srcset="assets/弟子/弟子_' + avNo + '@2x.png 2x" ' +
+                  'alt="" loading="lazy" draggable="false" ' +
+                  'style="animation-delay:-' + avDelay.toFixed(2) + 's"></span>' +
+                '<span class="role ' + rc + '">' + ROLES[x.role] + '</span>' +
                 '<span class="nm">' + x.name + '</span>' +
+                '<span class="lg" title="' + (x.linggenName || '') + '">' +
+                  '<i style="background:' + lgDot + '"></i>' + lgShort + '</span>' +
                 '<span class="tal">' + x.talentName + '</span>' +
                 '<span class="post">' + post + '</span>' +
                 '<span class="life">' + Math.round(x.lifespanLeft) + ' 年</span></div>';
+              avIdx++;
             }
             if (!alive.length) h7 += '<div class="rs-row" style="color:#5d574c">（尚无弟子）</div>';
             // 后勤产出
@@ -7144,15 +7230,25 @@ function autoEquip(idx) {
 function buildUI() {
   // 分区面板
   const wrap = $('#zones');
-  const order = ['头', '躯干', '背', '双手', '手臂', '双腿'];
-  for (const z of order) {
+  // ★ 装 · 经络图：6 个部位格分别放左右两栏（顺序按人体位置）
+  const LAYOUT = [
+    { z: '头',   side: 'left' },
+    { z: '双手', side: 'left' },
+    { z: '手臂', side: 'left' },
+    { z: '躯干', side: 'right' },
+    { z: '背',   side: 'right' },
+    { z: '双腿', side: 'right' },
+  ];
+  for (const L of LAYOUT) {
+    const z = L.z;
     const d = document.createElement('div');
-    d.className = 'zone'; d.id = 'zone-' + z;
+    d.className = 'ztile ' + L.side;
+    d.id = 'zone-' + z;
     // ★ 显式建子元素并持有引用
     //   不要用 d.innerHTML = '...' 然后再 querySelector：
     //   因为 render() 会清空容器，querySelector 就找不到了（曾因此白屏）
-    const hd = document.createElement('div'); hd.className = 'zone-hd';
-    const grid = document.createElement('div'); grid.className = 'zone-grid';
+    const hd = document.createElement('div'); hd.className = 'zh';
+    const grid = document.createElement('div'); grid.className = 'zg';
     d.appendChild(hd); d.appendChild(grid);
     d._hd = hd; d._grid = grid;
     wrap.appendChild(d);
