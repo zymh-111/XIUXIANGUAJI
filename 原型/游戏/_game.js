@@ -2630,9 +2630,12 @@ const SECT_MAP = [
 // 当前选中的设施（点建筑切换）
 let SECT_SEL = 'script';
 // ★ 境 · 弟子数据面板是否展开（用户要求：单独控件控制）
-// ★ Round 39：改为【默认展开】—— 用户要看的"当前历练弟子的数据"就应该是默认可见的，
-//   而不是藏在一个"弟子名录 ▾"按钮后面（用户报："我肯定是要看当前历练的弟子的各项数据啊"）
-let DP_OPEN = true;
+// ⚠️ Round 39 修正：保持【默认收起】
+//   用户原话："最开始的境的界面里面的数值显示藏到那种拉取框不就好了，
+//             你现在改的是啥啊，之前能一眼看到的东西，都找不到了"
+//   ⇒ 我第一版把它改成默认展开是【理解错了】—— 用户要的正是"收进拉取框"，
+//     不该把面板摊开、把下面的东西挤走
+let DP_OPEN = false;
 // 当前地图用的是哪一档图（避免每帧改 src）
 let SECT_MAP_TIER = 0;
 
@@ -3173,7 +3176,19 @@ function endDisciple(cause) {
   //         够的减去消耗继续活，不够的直接死，死了空出来的位置就用新的弟子补充"
   { try { generationalTurnover(cause); } catch (e) { } }
   // ★ 自动接下一代（挂机不卡死）
-  setTimeout(() => { newDisciple(carried); }, 800);
+  //   ⚠️⚠️ Round 39 加固：原来【没有 try/catch】
+  //      ⇒ 若 newDisciple 抛一次异常，这个回调就死了
+  //      ⇒ 游戏【永久卡在 rest】、ROSTER.front 永远是 null
+  //      ⇒ 用户看到：「前线空缺（等宗门补员）」+ 立绘消失 + 底部导航不见
+  setTimeout(function () {
+    try {
+      newDisciple(carried);
+    } catch (e) {
+      G.nextDiscipleErr = (G.nextDiscipleErr || 0) + 1;
+      G.lastNextErr = String(e && e.message || e);
+      try { console.error('newDisciple failed:', e); } catch (_) { }
+    }
+  }, 800);
 }
 
 // ---------------- 三之二·五、搜寻遗落传承（用户提案 B）----------------

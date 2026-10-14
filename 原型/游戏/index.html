@@ -128,7 +128,10 @@
     transform:translate(-50%,-50%);z-index:5;pointer-events:none;
     transition:left .18s linear, top .18s linear}
   #hero img{width:100%;height:100%;display:block;
-    filter:drop-shadow(0 3px 5px #000000b3);transform-origin:50% 82%;
+    /* ★ 与名册头像同一套风格对齐（提亮 + 轻暖化） */
+    filter:brightness(1.25) sepia(.10) brightness(1.05)
+      drop-shadow(0 3px 5px #000000b3);
+    transform-origin:50% 82%;
     animation:heroBreath 3.4s ease-in-out infinite}
   @keyframes heroBreath{0%,100%{transform:scale(1) translateY(0)}
     50%{transform:scale(1.025) translateY(-1.6px)}}
@@ -205,7 +208,7 @@
     letter-spacing:1px;text-align:right;font-variant-numeric:tabular-nums}
 
   /* ============ 属性行（.stat 风格） ============ */
-  #hud{padding:0 18px;margin-top:12px;flex:1 1 auto;overflow-y:auto}
+  #hud{padding:0 18px;margin-top:12px}   /* Round 39：滚动交给父层 .scroll（原来双滚动）*/
   #hud .stat{display:flex;justify-content:space-between;align-items:baseline;
     padding:7px 0;border-top:1px solid var(--line2);font-size:12px}
   #hud .stat .k{color:var(--dim);letter-spacing:2px;font-size:11px}
@@ -594,7 +597,13 @@
     box-shadow:0 0 0 1px #ffffff1c, inset 0 -2px 3px #00000030, 0 1px 3px #00000055}
   .rs-row .av img{position:absolute;left:0;top:0;width:100%;height:100%;
     user-select:none;pointer-events:none;transform-origin:50% 82%;
-    will-change:transform;animation:avBob 2.2s ease-in-out infinite}
+    will-change:transform;animation:avBob 2.2s ease-in-out infinite;
+    /* ★ Round 38 风格对齐：弟子素材偏暗（实测明度 46%）且是冷色（色相 200~240°），
+       与 UI 的暖宣纸调（--paper 明度 50% / 色相 40°）不搭。
+       brightness 提亮 + 少量 sepia 往暖色靠 ⇒ 实测 明度 46%→49%、饱和 24%→27%，
+       更接近 UI 基准，且保留角色原本的色彩关系（素材文件不动）。 */
+    filter:brightness(1.25) sepia(.10) brightness(1.05)
+      drop-shadow(0 1px 2px #000000aa)}
   @keyframes avBob{
     0%,100%{transform:translateY(0)   scale(1)}
     50%    {transform:translateY(-2.5px) scale(1.03)}
@@ -705,8 +714,13 @@
     <div id="battleInfo"></div>
 
     <!-- ★ 弟子数据控件（默认收起；点了才展开详细数据） -->
-    <button id="btnDisciple" class="on">当前弟子 ▴</button>
-    <div id="disciplePanel" class="on">
+    <!-- ⚠️⚠️ Round 39 修复：「境」页原来【没有 .scroll 包裹】（其他三页都有）
+         ⇒ #win 是固定 400×648，本页内容算下来 ~796px ⇒ 溢出 148px
+         ⇒ 溢出部分【把底部导航栏直接顶出可视区】（用户报："看不到下面的界面跳转键位"）
+         ⇒ 加上 .scroll（flex:1 1 auto + overflow-y:auto），导航栏就固定在底部了 -->
+    <div class="scroll">
+    <button id="btnDisciple">弟子名录 ▾</button>
+    <div id="disciplePanel">
       <div class="dp-hd"><span>随行弟子</span><em id="dpStat"></em></div>
       <div id="discipleBox"></div>
     </div>
@@ -729,6 +743,8 @@
       <button id="btnFast">快进 12 秒</button>
       <button id="btnExtract" class="danger">提前交接传承</button>
     </div>
+
+    </div><!-- /.scroll -->
 
     <div class="nav">
       <div class="on" data-go="jing">境</div>

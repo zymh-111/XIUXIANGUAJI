@@ -3889,6 +3889,29 @@ chk('★ 读档后门规的轴/值/署名都对',
   !!A.SECT_DOCTRINE.rules[0].by,
   A.SECT_DOCTRINE.rules[0].axis + '=' + A.SECT_DOCTRINE.rules[0].value);
 // ============================================================
+// ============================================================
+hdr('测试 51：「境」页布局（Round 39 用户报：看不到底部导航）');
+//
+//   用户原话："我怎么看不到下面的界面跳转键位了"
+//   根因：#win 是固定 400×648，而「境」页【没有 .scroll 包裹】（其他三页都有）
+//         ⇒ 内容算下来 ~796px，溢出 148px
+//         ⇒ 溢出部分把底部 .nav 直接顶出可视区，而不是滚动
+const _idx = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
+const _jing = _idx.slice(_idx.indexOf('data-v="jing"'), _idx.indexOf('data-v="zhuang"'));
+chk('★ 「境」页有 .scroll 包裹（导航才不会被顶出去）', /class="scroll"/.test(_jing));
+chk('★ .scroll 在 btnDisciple 之前',
+  _jing.indexOf('class="scroll"') < _jing.indexOf('btnDisciple'));
+chk('★ .scroll 在 .nav 之前闭合',
+  _jing.indexOf('/.scroll') > 0 && _jing.indexOf('/.scroll') < _jing.indexOf('class="nav"'));
+chk('★ 底部导航 4 个键位齐全', (function () {
+  const nav = _jing.slice(_jing.indexOf('class="nav"'));
+  return ['jing', 'zhuang', 'zong', 'lu'].every(v => nav.indexOf('data-go="' + v + '"') >= 0);
+})());
+chk('★ #hud 不再自己滚动（交给父层 .scroll）',
+  !/#hud\{[^}]*overflow-y:auto/.test(_idx));
+chk('★ 弟子面板默认【收起】（用户要的是拉取框）',
+  /<div id="disciplePanel">/.test(_idx) && /let DP_OPEN = false/.test(
+    require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8')));
 hdr('测试 50：开局名册 + 编制稳定（Round 39 用户报）');
 //
 //   用户原话：① 看不到历练的弟子图片　② 下面怎么是弟子名册
