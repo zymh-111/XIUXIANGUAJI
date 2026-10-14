@@ -3890,6 +3890,68 @@ chk('★ 读档后门规的轴/值/署名都对',
   A.SECT_DOCTRINE.rules[0].axis + '=' + A.SECT_DOCTRINE.rules[0].value);
 // ============================================================
 // ============================================================
+// ============================================================
+hdr('测试 52：境/宗 两页签重构（Round 40）');
+//
+//   用户要求：删减到只有【境】和【宗】两个页签
+//     · 录 → 并入宗门的史册馆
+//     · 装 → 并入境页的【背包】抽屉（滑出式盖住场景）
+//     · 境页另一个按钮看【当前历练弟子】的数据
+//     · 境页【不放弟子名册】（"这东西是宗门才该有的"）
+const _H = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
+const _J = require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8');
+
+chk('★ 只剩 境/宗 两个页签', (_H.match(/data-v="[a-z]+"/g) || []).length === 2,
+  (_H.match(/data-v="[a-z]+"/g) || []).join(' '));
+chk('★ 底部导航只有 境/宗', (_H.match(/data-go="[a-z]+"/g) || []).length === 4,
+  (_H.match(/data-go="[a-z]+"/g) || []).join(' '));
+chk('★ 已经没有 data-go="zhuang"/"lu"',
+  !/data-go="(zhuang|lu)"/.test(_H));
+chk('★ 史册馆已并入宗页（与宗门地图同页）', (function () {
+  // ⚠️ 不能比较 index 大小：archiveBox 被插在 scroll 开头，在 sectMap 之前
+  const z = _H.slice(_H.indexOf('data-v="zong"'));
+  const zongScreen = z.slice(0, z.indexOf('data-v=') < 0 ? z.length : z.indexOf('</div>\n\n  <!-- '));
+  return z.indexOf('archiveBox') >= 0 && z.indexOf('sectMap') >= 0 &&
+         z.indexOf('archiveBox') < z.indexOf('rosterBox');
+})());
+chk('★ 生平流水也并入宗页', /id="logBox"/.test(_H));
+chk('★ 装页的经络图搬进背包抽屉', (function () {
+  const d = _H.slice(_H.indexOf('id="bagDrawer"'), _H.indexOf('id="disciplePanel"'));
+  return d.indexOf('body-area') >= 0 && d.indexOf('zones') >= 0 &&
+         d.indexOf('gongfaBox') >= 0 && d.indexOf('fabaoBox') >= 0 && d.indexOf('bagList') >= 0;
+})());
+chk('★ 境页有【背包】与【当前弟子】两个按钮',
+  /id="btnBag"/.test(_H) && /id="btnCurDisciple"/.test(_H));
+chk('★ 境页没有弟子名册（名册归宗页）', (function () {
+  const jing = _H.slice(_H.indexOf('data-v="jing"'), _H.indexOf('data-v="zong"'));
+  return jing.indexOf('btnDisciple') < 0 && jing.indexOf('rosterBox') < 0;
+})());
+chk('★ 宗页仍有弟子名册', /id="rosterBox"/.test(_H));
+chk('★ 抽屉样式存在（盖住场景）',
+  /#bagDrawer,#disciplePanel\{/.test(_H) && /#bagDrawer\.on,#disciplePanel\.on\{display:flex\}/.test(_H));
+chk('★ 深链只留 jing/zong（旧链接有兼容）',
+  /views = \['jing','zong'\]/.test(_H) && /h === 'zhuang'/.test(_H) && /h === 'lu'/.test(_H));
+
+// ---- 运行时：VIEW_DISC_ID 必须能被 render() 访问到 ----
+//   ⚠️ 我第一版把它声明在 buildUI() 里（块作用域）⇒ "VIEW_DISC_ID is not defined"
+chk('★ VIEW_DISC_ID 在模块级声明（不在 buildUI 内）', (function () {
+  const i = _J.indexOf('let VIEW_DISC_ID');
+  const b = _J.indexOf('function buildUI()');
+  return i > 0 && i < b;
+})());
+chk('★ render() 能安全执行（不抛 VIEW_DISC_ID 错）', (function () {
+  try { A.render(); return true; } catch (e) {
+    return String(e.message).indexOf('VIEW_DISC_ID') < 0;
+  }
+})());
+chk('★ 无头渲染：弟子层只列 1 行（不是名册）', (function () {
+  A.ROSTER.list.length = 0; A.ROSTER.front = null; A.ROSTER.nextId = 1;
+  A.newDisciple([A.makeSlotItem('主手', 6, 1, 'sword')]);
+  A.render();
+  const b = global.document.getElementById('discipleBox');
+  const h = (b && (b.innerHTML || b._html)) || '';
+  return (h.match(/rs-row/g) || []).length === 1;
+})(), '1 行');
 hdr('测试 51：「境」页布局（Round 39 用户报：看不到底部导航）');
 //
 //   用户原话："我怎么看不到下面的界面跳转键位了"
@@ -3899,14 +3961,25 @@ hdr('测试 51：「境」页布局（Round 39 用户报：看不到底部导航
 const _idx = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
 const _jing = _idx.slice(_idx.indexOf('data-v="jing"'), _idx.indexOf('data-v="zhuang"'));
 chk('★ 「境」页有 .scroll 包裹（导航才不会被顶出去）', /class="scroll"/.test(_jing));
-chk('★ .scroll 在 btnDisciple 之前',
-  _jing.indexOf('class="scroll"') < _jing.indexOf('btnDisciple'));
+chk('★ .scroll 在主体内容之前（qiWrap/hud/btns 都在里面）', (function () {
+  // ⚠️ Round 40：btnDisciple 已删除（境页不再放弟子名册）⇒ 换锚点
+  const s = _jing.indexOf('class="scroll"');
+  return s > 0 && s < _jing.indexOf('qiWrap') &&
+         s < _jing.indexOf('id="hud"') && s < _jing.indexOf('class="btns"');
+})());
 chk('★ .scroll 在 .nav 之前闭合',
   _jing.indexOf('/.scroll') > 0 && _jing.indexOf('/.scroll') < _jing.indexOf('class="nav"'));
-chk('★ 底部导航 4 个键位齐全', (function () {
-  const nav = _jing.slice(_jing.indexOf('class="nav"'));
-  return ['jing', 'zhuang', 'zong', 'lu'].every(v => nav.indexOf('data-go="' + v + '"') >= 0);
-})());
+let _navGot = null;
+chk('★ 底部导航键位齐全', (function () {
+  // ⚠️ Round 40：从 4 个页签删减为 2 个（境/宗）
+  //   用捕获组而不是 slice —— 并把匹配结果放进 message 便于排查
+  // ⚠️ 必须截到 【本页 nav 的闭合 </div>】为止 ——
+  //    否则 nav 片段会越过页边界，把下一页的 nav 也抓进来（曾得到 4 个）
+  let nav = _jing.slice(_jing.indexOf('class="nav"'));
+  nav = nav.slice(0, nav.indexOf('</div>\n  </div>') + 6);
+  _navGot = [...nav.matchAll(/data-go="([a-z]+)"/g)].map(m => m[1]);
+  return _navGot.length === 2 && _navGot.indexOf('jing') >= 0 && _navGot.indexOf('zong') >= 0;
+})(), 'nav = [' + (_navGot || []).join(',') + ']');
 chk('★ #hud 不再自己滚动（交给父层 .scroll）',
   !/#hud\{[^}]*overflow-y:auto/.test(_idx));
 chk('★ 弟子面板默认【收起】（用户要的是拉取框）',

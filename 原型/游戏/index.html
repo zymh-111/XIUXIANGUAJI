@@ -97,14 +97,44 @@
   #battleInfo .dim{color:var(--dim2)}
 
   /* ★ 弟子数据控件（用户要求：境页面单独加个控件，点了才显示弟子详细数据） */
-  #btnDisciple{margin:10px 18px 0;font-size:11px;padding:6px 0;background:transparent;
+  /* ★★ Round 40：境页的功能入口按钮（背包 / 当前弟子） */
+  .jing-acts{display:flex;gap:7px;padding:8px 18px 0;flex:0 0 auto}
+  .jing-acts button{flex:1;font-size:11px;padding:7px 0;background:transparent;
     border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;
-    font-family:inherit;flex:0 0 auto;letter-spacing:2px}
-  #btnDisciple:hover{border-color:#ffffff44;color:var(--paper)}
-  #btnDisciple.on{border-color:var(--gold);color:var(--gold);background:#c9a22714}
-  #disciplePanel{margin:8px 18px 0;border-top:1px solid var(--line2);padding-top:7px;
-    flex:0 0 auto;display:none}   /* 由 .on 控制显示（Round 39：按钮切换仍有效）*/
-  #disciplePanel.on{display:block}
+    font-family:inherit;letter-spacing:1px}
+  .jing-acts button:hover{border-color:#ffffff44;color:var(--paper)}
+  .jing-acts button.on{border-color:var(--gold);color:var(--gold);background:#c9a22714}
+
+  /* ★★ Round 40：滑出式抽屉 / 数据层（盖住场景，不占满屏）
+     用户选的是【滑出式抽屉盖住场景】—— 挂机时能看到自动换装，手动调整时也不占满屏
+     两者共用 .bd-hd（标题+收起按钮）与 .bd-body（滚动内容） */
+  #bagDrawer,#disciplePanel{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;
+    display:none;flex-direction:column;background:#0d0e0f;
+    border-bottom:1px solid var(--line);box-shadow:0 10px 30px #000000cc}
+  #bagDrawer.on,#disciplePanel.on{display:flex}
+  /* 从顶部滑出 */
+  @keyframes bdSlide{from{transform:translateY(-14px);opacity:0}to{transform:translateY(0);opacity:1}}
+  #bagDrawer.on,#disciplePanel.on{animation:bdSlide .18s ease-out}
+  .bd-hd{display:flex;justify-content:space-between;align-items:center;
+    padding:10px 18px;border-bottom:1px solid var(--line2);flex:0 0 auto;background:#101112}
+  .bd-hd b{font-size:11.5px;color:var(--gold);font-weight:400;letter-spacing:2px}
+  .bd-hd button{font-size:11px;padding:4px 10px;background:transparent;
+    border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;font-family:inherit}
+  .bd-hd button:hover{border-color:var(--gold);color:var(--gold)}
+  .bd-body{flex:1 1 auto;overflow-y:auto;padding:0 0 14px}
+
+  /* ★ 弟子数据层内部（dp-* 沿用原来的样式） */
+  #disciplePanel .dp-hd{display:flex;justify-content:space-between;align-items:baseline;
+    padding:8px 18px 0;font-size:10.5px;color:var(--dim);letter-spacing:2px}
+  #disciplePanel .dp-hd em{font-style:normal;color:var(--gold);
+    font-variant-numeric:tabular-nums;font-size:10px}
+  #disciplePanel .dp-grid{display:grid;grid-template-columns:repeat(3,1fr);
+    gap:4px 8px;margin:7px 18px 2px}
+  #disciplePanel .dp-cell{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:10px;padding:2px 0;border-bottom:1px dashed #ffffff0f}
+  #disciplePanel .dp-cell .k{color:var(--dim2)}
+  #disciplePanel .dp-cell .v{color:var(--paper);font-variant-numeric:tabular-nums}
+  #disciplePanel .dp-note{font-size:9.5px;color:#5d574c;margin:5px 18px 0;line-height:1.6}
 /* ★ Round 39：当前弟子面板 —— 六项战斗摘要（hud 里没单独列的）*/
 #disciplePanel .dp-grid{display:grid;grid-template-columns:repeat(3,1fr);
   gap:4px 8px;margin:7px 0 2px}
@@ -376,6 +406,13 @@
   /* ============ 录 · 史册馆容器（Round 37） ============
      #archiveBox 默认隐藏；点「宗」页的中路后楼后跳到「录」并显示。
      内容由 #archiveBody 承载（渲染逻辑在别处实现）。 */
+  /* ★ Round 40：史册 / 生平 切换（原来靠底部「录」页签，现在并进宗页） */
+  .arc-tabs{display:flex;gap:6px;margin:2px 0 8px}
+  .arc-tabs button{flex:1;font-size:10.5px;padding:5px 0;background:transparent;
+    border:1px solid #ffffff1c;border-radius:3px;color:#8c8574;cursor:pointer;
+    font-family:inherit;letter-spacing:2px}
+  .arc-tabs button.on{border-color:var(--gold);color:var(--gold);background:#c9a22712}
+
   #archiveBox{padding-bottom:6px}
   #archiveBox .arc-hd{font-size:11px;color:var(--gold);letter-spacing:3px;
     padding-bottom:7px;margin-bottom:8px;border-bottom:1px solid var(--line2);
@@ -718,13 +755,14 @@
          ⇒ #win 是固定 400×648，本页内容算下来 ~796px ⇒ 溢出 148px
          ⇒ 溢出部分【把底部导航栏直接顶出可视区】（用户报："看不到下面的界面跳转键位"）
          ⇒ 加上 .scroll（flex:1 1 auto + overflow-y:auto），导航栏就固定在底部了 -->
-    <div class="scroll">
-    <button id="btnDisciple">弟子名录 ▾</button>
-    <div id="disciplePanel">
-      <div class="dp-hd"><span>随行弟子</span><em id="dpStat"></em></div>
-      <div id="discipleBox"></div>
+        <!-- ★ Round 40：境页的功能入口（用户："境有几个按键，一个可以开背包…另一个可以查看当前弟子的各项数据"）
+         ⚠️ 境页【不放弟子名册】—— 名册是宗门的事务（用户："这东西是宗门才该有的"） -->
+    <div class="jing-acts">
+      <button id="btnBag">背包</button>
+      <button id="btnCurDisciple">当前弟子</button>
     </div>
 
+<div class="scroll">
     <!-- 修为条 -->
     <div id="qiWrap">
       <div class="qi-lbl">
@@ -746,100 +784,107 @@
 
     </div><!-- /.scroll -->
 
+    <!-- ★ Round 40：背包抽屉（原「装」页搬进来）
+         用户选的是【滑出式抽屉盖住场景】—— 挂机时能看到自动换装，手动调整时也不占满屏 -->
+    <div id="bagDrawer">
+      <div class="bd-hd">
+        <b>背包 · 经络图</b>
+        <button id="btnCloseBag">收起 ▾</button>
+      </div>
+      <div class="bd-body">
+<!-- ★ 装 · 经络图（还原原始设计：人体 + 左右 6 个部位格）
+                   每个部位格内部仍是网格拼装，drag & drop 玩法不变 -->
+              <div class="body-area">
+                <div class="fig-wrap">
+                  <div class="fig-glow"></div>
+                  <img class="fig-sil" src="assets/经络图_剪影.png" alt="">
+                  <img class="fig-pts" src="assets/经络图_穴位.png" alt="">
+                  <svg class="fig-qi" viewBox="0 0 220 340" aria-hidden="true">
+                    <g fill="#d9b84a">
+                      <circle cx="72" cy="86" r="1.7" opacity=".50"/>
+                      <circle cx="150" cy="118" r="1.3" opacity=".36"/>
+                      <circle cx="66" cy="176" r="1.5" opacity=".44"/>
+                      <circle cx="158" cy="208" r="1.8" opacity=".48"/>
+                      <circle cx="80" cy="266" r="1.3" opacity=".34"/>
+                      <circle cx="146" cy="296" r="1.5" opacity=".40"/>
+                      <circle cx="110" cy="60" r="1.2" opacity=".30"/>
+                      <circle cx="110" cy="322" r="1.6" opacity=".42"/>
+                      <circle cx="90" cy="130" r="1.1" opacity=".28"/>
+                      <circle cx="136" cy="250" r="1.1" opacity=".28"/>
+                    </g>
+                  </svg>
+                </div>
+                <div id="zones"></div>
+                <!-- 引线：从左右部位格指向人体对应部位（viewBox 按 body-area 实际宽度 364 估） -->
+                <svg class="leaders" viewBox="0 0 364 356" fill="none" preserveAspectRatio="none">
+                  <g stroke="#ffffff1c" stroke-width="1">
+                    <path d="M96,26 L152,44"/>
+                    <path d="M96,140 L142,130"/>
+                    <path d="M96,252 L128,192"/>
+                    <path d="M268,252 L232,110"/>
+                    <path d="M268,300 L236,246"/>
+                    <path d="M268,344 L228,290"/>
+                  </g>
+                </svg>
+              </div>
+              <div class="btns" style="padding:10px 18px 0">
+                <button id="btnClear">全部卸下</button>
+                <button id="btnEquipAll" class="primary">一键穿上所有提升</button>
+                <button id="btnScrap">分解无提升</button>
+              </div>
+              <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;
+                  font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:4px">
+                  <span>掉落</span><span>素材 <b id="mats" style="color:var(--gold);font-weight:400">0</b></span>
+                </div>
+                <div class="flt">
+                  <span>自动分解低于</span>
+                  <select id="fltQ">
+                    <option value="0">不分解</option>
+                    <option value="1">精良</option>
+                    <option value="2">史诗</option>
+                    <option value="3">传奇</option>
+                  </select>
+                  <label><input type="checkbox" id="fltUp"> 只看有提升</label>
+                  <select id="sortBy">
+                    <option value="score">按提升</option>
+                    <option value="q">按品质</option>
+                    <option value="slot">按部位</option>
+                  </select>
+                </div>
+                <!-- ★ 功法 / 法宝（Round 24：从「宗」页移来，用户要求） -->
+                <div style="margin-top:10px;border-top:1px solid var(--line2);padding-top:8px">
+                  <div class="vwin-t" style="margin-bottom:3px">功法</div>
+                  <div id="gongfaBox"></div>
+                </div>
+                <div style="margin-top:10px;border-top:1px solid var(--line2);padding-top:8px">
+                  <div class="vwin-t" style="margin-bottom:3px">法宝</div>
+                  <div id="fabaoBox"></div>
+                </div>
+        
+                <div id="cmpBox"></div>
+                <div id="bagList"></div>
+              </div>
+      </div>
+    </div>
+
+    <!-- ★ Round 40：当前弟子数据层（点「当前弟子」打开，盖住场景）
+         ⚠️ 这里【只显示正在外出历练的那一个弟子】—— 不是名册
+            （用户："境页不要有弟子名册这种东西，这东西是宗门才该有的"） -->
+    <div id="disciplePanel">
+      <div class="bd-hd">
+        <b>当前历练弟子</b>
+        <button id="btnCloseDisc">收起 ▾</button>
+      </div>
+      <div class="bd-body">
+        <div class="dp-hd"><span>外出历练</span><em id="dpStat"></em></div>
+        <div id="discipleBox"></div>
+      </div>
+    </div>
+
     <div class="nav">
       <div class="on" data-go="jing">境</div>
-      <div data-go="zhuang">装</div>
       <div data-go="zong">宗</div>
-      <div data-go="lu">录</div>
-    </div>
-  </div>
-
-  <!-- ==================== 装 ==================== -->
-  <div class="screen" data-v="zhuang">
-    <div class="top">
-      <div class="gen">身体分区 · <b>拖动背包到这里</b></div>
-      <div class="seal"><span>装</span></div>
-    </div>
-    <div class="scroll">
-      <!-- ★ 装 · 经络图（还原原始设计：人体 + 左右 6 个部位格）
-           每个部位格内部仍是网格拼装，drag & drop 玩法不变 -->
-      <div class="body-area">
-        <div class="fig-wrap">
-          <div class="fig-glow"></div>
-          <img class="fig-sil" src="assets/经络图_剪影.png" alt="">
-          <img class="fig-pts" src="assets/经络图_穴位.png" alt="">
-          <svg class="fig-qi" viewBox="0 0 220 340" aria-hidden="true">
-            <g fill="#d9b84a">
-              <circle cx="72" cy="86" r="1.7" opacity=".50"/>
-              <circle cx="150" cy="118" r="1.3" opacity=".36"/>
-              <circle cx="66" cy="176" r="1.5" opacity=".44"/>
-              <circle cx="158" cy="208" r="1.8" opacity=".48"/>
-              <circle cx="80" cy="266" r="1.3" opacity=".34"/>
-              <circle cx="146" cy="296" r="1.5" opacity=".40"/>
-              <circle cx="110" cy="60" r="1.2" opacity=".30"/>
-              <circle cx="110" cy="322" r="1.6" opacity=".42"/>
-              <circle cx="90" cy="130" r="1.1" opacity=".28"/>
-              <circle cx="136" cy="250" r="1.1" opacity=".28"/>
-            </g>
-          </svg>
-        </div>
-        <div id="zones"></div>
-        <!-- 引线：从左右部位格指向人体对应部位（viewBox 按 body-area 实际宽度 364 估） -->
-        <svg class="leaders" viewBox="0 0 364 356" fill="none" preserveAspectRatio="none">
-          <g stroke="#ffffff1c" stroke-width="1">
-            <path d="M96,26 L152,44"/>
-            <path d="M96,140 L142,130"/>
-            <path d="M96,252 L128,192"/>
-            <path d="M268,252 L232,110"/>
-            <path d="M268,300 L236,246"/>
-            <path d="M268,344 L228,290"/>
-          </g>
-        </svg>
-      </div>
-      <div class="btns" style="padding:10px 18px 0">
-        <button id="btnClear">全部卸下</button>
-        <button id="btnEquipAll" class="primary">一键穿上所有提升</button>
-        <button id="btnScrap">分解无提升</button>
-      </div>
-      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;
-          font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:4px">
-          <span>掉落</span><span>素材 <b id="mats" style="color:var(--gold);font-weight:400">0</b></span>
-        </div>
-        <div class="flt">
-          <span>自动分解低于</span>
-          <select id="fltQ">
-            <option value="0">不分解</option>
-            <option value="1">精良</option>
-            <option value="2">史诗</option>
-            <option value="3">传奇</option>
-          </select>
-          <label><input type="checkbox" id="fltUp"> 只看有提升</label>
-          <select id="sortBy">
-            <option value="score">按提升</option>
-            <option value="q">按品质</option>
-            <option value="slot">按部位</option>
-          </select>
-        </div>
-        <!-- ★ 功法 / 法宝（Round 24：从「宗」页移来，用户要求） -->
-        <div style="margin-top:10px;border-top:1px solid var(--line2);padding-top:8px">
-          <div class="vwin-t" style="margin-bottom:3px">功法</div>
-          <div id="gongfaBox"></div>
-        </div>
-        <div style="margin-top:10px;border-top:1px solid var(--line2);padding-top:8px">
-          <div class="vwin-t" style="margin-bottom:3px">法宝</div>
-          <div id="fabaoBox"></div>
-        </div>
-
-        <div id="cmpBox"></div>
-        <div id="bagList"></div>
-      </div>
-    </div>
-    <div class="nav">
-      <div data-go="jing">境</div>
-      <div class="on" data-go="zhuang">装</div>
-      <div data-go="zong">宗</div>
-      <div data-go="lu">录</div>
     </div>
   </div>
 
@@ -850,6 +895,18 @@
       <div class="seal"><span>宗门</span></div>
     </div>
     <div class="scroll">
+      <!-- ★ Round 40：原「录」页的【史册馆】+【生平流水】合并到这里
+           （用户："录不是合并到宗门的那个历史馆了吗"）
+           默认隐藏，从「宗」页宗门地图的藏经阁点「进入史册馆」打开 -->
+      <div id="archiveBox">
+              <div id="archiveBody"></div>
+            </div>
+            <div class="arc-tabs">
+        <button id="arcTabHis" class="on">史册</button>
+        <button id="arcTabLog">生平</button>
+      </div>
+      <div id="logBox"></div>
+
       <!-- ★ 宗门地图（AI 生成 · 三档图）
            建筑热点：鼠标移上去 → 金色光圈；点一下 → 下方显示该设施功能与升级 -->
       <div class="sect-map" id="sectMap">
@@ -958,32 +1015,7 @@
     </div>
     <div class="nav">
       <div data-go="jing">境</div>
-      <div data-go="zhuang">装</div>
       <div class="on" data-go="zong">宗</div>
-      <div data-go="lu">录</div>
-    </div>
-  </div>
-
-  <!-- ==================== 录 ==================== -->
-  <div class="screen" data-v="lu">
-    <div class="top">
-      <div class="gen">宗门 · <b id="sectName2">小宗门</b></div>
-      <div class="seal"><span>录</span></div>
-    </div>
-    <div class="scroll">
-      <!-- ★ 史册馆容器（Round 37）：点「宗」页的中路后楼跳到本页时显示。
-           ⚠️ 内容渲染由另一处实现：只要往 #archiveBody 里写 HTML 即可。
-              本容器默认隐藏，由 _game.js 的 openArchive() 打开。 -->
-      <div id="archiveBox" style="display:none">
-        <div id="archiveBody"></div>
-      </div>
-      <div id="logBox"></div>
-    </div>
-    <div class="nav">
-      <div data-go="jing">境</div>
-      <div data-go="zhuang">装</div>
-      <div data-go="zong">宗</div>
-      <div class="on" data-go="lu">录</div>
     </div>
   </div>
 
@@ -1009,10 +1041,12 @@ document.querySelectorAll('#win .nav div').forEach(function(d){
   });
 });
 (function(){
-  var views = ['jing','zhuang','zong','lu'];
+  var views = ['jing','zong'];   // ★ Round 40：只两个页签
   var h = location.hash.replace('#','');
   if (views.indexOf(h) >= 0) goTab(h);
-  else if (h === 'cheng') goTab('zong');   // 旧链接兼容
+  // ★ Round 40：旧链接兼容（装/录 已并入）
+  else if (h === 'zhuang' || h === 'cheng') goTab('jing');
+  else if (h === 'lu') goTab('zong');
 })();
 </script>
 <!-- ★ 缓存修复（Round 37）：
