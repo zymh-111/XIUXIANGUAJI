@@ -1,0 +1,191 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>宗门 · 建筑面板原型</title><style>
+:root{--ink:#0c0d0e;--paper:#cfc8ba;--gold:#c9a227;--bg:#101113;--line:#ffffff14;--line2:#ffffff0f;
+--dim:#7e7768;--dim2:#5d574c;--txt:#d8d1c3;--bright:#e6ded0;--green:#6fa86f;--red:#c0604f}
+body{background:var(--bg);color:var(--paper);margin:0;padding:20px;
+font:13px/1.6 system-ui,"Microsoft YaHei",sans-serif}
+.win{width:400px;background:var(--ink);border:1px solid #ffffff17;border-radius:9px;
+padding:14px 0;box-shadow:0 20px 60px #000c}
+h3{font-size:11px;color:var(--gold);font-weight:400;letter-spacing:2px;margin:0 0 10px;padding:0 16px}
+/* 阶位条 */
+.ranks{display:flex;gap:3px;padding:0 16px;margin-bottom:14px}
+.rk{flex:1;text-align:center;padding:5px 2px;border:1px solid var(--line2);border-radius:3px;
+font-size:9px;color:var(--dim2);line-height:1.3}
+.rk em{font-style:normal;display:block;font-size:8.5px;color:#4a463c}
+.rk.on{border-color:#c9a22755;color:#bbb4a6}
+.rk.on em{color:#8c8574}
+.rk.now{border-color:var(--gold);color:var(--gold);background:#c9a22714}
+/* 建筑卡 */
+.bcard{display:flex;gap:8px;align-items:flex-start;padding:8px 16px;
+border-top:1px solid var(--line2)}
+.bico{flex:0 0 auto;width:30px;height:30px;object-fit:contain;margin-top:1px;
+filter:drop-shadow(0 1px 2px #000a)}
+.bmain{flex:1;min-width:0}
+.brow1{display:flex;align-items:baseline;gap:6px}
+.brow1 b{color:#bbb4a6;font-weight:400;font-size:11.5px;letter-spacing:1px}
+.guard{font-size:9.5px;color:#7fb8f0}
+.brow2{font-size:9.5px;color:var(--dim);margin-top:1px}
+.brow3{display:flex;align-items:baseline;gap:5px;margin-top:2px}
+.pips{font-size:9px;color:var(--gold);letter-spacing:1px}
+.uplv{font-size:9px;color:var(--dim2)}
+.brow4{font-size:9.5px;color:#8c8574;margin-top:1px;overflow:hidden;
+text-overflow:ellipsis;white-space:nowrap}
+.bbtn{flex:0 0 auto;align-self:center;min-width:52px;text-align:right}
+.bbtn button{font:9.5px inherit;padding:3px 7px;background:#c9a22722;border:1px solid var(--gold);
+border-radius:3px;color:#e0c464;cursor:pointer}
+.bbtn button.dis{opacity:.35;border-color:#ffffff22;background:transparent;color:#8c8574}
+.bbtn .lock{font-size:8.5px;color:var(--dim2);white-space:nowrap}
+.bbtn .max{font-size:9.5px;color:var(--green)}
+.bbtn .none{font-size:10px;color:#4a463c}
+.note{padding:10px 16px 0;font-size:10px;color:var(--dim2);line-height:1.8;
+border-top:1px solid var(--line2);margin-top:6px}
+.note b{color:var(--gold);font-weight:400}
+</style></head><body>
+<div class="win">
+  <h3>宗门 · 建筑面板（原型）</h3>
+  <div class="ranks"><div class="rk on ">
+    <span>小宗门</span><em>0</em></div><div class="rk on ">
+    <span>中等宗门</span><em>30</em></div><div class="rk on now">
+    <span>大宗门</span><em>180</em></div><div class="rk  ">
+    <span>顶级宗门</span><em>450</em></div><div class="rk  ">
+    <span>仙门</span><em>1200</em></div></div>
+  
+  <div class="bcard">
+    <img class="bico" src="assets/宗门/设施_锻造部.png"
+         srcset="assets/宗门/设施_锻造部@2x.png 2x" alt="">
+    <div class="bmain">
+      <div class="brow1">
+        <b>锻造部</b>
+        <span class="guard">驻守 3/5</span>
+      </div>
+      <div class="brow2">
+        <span class="eff">产出素材</span>
+      </div>
+      <div class="brow3">
+        <span class="pips"><span style="color:#5d574c">无升级</span></span>
+        <span class="uplv"></span>
+      </div>
+      <div class="brow4">（仅靠弟子驻守）</div>
+    </div>
+    <div class="bbtn"><span class="none">—</span></div>
+  </div>
+  <div class="bcard">
+    <img class="bico" src="assets/宗门/设施_传功阁.png"
+         srcset="assets/宗门/设施_传功阁@2x.png 2x" alt="">
+    <div class="bmain">
+      <div class="brow1">
+        <b>传功阁</b>
+        <span class="guard">驻守 2/5</span>
+      </div>
+      <div class="brow2">
+        <span class="eff">弟子修炼 +%</span>
+      </div>
+      <div class="brow3">
+        <span class="pips">●●●○○</span>
+        <span class="uplv">Lv3/5</span>
+      </div>
+      <div class="brow4">弟子修炼 +18%（灵气获取）</div>
+    </div>
+    <div class="bbtn"><button class="">205</button></div>
+  </div>
+  <div class="bcard">
+    <img class="bico" src="assets/宗门/设施_藏经阁.png"
+         srcset="assets/宗门/设施_藏经阁@2x.png 2x" alt="">
+    <div class="bmain">
+      <div class="brow1">
+        <b>藏经阁</b>
+        <span class="guard">驻守 1/3</span>
+      </div>
+      <div class="brow2">
+        <span class="eff">功法研究（提高功法掉落）</span>
+      </div>
+      <div class="brow3">
+        <span class="pips"><span style="color:#5d574c">无升级</span></span>
+        <span class="uplv"></span>
+      </div>
+      <div class="brow4">（仅靠弟子驻守）</div>
+    </div>
+    <div class="bbtn"><span class="none">—</span></div>
+  </div>
+  <div class="bcard">
+    <img class="bico" src="assets/宗门/设施_宝库.png"
+         srcset="assets/宗门/设施_宝库@2x.png 2x" alt="">
+    <div class="bmain">
+      <div class="brow1">
+        <b>宝库</b>
+        <span class="guard">驻守 0/3</span>
+      </div>
+      <div class="brow2">
+        <span class="eff">装备掉落 +%</span>
+      </div>
+      <div class="brow3">
+        <span class="pips">○○○○</span>
+        <span class="uplv">Lv0/4</span>
+      </div>
+      <div class="brow4">从传承池提取装备便宜 20%</div>
+    </div>
+    <div class="bbtn"><button class="">80</button></div>
+  </div>
+  <div class="bcard">
+    <img class="bico" src="assets/宗门/设施_传承殿.png"
+         srcset="assets/宗门/设施_传承殿@2x.png 2x" alt="">
+    <div class="bmain">
+      <div class="brow1">
+        <b>传承殿</b>
+        <span class="guard">驻守 2/3</span>
+      </div>
+      <div class="brow2">
+        <span class="eff">传承品级 +</span>
+      </div>
+      <div class="brow3">
+        <span class="pips">○○○</span>
+        <span class="uplv">Lv0/3</span>
+      </div>
+      <div class="brow4">直传传承位 +1（3 → 4）</div>
+    </div>
+    <div class="bbtn"><button class="">120</button></div>
+  </div>
+  <div class="bcard">
+    <img class="bico" src="assets/宗门/设施_传功阁.png"
+         srcset="assets/宗门/设施_传功阁@2x.png 2x" alt="">
+    <div class="bmain">
+      <div class="brow1">
+        <b>延寿丹房</b>
+        <span class="guard">驻守 0/3</span>
+      </div>
+      <div class="brow2">
+        <span class="eff">为驻宗弟子续命</span>
+      </div>
+      <div class="brow3">
+        <span class="pips">○○○</span>
+        <span class="uplv">Lv0/3</span>
+      </div>
+      <div class="brow4">弟子寿元 +5 年（延寿丹）</div>
+    </div>
+    <div class="bbtn"><span class="lock">需 顶级宗门</span></div>
+  </div>
+  <div class="bcard">
+    <img class="bico" src="assets/宗门/设施_藏经阁.png"
+         srcset="assets/宗门/设施_藏经阁@2x.png 2x" alt="">
+    <div class="bmain">
+      <div class="brow1">
+        <b>议事堂</b>
+        <span class="guard">驻守 1/2</span>
+      </div>
+      <div class="brow2">
+        <span class="eff">秘境情报（提高倾向命中）</span>
+      </div>
+      <div class="brow3">
+        <span class="pips"><span style="color:#5d574c">无升级</span></span>
+        <span class="uplv"></span>
+      </div>
+      <div class="brow4">（仅靠弟子驻守）</div>
+    </div>
+    <div class="bbtn"><span class="none">—</span></div>
+  </div>
+  <div class="note">
+    <b>●</b> = 已升级  <b>○</b> = 未升级　·　<b>驻守</b> = 弟子岗位人数<br>
+    驻守靠分派弟子、升级靠荣誉点，<b>两条线各自独立、效果叠加</b>
+  </div>
+</div>
+</body></html>

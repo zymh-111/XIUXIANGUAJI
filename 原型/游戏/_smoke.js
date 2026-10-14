@@ -3714,6 +3714,74 @@ G.tier = 0; A.initZones(); G.bag = []; G.filterQ = 0;
 
 // ============================================================
 // ============================================================
+// ============================================================
+hdr('测试 49：史册馆（Round 38 · 录页合订本）');
+//
+//   骨架由另一个会话搭好（#archiveBox / #archiveBody / .arc-*），
+//   我实现 renderArchiveBody()：从 SECT.history + EVENTS 渲染历代合订本。
+//   与 #logBox（《生平》· 只记本会话大事件）定位不同。
+A.SECT.up = {}; A.SECT_RES.materials = 0; A.doctrineReset();
+A.SECT.honor = 0; A.SECT.rank = 0; A.SECT.history.length = 0;
+A.EVENTS.length = 0;
+A.newDisciple([A.makeSlotItem('主手', 6, 1, 'sword')]);
+const _ab = () => (global.document.getElementById('archiveBody').innerHTML || '');
+
+chk('renderArchiveBody 已导出', typeof A.renderArchiveBody === 'function');
+chk('openArchive 已导出', typeof A.openArchive === 'function');
+
+// ---- 空状态：必须把 gens 也归零（newDisciple 会把它加到 1）----
+//   ⚠️ 我第一版漏了这一步 ⇒ 断言写错了（gens=1 时"当代历练中"是【正确】的）
+const _gensSave = A.SECT.generation;
+A.SECT.generation = 0;
+A.renderArchiveBody();
+chk('★ 空档显示 arc-empty（不是白屏）', _ab().indexOf('arc-empty') >= 0);
+chk('空档不显示「当代历练中」', _ab().indexOf('当代历练中') < 0,
+  _ab().replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 90));
+A.SECT.generation = _gensSave;
+
+// ---- 有当代但还没记录 ⇒ 应显示「当代历练中」----
+A.SECT.history.length = 0;
+A.renderArchiveBody();
+chk('★ 当代尚无记录时显示「当代历练中」', _ab().indexOf('当代历练中') >= 0);
+chk('★ 当代尚无记录时不显示「卷一」条目', (_ab().match(/arc-item/g) || []).length === 0);
+
+// ---- 跑 3 代 ----
+for (let gen = 1; gen <= 3; gen++) {
+  A.startRun();
+  let _r = 0;
+  for (let i = 0; i < 4000 && _r < 6; i++) {
+    G._lastTick = Date.now() - 200; A.tick();
+    if (!G.running) { _r++; if (G.hp <= 0) break; }
+  }
+  A.endDisciple('old_age'); A.newDisciple([]);
+}
+A.SECT_DOCTRINE.speech.survive = 80; A.ruleAdd('survive');
+A.SECT.honor = 200; A.refreshSectRank();
+A.renderArchiveBody();
+const _h = _ab();
+chk('★ 有分册标题 arc-hd', _h.indexOf('arc-hd') >= 0);
+chk('★ 有卷一（历代弟子）', _h.indexOf('卷一') >= 0);
+chk('★ 有卷二（宗门大事）', _h.indexOf('卷二') >= 0);
+chk('★ 有记录条目 arc-item', (_h.match(/arc-item/g) || []).length >= 3,
+  (_h.match(/arc-item/g) || []).length + ' 条');
+chk('★ 记录了历代弟子（第 N 代）', /第 \d+ 代/.test(_h));
+chk('★ 宗门大事抓到「立门规」', _h.indexOf('立门规') >= 0);
+chk('★ 宗门大事抓到「宗门晋升」', _h.indexOf('宗门晋升') >= 0);
+chk('宗门大事带时刻（HH:MM）', /\d\d:\d\d/.test(_h), (_h.match(/\d\d:\d\d/) || [])[0] || '无');
+chk('★ 表头自洽（代数与卷数分开说）', _h.indexOf('已录') >= 0 && _h.indexOf('历代') >= 0);
+chk('★ 渲染 5 次长度稳定（不累积）', (function () {
+  const L = [];
+  for (let i = 0; i < 5; i++) { A.renderArchiveBody(); L.push(_ab().length); }
+  return new Set(L).size === 1;
+})(), '5 次同长');
+
+// ---- openArchive 开关 ----
+A.openArchive(true);
+chk('★ openArchive(true) 显示容器',
+  global.document.getElementById('archiveBox').style.display !== 'none');
+A.openArchive(false);
+chk('★ openArchive(false) 隐藏容器',
+  global.document.getElementById('archiveBox').style.display === 'none');
 hdr('测试 48：门规（训话的上锁版 · Round 34）');
 //
 //   用户决策："上锁吧" ⇒ 门规 = 把训话某轴锁住，跨代保留 + 署名
@@ -3825,13 +3893,20 @@ hdr('测试 47：名册进存档（审计发现的严重缺口）');
 //   ★ Round 33：ROSTER 原来【完全没进存档】⇒ 刷新即丢
 //     后勤弟子 / 在册人数 / 分派规则 / 前线归属 全部消失
 //   审计由两条独立路径分别确认（saveGame 体与 loadGame 体零引用）
+// ⚠️⚠️ Round 38 修复 flaky：前面的测试（44）会 recruit(0..20) 把名册招到 24 上限，
+//   且名册【不随 newDisciple 重置】⇒ list[0] 可能是被别的测试杀死的弟子
+//   ⇒ 测试 47 必须【先清空名册】，只依赖自己造的弟子
 A.SECT.up = {}; A.SECT_RES.materials = 0; A.doctrineReset();
+A.ROSTER.list.length = 0;
+A.ROSTER.nextId = 1;
+A.ROSTER.front = null;
 A.newDisciple([A.makeSlotItem('主手', 6, 1, 'sword')]);
 A.recruit(0);
-// ★ Round 36：recruit 按【天赋】分派，可能抽不到"上乘"天赋 ⇒ 没有前线（flaky）
-//   ⇒ 显式把第一个弟子置为前线（这是"初始弟子"的真实路径）
-A.ROSTER.front = A.ROSTER.list[0];
-A.ROSTER.list[0].role = 'front';
+// recruit 按【天赋】分派，可能抽不到"上乘"天赋 ⇒ 没有前线
+//   ⇒ 显式把【新招的】第一个弟子置为前线（不是 list[0]）
+const _rsPick = A.ROSTER.list.find(x => x.alive && x.id !== A.DISCIPLE.id) || A.ROSTER.list[0];
+A.ROSTER.front = _rsPick;
+_rsPick.role = 'front';
 const _rsN = A.ROSTER.list.length;
 const _rsFront = A.ROSTER.front ? A.ROSTER.front.id : null;
 const _rsNext = A.ROSTER.nextId;
@@ -3849,7 +3924,11 @@ chk('★ 弟子姓名恢复', A.ROSTER.list.map(x => x.name).join(',') === _rsNa
 chk('★ 分派角色恢复', A.ROSTER.list.map(x => x.role).join(',') === _rsRoles);
 chk('★ nextId 恢复（不会重号）', A.ROSTER.nextId === _rsNext, _rsNext + ' → ' + A.ROSTER.nextId);
 chk('★ 前线引用重连（是 list 里的同一对象）',
-  A.ROSTER.front && A.ROSTER.list.indexOf(A.ROSTER.front) >= 0 && A.ROSTER.front.id === _rsFront);
+  A.ROSTER.front && A.ROSTER.list.indexOf(A.ROSTER.front) >= 0 && A.ROSTER.front.id === _rsFront,
+  'front=' + (A.ROSTER.front ? A.ROSTER.front.id : 'null') + ' want=' + _rsFront +
+  ' inList=' + (A.ROSTER.front ? A.ROSTER.list.indexOf(A.ROSTER.front) : '-') +
+  ' n=' + A.ROSTER.list.length + ' ids=' + A.ROSTER.list.map(x=>x.id).join(',') +
+  ' alive=' + A.ROSTER.list.map(x=>x.alive?1:0).join(''));
 chk('★ 分派规则恢复', A.ROSTER.rule && A.ROSTER.rule.kind, JSON.stringify(A.ROSTER.rule));
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);

@@ -1445,6 +1445,14 @@ const AV_DISC = [
 const AV_LG_SHORT = { dan: '单', shuang: '双', san: '三', si: '四', wu: '五', wei: '伪' };
 // 场景主角当前用的是哪个形象编号（避免每帧重复写 DOM）
 let HERO_AV = 0;
+// ★ 宗门设施图标映射（assets/宗门/设施_<名>.png）
+//   ⚠️ 文件名必须与 assets/宗门/ 里实际存在的图标一致！
+//   没有映射的项（入门礼 / 传承殿 / 延寿丹房）自动不显示图标，只显示文字 ——
+//   出好图后往这里加一行即可。
+const FAC_ICON = {
+  train: '传功阁',   // 传功阁 → 打坐修士 + 蒲团
+  free:  '宝库',     // 宝库   → 神龛 + 元宝珠宝
+};
 
 // ---- 分派规则（玩家定义 · 一次性）----
 const ASSIGN_RULES = [
@@ -2540,18 +2548,242 @@ const SECT_RANKS = [
   { n: '仙门', need: 1200 },
 ];
 // 宗门加成（永久 · 跨代累积）
+// ★ fac 字段：显式声明这一项【属于哪个后勤设施】（FACILITIES 的 id）
+//   ⚠️ 不能让升级项的 id 直接等于设施 id —— 历史上两者不一致：
+//      'free'(宝库) 的设施 id 是 'vault'，'slot'(传承殿) 是 'legacy'。
+//      不写 fac 就会"升级项和建筑对不上"（界面上表现为宝库/传承殿查不到等级）。
+//   fac 为 null 表示【不是建筑】（如「入门礼」是开新弟子的福利）。
 const SECT_UPGRADES = [
-  { id: 'train', name: '传功阁', max: 5, cost: lv => 40 + lv * 55, rank: 0,
+  { id: 'train', name: '传功阁', max: 5, cost: lv => 40 + lv * 55, rank: 0, fac: 'train',
     desc: level => '弟子修炼 +' + (level * 6) + '%（灵气获取）', eff: { qi: 0.06 } },
-  { id: 'slot', name: '传承殿', max: 3, cost: lv => 120 + lv * 180, rank: 1,
+  { id: 'slot', name: '传承殿', max: 3, cost: lv => 120 + lv * 180, rank: 1, fac: 'legacy',
     desc: level => '直传传承位 +' + level + '（' + P.LEGACY_SLOTS + ' → ' + (P.LEGACY_SLOTS + level) + '）', eff: { slot: 1 } },
-  { id: 'start', name: '入门礼', max: 4, cost: lv => 60 + lv * 90, rank: 1,
+  { id: 'start', name: '入门礼', max: 4, cost: lv => 60 + lv * 90, rank: 1, fac: null,
     desc: level => '新弟子起手灵气 +' + (level * 50), eff: { qi0: 50 } },
-  { id: 'free', name: '宝库', max: 4, cost: lv => 80 + lv * 100, rank: 2,
+  { id: 'free', name: '宝库', max: 4, cost: lv => 80 + lv * 100, rank: 2, fac: 'vault',
     desc: level => '从传承池提取装备便宜 ' + (level * 20) + '%', eff: { discount: 0.20 } },
-  { id: 'life', name: '延寿丹房', max: 3, cost: lv => 150 + lv * 150, rank: 3,
+  { id: 'life', name: '延寿丹房', max: 3, cost: lv => 150 + lv * 150, rank: 3, fac: 'life',
     desc: level => '弟子寿元 +' + (level * 5) + ' 年（延寿丹）', eff: { lifeYear: 5 } },
 ];
+// 设施 id → 升级项（供界面把"建筑"和"升级"对上）
+const SECT_UP_BY_FAC = {};
+SECT_UPGRADES.forEach(u => { if (u.fac) SECT_UP_BY_FAC[u.fac] = u; });
+
+// ============================================================
+// ★ 宗门地图（Round 37）
+//
+//   用户原话："宗门大图里面的建筑可以对应上我们设定的功能，鼠标放上去能高亮，
+//             点进去显示对应功能的界面，然后每次升级，宗门大图整体就对应升级一次"
+//
+//   定案（用户确认）：
+//     · 阶位 0/1 → 档1（素） · 阶位 2/3 → 档2（金顶） · 阶位 4 → 档3（仙门）
+//     · 山门不作为设施（纯装饰）
+//     · 中路后楼两侧的【双塔】一起挂「议事堂」
+//
+//   ⚠️ 坐标是百分比（相对图片宽高）。三张图建筑布局一致 ⇒ 共用一套坐标。
+//      若某张图偏移明显，给该档单独加一套（SECT_MAP_BY_TIER）。
+// ============================================================
+const SECT_MAP = [
+  // fac（= FACILITIES 的 id）  显示位置           热点（x%, y%, w%, h%）
+  { fac: 'legacy', name: '后楼左塔', x: 34.0, y:  9.9, w:  8.1, h: 19.8 },  // 传承殿
+  { fac: 'hall',   name: '后楼右塔', x: 57.4, y:  9.9, w:  8.1, h: 19.8 },  // 议事堂（双塔共用）
+  { fac: 'vault',  name: '左·后亭',  x: 25.5, y: 24.8, w: 11.5, h: 26.8 },  // 宝库
+  { fac: 'life',   name: '右·后亭',  x: 62.9, y: 24.8, w: 11.5, h: 26.8 },  // 延寿丹房
+  { fac: 'script', name: '中路正殿', x: 37.4, y: 25.8, w: 16.6, h: 30.8 },  // 藏经阁
+  { fac: 'forge',  name: '左·前亭',  x: 15.3, y: 41.7, w: 18.7, h: 29.8 },  // 锻造部
+  { fac: 'train',  name: '右·前亭',  x: 65.9, y: 41.7, w: 18.7, h: 29.8 },  // 传功阁
+];
+// 当前选中的设施（点建筑切换）
+let SECT_SEL = 'script';
+// ★ 境 · 弟子数据面板是否展开（用户要求：单独控件控制）
+let DP_OPEN = false;
+// 当前地图用的是哪一档图（避免每帧改 src）
+let SECT_MAP_TIER = 0;
+
+// ★ 史册馆（Round 37）
+//   中路后楼 = 史册馆入口：在它的建筑面板上多一个按钮，点了跳到「录」页。
+//   史册的具体内容由「录」页的 #archiveBody 承载（渲染逻辑在别处实现）。
+const ARCHIVE_FAC = 'script';     // 哪座建筑当史册馆（= 中路后楼 · 藏经阁）
+let ARCHIVE_OPEN = false;         // 「录」页是否处于史册模式
+
+function openArchive(on) {
+  ARCHIVE_OPEN = !!on;
+  const box = document.getElementById('archiveBox');
+  if (box && box.style) box.style.display = ARCHIVE_OPEN ? '' : 'none';
+  if (ARCHIVE_OPEN) { try { renderArchiveBody(); } catch (e) { } }   // ★ 每次打开都刷新
+  if (typeof goTab === 'function') goTab('lu');
+}
+
+// ---------------- 史册馆（Round 38）----------------
+//
+// 用户（另一个会话）已搭好骨架：
+//   #archiveBox  ← 默认 display:none，openArchive(true) 显示
+//   #archiveBody ← 内容往这里写
+//   .arc-hd / .arc-sec / .arc-item(.g 左代次 + .b 正文) / .arc-empty
+//
+// ★ 设计：这份"史册"= 【全部历代】的永久合订本（读 SECT.history + EVENTS），
+//   而不是"本次会话新增"（那是 #logBox 的《生平》，只记神话/突破等大事件）。
+//   两者定位不同：
+//     #logBox   流水 · 只记大事件 · 滚动的
+//     #archiveBox 合订本 · 历代汇总 · 从宗门建筑点进来的
+function renderArchiveBody() {
+  const box = document.getElementById('archiveBody');
+  if (!box) return;
+  const hist = SECT.history || [];
+  const gens = SECT.generation || 0;
+
+  // 每次从事件流里取"每一代"的细节（突破/掉落/渡劫…）
+  const evd = {};
+  try {
+    for (const e of EVENTS) {
+      if (e.imp < 4) continue;
+      (evd[e.gen] = evd[e.gen] || []).push(e);
+    }
+  } catch (e) { }
+
+  // ⚠️ 表头要自洽：hist 有 40 条上限，所以"已记录"与"历代"是两个数
+  //   ⚠️⚠️ stillAlive 必须算在【空状态早退之前】—— 否则 gens=0 时也会显示"当代历练中"
+  const recorded = hist.length;
+  const stillAlive = (gens > 0 && hist.every(function (x) { return x.gen !== gens; })) ? 1 : 0;
+
+  let h = '';
+  // ---- 分册标题 ----
+  h += '<div class="arc-hd">宗门史册 <em>历代 ' + gens + ' 代 · 已录 ' +
+    recorded + ' 卷' + (stillAlive ? ' · 当代历练中' : '') + '</em></div>';
+
+  if (!hist.length && !gens) {
+    h += '<div class="arc-empty">史册尚无记录。<br>' +
+      '弟子在秘境中历练、传承、坐化 —— 都会记在这里。</div>';
+    box.innerHTML = h;
+    return;
+  }
+
+  // ---- 卷一 · 历代弟子（倒序：近的在前）----
+  h += '<div class="arc-sec">卷一 · 历代弟子</div>';
+  const CAUSE = { old_age: '善终', battle: '战死秘境', handover: '主动交接' };
+  const rows = hist.slice().reverse();
+  if (rows.length) {
+    for (const x of rows) {
+      const evs = (evd[x.gen] || []);
+      // 从事件里挑"高光"（最多 3 条）
+      const hi = [];
+      const seen = {};
+      for (const e of evs) {
+        if (e.type === 'break' && !seen[e.realm]) { seen[e.realm] = 1; hi.push('破入<b>' + e.realm + '</b>'); }
+        else if (e.type === 'drop_myth') hi.push('得神话<b>' + (e.slot || '') + '</b>');
+        else if (e.type === 'dujie_ok' && e.realm) hi.push('渡劫<b>' + e.realm + '</b>');
+        else if (e.type === 'ascend') hi.push('<b>羽化飞仙</b>');
+        if (hi.length >= 3) break;
+      }
+      let body = '';
+      body += '修至<b>' + (P.REALMS[realmOf(x.tier | 0)] || '—') + '</b>';
+      if (hi.length) body += ' · ' + hi.join(' · ');
+      body += '<br><i>' + (CAUSE[x.cause] || x.cause || '—') +
+        ' · 共历 ' + (x.runs | 0) + ' 局' +
+        (x.carried ? ' · 带回 ' + x.carried + ' 件' : '') +
+        (x.lost ? ' · 遗落 ' + x.lost + ' 件' : '') +
+        (x.hoursLeft != null ? ' · 余寿 ' + x.hoursLeft + ' 时' : '') + '</i>';
+      h += '<div class="arc-item"><span class="g">第 ' + x.gen + ' 代</span>' +
+        '<span class="b">' + body + '</span></div>';
+    }
+  } else {
+    h += '<div class="arc-empty">第 ' + gens + ' 代弟子正在历练中…</div>';
+  }
+
+  // ---- 卷二 · 宗门大事（从事件流里挑宗门层的事件）----
+  const bigs = [];
+  try {
+    for (const e of EVENTS) {
+      if (/^sect_rank|^rule_add|^rule_neg|^ascend$|^death_handover$|^boss_kill$/.test(e.type)) {
+        bigs.push(e);
+      }
+    }
+  } catch (e) { }
+  bigs.sort(function (a, b) { return b.t - a.t; });
+  h += '<div class="arc-sec">卷二 · 宗门大事</div>';
+  if (bigs.length) {
+    const LBL = {
+      sect_rank: '宗门晋升', rule_add: '立门规', rule_neg: '积弊成形',
+      ascend: '羽化飞仙', death_handover: '主动交接', boss_kill: '讨伐 Boss',
+    };
+    for (const e of bigs.slice(0, 10)) {
+      let d = LBL[e.type] || e.type;
+      if (e.type === 'sect_rank' && e.rank) d += ' → <b>' + e.rank + '</b>';
+      else if (e.type === 'rule_add') d += ' 〈' + (AXIS_NAME[e.axis] || e.axis || '') + '·' + (e.value || '') + '〉';
+      else if (e.type === 'rule_neg') d += ' 〈避' + (e.zone || '') + '〉';
+      else if (e.type === 'boss_kill' && e.name) d += ' <b>' + e.name + '</b>';
+      h += '<div class="arc-item"><span class="g">' + fmtClock(e.t) + '</span>' +
+        '<span class="b">第 ' + e.gen + ' 代 · ' + d + '</span></div>';
+    }
+  } else {
+    h += '<div class="arc-empty">尚无宗门大事。<br>' +
+      '<i>（宗门晋阶、立门规、积弊成形、讨伐 Boss 都会记在这里）</i></div>';
+  }
+
+  box.innerHTML = h;
+}
+
+
+// 选中建筑的功能面板（由 render() 调用）
+function renderSectPanel() {
+  const box = document.getElementById('sectPanel');
+  if (!box) return;
+  const b = SECT_MAP.find(v => v.fac === SECT_SEL) || SECT_MAP[0];
+  const f = FAC_BY_ID[b.fac];
+  if (!f) { box.innerHTML = ''; return; }
+  const u = SECT_UP_BY_FAC[b.fac];
+  const lv = u ? (SECT.up[u.id] || 0) : 0;
+  const alive = ROSTER.list.filter(v => v.alive);
+  const guard = alive.filter(v => v.post === b.fac).length;
+  const locked = u && SECT.rank < u.rank;
+  const cost = u ? sectUpCost(u.id) : Infinity;
+  const can = u && !locked && lv < u.max && SECT.honor >= cost;
+  let pips = '';
+  if (u) for (let i = 0; i < u.max; i++) pips += (i < lv) ? '●' : '○';
+  const ico = FAC_ICON[b.fac];
+
+  box.innerHTML =
+    '<div class="bldg-panel">' +
+      '<div class="bh">' +
+        (ico ? '<img src="assets/宗门/设施_' + ico + '.png" ' +
+               'srcset="assets/宗门/设施_' + ico + '@2x.png 2x" alt="">' : '') +
+        '<div><b>' + f.name + '</b><em>' + b.name +
+          (u ? (' · ' + (SECT_UPGRADES.find(v => v.id === u.id) ? '' : '')) : '') +
+        '</em></div>' +
+      '</div>' +
+      '<div class="bp"><span>建筑效果</span><b>' + f.desc + '</b></div>' +
+      '<div class="bp"><span>弟子驻守</span><b>' + guard + '/' + f.slots +
+        (guard ? '' : '（空缺）') + '</b></div>' +
+      (u
+        ? '<div class="bp"><span>荣誉升级</span><b class="g">' + pips +
+            ' Lv' + lv + '/' + u.max + '</b></div>' +
+          '<div class="bp"><span>升级效果</span><b>' + u.desc(Math.max(1, lv)) + '</b></div>' +
+          '<div class="bp"><span>' + (lv >= u.max ? '状态' : '下一级') + '</span><b class="' +
+            (locked ? 'lock' : '') + '">' +
+            (locked ? ('需宗门达到 ' + SECT_RANKS[u.rank].n)
+                    : (lv >= u.max ? '已满级' : ('耗荣誉 ' + cost))) + '</b></div>'
+        : '<div class="bp"><span>荣誉升级</span><b class="none">该建筑无升级项，只靠弟子驻守</b></div>') +
+      (u && lv < u.max
+        ? '<div class="bbtn"><button data-scmap="' + u.id + '"' +
+            (can ? '' : ' disabled') + '>' +
+            (locked ? ('需 ' + SECT_RANKS[u.rank].n) : ('升级 ' + cost)) + '</button></div>'
+        : '') +
+      // ★ 中路后楼 = 史册馆入口（点了跳到「录」页的史册）
+      (b.fac === ARCHIVE_FAC
+        ? '<div class="bbtn" style="margin-top:4px">' +
+            '<button data-arc="1">进入史册馆 ▸</button></div>'
+        : '') +
+    '</div>';
+
+  box.querySelectorAll('button[data-scmap]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (buySectUpgrade(btn.getAttribute('data-scmap'))) render();
+    });
+  });
+  box.querySelectorAll('button[data-arc]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openArchive(true); });
+  });
+}
 const SECT = {
   generation: 0,          // 第几代弟子（newDisciple 里 +1）
   legacyPool: [],         // 传承池（除了直传给下一代的，其余存这里）
@@ -6050,8 +6282,59 @@ function render() {
     if (sn) sn.textContent = SECT_RANKS[SECT.rank].n;
     const sn2 = document.getElementById('sectName2');
     if (sn2) sn2.textContent = SECT_RANKS[SECT.rank].n;
+    // ★ 宗门全景横幅：宗门名 + 右上角状态（和「境」的 sceneLabel 同一套渲染时机）
+    const bn = document.getElementById('bannerSectName');
+    if (bn) bn.textContent = SECT_RANKS[SECT.rank].n;
+    const bs = document.getElementById('bannerStat');
+    if (bs) {
+      const aliveN = ROSTER.list.filter(v => v.alive).length;
+      bs.innerHTML = '第 <b>' + SECT.generation + '</b> 代 · <b>' +
+        P.REALMS[realm()] + '</b><br>弟子 <b>' + aliveN + '</b> · 荣誉 <b>' +
+        Math.round(SECT.honor || 0) + '</b>';
+    }
     const ht = document.getElementById('honorTxt');
     if (ht) ht.textContent = SECT.honor;
+  }
+
+  // ★ 境 · 弟子数据面板（用户要求：单独控件控制展开/收起）
+  //   数据来源与「宗」的弟子名册同一套；这里只做"随行弟子"精简版
+  if (DP_OPEN) {
+    const dpb = document.getElementById('discipleBox');
+    const dps = document.getElementById('dpStat');
+    if (dpb) {
+      const dz = ROSTER.list.filter(v => v.alive);
+      if (dps) {
+        const f = ROSTER.front;
+        dps.textContent = '在册 ' + dz.length + ' · 前线 ' + (f && f.alive ? f.name : '空缺');
+      }
+      let dh = '';
+      let di = 0;
+      for (const x of dz) {
+        const rc = x.role === 'front' ? 'front' : (x.role === 'back' ? 'back' : 'idle');
+        const post = x.post ? (FAC_BY_ID[x.post] || {}).name : '';
+        const avNo = 1 + ((x.id || di) % AV_COUNT);
+        const [c1, c2] = AV_DISC[((x.id || di) + AV_DISC.length - 1) % AV_DISC.length];
+        const lgShort = AV_LG_SHORT[x.linggen] || (x.linggen ? '灵' : '—');
+        const lgDot = WX_COLOR[WUXING[(x.id || 0) % WUXING.length]] || '#888';
+        dh += '<div class="rs-row has-av">' +
+          '<span class="av" style="--c1:' + c1 + ';--c2:' + c2 +
+            ';margin-top:' + ((di % 3) * 0.6).toFixed(1) + 'px">' +
+          '<img src="assets/弟子/弟子_' + avNo + '.png" ' +
+            'srcset="assets/弟子/弟子_' + avNo + '@2x.png 2x" alt="" loading="lazy" ' +
+            'draggable="false" style="animation-delay:-' +
+            ((di * 0.23) % 2.2).toFixed(2) + 's"></span>' +
+          '<span class="role ' + rc + '">' + ROLES[x.role] + '</span>' +
+          '<span class="nm">' + x.name + '</span>' +
+          '<span class="lg" title="' + (x.linggenName || '') + '">' +
+            '<i style="background:' + lgDot + '"></i>' + lgShort + '</span>' +
+          '<span class="tal">' + x.talentName + '</span>' +
+          '<span class="post">' + post + '</span>' +
+          '<span class="life">' + Math.round(x.lifespanLeft) + ' 年</span></div>';
+        di++;
+      }
+      if (!dz.length) dh = '<div class="rs-row" style="color:#5d574c">（尚无弟子）</div>';
+      dpb.innerHTML = dh;
+    }
   }
 
   // ★ 顶部：极简竖窗风格（.stat 纵列，无方框）
@@ -6999,12 +7282,22 @@ function render() {
         html2 += "<div class=\"sc-pool\">历代弟子 " + SECT.history.length +
           " · 传承池 " + SECT.legacyPool.length + " 件 · 遗落 " + SECT.lostLegacy.length + " 件 · 直传 " + legacySlots() + " 件</div>";
         for (const u of SECT_UPGRADES) {
+          // ★ 有对应建筑的升级项已挪到【宗门地图】的建筑面板里（点建筑看）
+          //   这里只保留"不是建筑"的项（入门礼）
+          if (SECT_UP_BY_FAC[u.id] === u) continue;
           const lv = SECT.up[u.id] || 0;
           const cost = sectUpCost(u.id);
           const locked = SECT.rank < u.rank;
           const can = !locked && lv < u.max && SECT.honor >= cost;
           const btn = (lv >= u.max) ? "满" : (locked ? SECT_RANKS[u.rank].n : String(cost));
-          html2 += "<div class=\"sc-up\"><span class=\"nm\">" + u.name + "</span>" +
+          // ★ 设施图标（AI 生成）。没有图标的项自动跳过，只显示文字。
+          const ico = FAC_ICON[u.id];
+          const icoHtml = ico
+            ? '<img class="sc-icon" src="assets/宗门/设施_' + ico + '.png" ' +
+              'srcset="assets/宗门/设施_' + ico + '@2x.png 2x" alt="" draggable="false">'
+            : '';
+          html2 += "<div class=\"sc-up\">" + icoHtml +
+            "<span class=\"nm\">" + u.name + "</span>" +
             "<span class=\"lv\">Lv" + lv + "/" + u.max + "</span>" +
             "<span class=\"dsc\">" + (lv ? u.desc(lv) : u.desc(1)) + "</span>" +
             "<button data-sc=\"" + u.id + "\"" + (can ? "" : " disabled") + ">" + btn + "</button></div>";
@@ -7016,6 +7309,48 @@ function render() {
             if (buySectUpgrade(btn.getAttribute("data-sc"))) render();
           });
         });
+      }
+
+      // ================= 宗门地图（建筑热点 + 功能面板） =================
+      {
+        const mapEl = document.getElementById("sectMap");
+        const imgEl = document.getElementById("sectMapImg");
+        const spotsEl = document.getElementById("sectSpots");
+        if (mapEl && imgEl && spotsEl) {
+          // 阶位 → 图片档（用户定案：0/1 素 · 2/3 金顶 · 4 仙门）
+          const tier = SECT.rank <= 1 ? 1 : (SECT.rank <= 3 ? 2 : 3);
+          const IMGNAME = { 1: "宗门_档1_素", 2: "宗门_档2_金顶", 3: "宗门_档3_仙门" }[tier];
+          if (SECT_MAP_TIER !== tier) {
+            SECT_MAP_TIER = tier;
+            // 用属性赋值（不用 setAttribute）—— 测试桩只实现了属性/样式
+            imgEl.src = "assets/宗门/" + IMGNAME + ".png";
+            imgEl.srcset = "assets/宗门/" + IMGNAME + "@2x.png 2x";
+          }
+          // 阶位滤镜 class
+          for (let i = 0; i <= 4; i++) mapEl.classList.toggle("r" + i, i === SECT.rank);
+          // 热点（只在建筑数变化时重建；位置固定）
+          if (spotsEl.childElementCount !== SECT_MAP.length) {
+            spotsEl.innerHTML = SECT_MAP.map(function (b) {
+              return '<div class="spot" data-b="' + b.fac + '" style="left:' +
+                b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%">' +
+                '<span class="ring"></span>' +
+                '<span class="tag">' + FAC_BY_ID[b.fac].name + '</span></div>';
+            }).join('');
+            spotsEl.querySelectorAll(".spot").forEach(function (s) {
+              s.addEventListener("mouseenter", function () {
+                SECT_SEL = s.getAttribute("data-b"); renderSectPanel();
+              });
+              s.addEventListener("click", function () {
+                SECT_SEL = s.getAttribute("data-b"); renderSectPanel();
+              });
+            });
+          }
+          // 高亮当前选中
+          spotsEl.querySelectorAll(".spot").forEach(function (s) {
+            s.classList.toggle("on", s.getAttribute("data-b") === SECT_SEL);
+          });
+          renderSectPanel();
+        }
       }
 
       const fbb = document.getElementById("fabaoBox");
@@ -7092,6 +7427,11 @@ function render() {
         }
       }
     }
+  }
+
+  // ★ 史册馆（Round 38）：打开时随 render 刷新（否则停在史册页时宗门变化看不到）
+  if (typeof ARCHIVE_OPEN !== "undefined" && ARCHIVE_OPEN) {
+    try { renderArchiveBody(); } catch (e) { }
   }
 
   // 日志（★ Round 24：带【第几代】标签 + 换代分隔线）
@@ -7255,6 +7595,18 @@ function buildUI() {
   }
 }
 $('#btnRun')?.addEventListener('click', () => { if (!G.running) startRun(); });
+// ★ 境 · 弟子数据控件（展开/收起）
+$('#btnDisciple')?.addEventListener('click', function () {
+  DP_OPEN = !DP_OPEN;
+  const p = document.getElementById('disciplePanel');
+  const b = document.getElementById('btnDisciple');
+  if (p) p.classList.toggle('on', DP_OPEN);
+  if (b) {
+    b.classList.toggle('on', DP_OPEN);
+    b.textContent = DP_OPEN ? '弟子名录 ▴' : '弟子名录 ▾';
+  }
+  render();
+});
 $('#btnFast')?.addEventListener('click', () => { for (let i = 0; i < 120 && G.running; i++) tickN(1); });
 // ★ 一键穿上所有"有提升"的
 $('#btnEquipAll')?.addEventListener('click', () => {
@@ -7466,6 +7818,7 @@ globalThis.__api = {
     autoLearnSpecs, autoPickGongfa, gfScore, autoPickSpecs,
   tick, tickN, startRun, endRun, gainQi, mobHp, qiNeed, newDisciple, endDisciple,
   FACILITIES, FAC_BY_ID, disciplePower, facOutput, backlineBonus, autoAssignPosts, grantBacklineOutput, TALENT_ORDER,
+  SECT_UP_BY_FAC,
   ROSTER, ROLES, ASSIGN_RULES, baseRecruit, RECRUIT_BASE, RECRUIT_PER_LEVEL, ROSTER_CAP, totalSlots,
   makeDisciple, assignDisciple, recruit, settleBackline, backlineCost, generationalTurnover, rollTalentBySect,
   TALENTS, TAL, talOf, talReset, talSpeedMul, talLifeMul, LIFE_PER_REALM, LIFE_CAP_YEARS,
@@ -7475,7 +7828,8 @@ globalThis.__api = {
   SECT_RES, FORGE_RECIPES, forge, forgeAll, forgeCost, canForge,
   reforge, reforgeCost, transferAffixes, transferCost, targetForge, targetCost, targetPool,
   FORGE_BASE, affixScoreOf,
-  SECT_DOCTRINE, doctrineReset, idleReportData, renderIdleReport, fmtClock, RULE_CFG, RULE_ROLL, AXIS_NAME,
+  SECT_DOCTRINE, doctrineReset, renderArchiveBody, openArchive,
+  get ARCHIVE_OPEN() { return ARCHIVE_OPEN; }, idleReportData, renderIdleReport, fmtClock, RULE_CFG, RULE_ROLL, AXIS_NAME,
   ruleAdd, ruleDrop, ruleLift, ruleCount, ruleHasAxis, ruleValue, ruleEffective, ruleNoteDeath, ruleRollReset, TEMPLATE_LEVELS, TEMPLATE_AXES, SPEECH_PRESETS, setSpeech, speechMargin,
   itemAxes, doctrineScore, assembleBest, autoScrapByDoctrine,
   SECT, SECT_RANKS, SECT_UPGRADES, ZONE_BIAS, ZB, zbNow, zbAdvance, zbReset, zbWeights, zbReason, sectPeers,

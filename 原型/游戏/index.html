@@ -46,7 +46,12 @@
     mix-blend-mode:overlay;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E")}
 
-  .screen{position:absolute;inset:0;display:none;flex-direction:column;z-index:1}
+  /* ★ Round 37 修复：原来没有 overflow 规则 —— 当固定高度子元素之和超过
+     #win 的 648px（把场景加高到 380px 后就会），内容会【溢出到手机框外】，
+     表现为"界面上莫名多出一些文字/和别的内容重叠"。
+     ⇒ 裁剪在 .screen 内，超出的部分由 .scroll 滚动承接。 */
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;z-index:1;
+    overflow:hidden}
   .screen.on{display:flex}
 
   /* ============ 顶部（世代 + 印章） ============ */
@@ -75,19 +80,35 @@
   .scene .veil{position:absolute;inset:0;z-index:1;pointer-events:none;
     background:radial-gradient(ellipse at 50% 42%,transparent 0%,rgba(8,9,10,.72) 100%),
                linear-gradient(180deg,rgba(10,11,12,.5),rgba(10,11,12,.86))}
-  .qilabel{position:absolute;z-index:3;left:14px;bottom:11px;font-size:10.5px;color:#8c8574;letter-spacing:2px}
+  /* ★ Round 37 修复：sceneLabel 与 battleInfo 原来【都】绝对定位在场景底部
+     ⇒ 窄屏（400px 手机框）下必然重叠 —— "秘境·金煞谷·已入 12 息" 和战斗统计
+     糊成一行（截图可复现）。
+     ⇒ 现在：秘境名留在场景内左下（加半透明底），战斗数据移到场景【下方】独立一行。 */
+  .qilabel{position:absolute;z-index:3;left:12px;bottom:9px;font-size:10.5px;
+    color:#8c8574;letter-spacing:1.5px;
+    background:#0a0b0ccc;border-radius:3px;padding:1px 6px}
   .qilabel b{color:var(--gold);font-weight:400}
-  /* ★ Round 36 修复：这里原本有 6 个 <span> 但【没有任何布局规则】
-     ⇒ 它们全挤在同一行上重叠，字糊成一团（截图里能看到 "40旅...900...900" 这种）
-     ⇒ 改为 flex 两行 + 右对齐 + 换行间距 */
-  #battleInfo{position:absolute;z-index:3;left:14px;right:14px;bottom:11px;
-    font-size:10.5px;color:#8c8574;letter-spacing:1px;line-height:1.7;
-    display:flex;flex-wrap:wrap;justify-content:flex-end;
-    gap:0 10px;align-items:baseline}
+  #battleInfo{margin:6px 18px 0;font-size:10.5px;color:#8c8574;letter-spacing:.5px;
+    line-height:1.7;display:flex;flex-wrap:wrap;gap:0 12px;align-items:baseline;
+    flex:0 0 auto}
   #battleInfo span{white-space:nowrap}
   #battleInfo b{color:var(--paper);font-weight:400}
   #battleInfo b.low{color:var(--red)}
   #battleInfo .dim{color:var(--dim2)}
+
+  /* ★ 弟子数据控件（用户要求：境页面单独加个控件，点了才显示弟子详细数据） */
+  #btnDisciple{margin:10px 18px 0;font-size:11px;padding:6px 0;background:transparent;
+    border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;
+    font-family:inherit;flex:0 0 auto;letter-spacing:2px}
+  #btnDisciple:hover{border-color:#ffffff44;color:var(--paper)}
+  #btnDisciple.on{border-color:var(--gold);color:var(--gold);background:#c9a22714}
+  #disciplePanel{margin:8px 18px 0;border-top:1px solid var(--line2);padding-top:7px;
+    flex:0 0 auto;display:none}
+  #disciplePanel.on{display:block}
+  #disciplePanel .dp-hd{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:5px}
+  #disciplePanel .dp-hd em{font-style:normal;color:var(--gold);
+    font-variant-numeric:tabular-nums}
 
   /* 战斗角色（保留原有观感，缩到窄窗里） */
   #battleWrap{position:absolute;inset:0;z-index:4}
@@ -279,7 +300,93 @@
   .spec-desc{font-size:9.5px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #cmpBox{font-size:11px;color:var(--dim)}
 
-  /* ============ 宗 · 竖窗（保留"极简竖窗"语汇） ============ */
+  /* ============ 宗 · 宗门地图（AI 生成 · 三档图） ============
+     阶位 → 用图：0/1 档1（素）· 2/3 档2（金顶）· 4 档3（仙门）
+     同图 + 滤镜递进 ⇒ 升阶时"越来越灵气充盈" */
+  .sect-map{position:relative;margin:14px 18px 0;border-radius:3px;overflow:hidden;
+    background:#141518;flex:0 0 auto;border:1px solid var(--line2)}
+  .sect-map .mimg{display:block;width:100%;height:auto;
+    transition:filter .35s ease}
+  /* 阶位越高越"灵气充盈"（同图滤镜递进）
+     ⚠️ 地图是「宗」页签的主视觉，基准亮度不能太低，否则建筑看不清 */
+  .sect-map.r0 .mimg{filter:brightness(.80) saturate(.58)}
+  .sect-map.r1 .mimg{filter:brightness(.86) saturate(.66)}
+  .sect-map.r2 .mimg{filter:brightness(.94) saturate(.76)}
+  .sect-map.r3 .mimg{filter:brightness(1.02) saturate(.86)}
+  .sect-map.r4 .mimg{filter:brightness(1.12) saturate(1.00)}
+  .sect-map.r4::after{content:'';position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 42%,#c9a22726 0%,transparent 62%);
+    animation:sectGlow 4.5s ease-in-out infinite}
+  @keyframes sectGlow{0%,100%{opacity:.55}50%{opacity:1}}
+
+  /* 建筑热点（hover 金色光圈 + 名字标签） */
+  .spot{position:absolute;cursor:pointer;border-radius:5px}
+  .spot .ring{position:absolute;inset:0;border:1px solid transparent;border-radius:5px;
+    transition:all .16s ease;pointer-events:none}
+  .spot .tag{position:absolute;left:50%;top:0;transform:translate(-50%,-108%);
+    font-size:9px;color:#e6ded0;background:#0c0d0ef0;border:1px solid #ffffff30;
+    border-radius:3px;padding:1px 4px;white-space:nowrap;opacity:0;
+    transition:opacity .16s;pointer-events:none;z-index:9}
+  .spot:hover .ring,.spot.on .ring{border-color:#e8cc72;
+    box-shadow:0 0 0 2px #c9a22755,0 0 18px 5px #c9a22770,inset 0 0 22px #c9a22738;
+    background:#c9a2271c}
+  .spot:hover .tag,.spot.on .tag{opacity:1}
+  .spot:hover{z-index:8}
+
+  /* 选中建筑的功能面板 */
+  .bldg-panel{padding:9px 0 4px;border-top:1px solid var(--line2);margin-top:8px}
+  .bldg-panel .bh{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+  .bldg-panel .bh img{width:26px;height:26px;object-fit:contain;
+    filter:drop-shadow(0 1px 2px #000000aa)}
+  .bldg-panel .bh b{color:var(--bright);font-weight:400;font-size:12px;letter-spacing:1px}
+  .bldg-panel .bh em{font-style:normal;display:block;font-size:9px;color:var(--dim2)}
+  .bldg-panel .bp{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+    font-size:10px;padding:3px 0;border-top:1px solid var(--line2)}
+  .bldg-panel .bp>span{color:var(--dim);flex:0 0 auto}
+  .bldg-panel .bp>b{color:var(--txt);font-weight:400;text-align:right}
+  .bldg-panel .bp>b.g{color:var(--gold);letter-spacing:1px}
+  .bldg-panel .bp>b.lock{color:var(--red)}
+  .bldg-panel .bp>b.none{color:var(--dim2);font-size:9.5px}
+  .bldg-panel .bbtn{margin-top:6px;text-align:right}
+  .bldg-panel .bbtn button{font:10px inherit;padding:3px 9px;background:#c9a22722;
+    border:1px solid var(--gold);border-radius:3px;color:#e0c464;cursor:pointer}
+  .bldg-panel .bbtn button:disabled{opacity:.35;border-color:#ffffff22;
+    background:transparent;color:#8c8574;cursor:default}
+
+  /* ============ 录 · 史册馆容器（Round 37） ============
+     #archiveBox 默认隐藏；点「宗」页的中路后楼后跳到「录」并显示。
+     内容由 #archiveBody 承载（渲染逻辑在别处实现）。 */
+  #archiveBox{padding-bottom:6px}
+  #archiveBox .arc-hd{font-size:11px;color:var(--gold);letter-spacing:3px;
+    padding-bottom:7px;margin-bottom:8px;border-bottom:1px solid var(--line2);
+    display:flex;justify-content:space-between;align-items:baseline}
+  #archiveBox .arc-hd em{font-style:normal;font-size:10px;color:var(--dim2);
+    letter-spacing:1px}
+  #archiveBox .arc-sec{font-size:10.5px;color:var(--dim);letter-spacing:2px;
+    margin:10px 0 4px}
+  #archiveBox .arc-item{display:flex;gap:9px;padding:6px 0;
+    border-bottom:1px solid var(--line2);font-size:10.5px;align-items:baseline}
+  #archiveBox .arc-item .g{flex:0 0 auto;color:var(--gold);font-size:10px;
+    letter-spacing:1px;font-variant-numeric:tabular-nums}
+  #archiveBox .arc-item .b{flex:1;min-width:0;color:var(--txt);line-height:1.6}
+  #archiveBox .arc-item .b i{font-style:normal;color:var(--dim2)}
+  #archiveBox .arc-item .b b{color:var(--gold);font-weight:400}
+  #archiveBox .arc-empty{font-size:10px;color:#5d574c;padding:8px 0}
+
+  .sect-banner{position:relative;isolation:isolate;margin:14px 18px 0;height:156px;
+    border-radius:3px;overflow:hidden;background:#0a0b0c;flex:0 0 auto}
+  .sect-banner img{width:100%;height:100%;object-fit:cover;object-position:center 45%;
+    filter:brightness(.78) saturate(.62) contrast(1.03)}
+  .sect-banner .veil{position:absolute;inset:0;pointer-events:none;z-index:1;
+    background:radial-gradient(ellipse at 50% 45%,transparent 0%,rgba(8,9,10,.60) 100%),
+               linear-gradient(180deg,rgba(10,11,12,.34),rgba(10,11,12,.82))}
+  .sect-banner .bn{position:absolute;left:14px;bottom:10px;z-index:2;
+    font-size:10.5px;color:#8c8574;letter-spacing:2px}
+  .sect-banner .bn b{color:var(--gold);font-weight:400;font-size:12px}
+  .sect-banner .bnr{position:absolute;right:14px;bottom:10px;z-index:2;
+    font-size:10.5px;color:#8c8574;letter-spacing:1px;text-align:right;line-height:1.6}
+  .sect-banner .bnr b{color:var(--paper);font-weight:400}
+
   .vwin-row{display:flex;gap:8px;align-items:stretch;padding:8px 0 0}
   .vwin{flex:1;min-width:0;border:1px solid var(--line2);border-radius:3px;
     padding:8px 7px;position:relative;display:flex;flex-direction:column}
@@ -289,13 +396,18 @@
     border-top:1px solid var(--line2);padding-top:6px}
   .sc-head{display:flex;flex-direction:column;gap:2px;font-size:10.5px}
   .sc-head .rank{color:var(--gold);font-weight:400;letter-spacing:1px}
+  /* 设施图标（AI 生成 · assets/宗门/设施_*.png） */
+  .sc-up .sc-icon{flex:0 0 auto;width:24px;height:24px;object-fit:contain;
+    align-self:center;filter:drop-shadow(0 1px 2px #000000aa)}
   .sc-head .honor{color:#c9a227;font-size:10px}
   .sc-pool{font-size:9.5px;color:var(--dim2);margin-top:3px;line-height:1.6}
-  .sc-up{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px;font-size:10px;
+  .sc-up{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:10px;
     padding:4px 0;border-top:1px solid var(--line2)}
-  .sc-up .nm{color:#9aa5b8;width:100%}
-  .sc-up .lv{color:#6ea8fe;font-size:9.5px}
-  .sc-up .dsc{flex:1;color:var(--dim2);font-size:9.5px;overflow:hidden;
+  /* ★ 去掉 width:100% —— 否则设施名独占一行，把图标挤到上一行 */
+  .sc-up .nm{color:#9aa5b8;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
+  .sc-up .lv{color:#6ea8fe;font-size:9.5px;flex:0 0 auto}
+  .sc-up .dsc{flex:1 1 100%;color:var(--dim2);font-size:9.5px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
   .sc-up button{flex:0 0 auto;font-size:9px;padding:1px 5px;border-radius:3px}
   .sc-up button:disabled{opacity:.35;cursor:default}
@@ -563,7 +675,16 @@
         <div id="battleBarWrap"><div id="battleBar"></div></div>
       </div>
       <div class="qilabel" id="sceneLabel">秘境 · <b>待入</b></div>
-      <div id="battleInfo"></div>
+    </div>
+
+    <!-- ★ 战斗数据（Round 37：从场景内挪出来，避免和秘境名重叠） -->
+    <div id="battleInfo"></div>
+
+    <!-- ★ 弟子数据控件（默认收起；点了才展开详细数据） -->
+    <button id="btnDisciple">弟子名录 ▾</button>
+    <div id="disciplePanel">
+      <div class="dp-hd"><span>随行弟子</span><em id="dpStat"></em></div>
+      <div id="discipleBox"></div>
     </div>
 
     <!-- 修为条 -->
@@ -689,6 +810,16 @@
       <div class="seal"><span>宗门</span></div>
     </div>
     <div class="scroll">
+      <!-- ★ 宗门地图（AI 生成 · 三档图）
+           建筑热点：鼠标移上去 → 金色光圈；点一下 → 下方显示该设施功能与升级 -->
+      <div class="sect-map" id="sectMap">
+        <img class="mimg" id="sectMapImg"
+             src="assets/宗门/宗门_档1_素.png"
+             srcset="assets/宗门/宗门_档1_素@2x.png 2x" alt="">
+        <div id="sectSpots"></div>
+      </div>
+      <div id="sectPanel" style="margin:0 18px"></div>
+
       <!-- ★ 极简竖窗：五条窄长竖窗并列 -->
       <div class="vwin-row">
         <div class="vwin">
@@ -800,6 +931,12 @@
       <div class="seal"><span>录</span></div>
     </div>
     <div class="scroll">
+      <!-- ★ 史册馆容器（Round 37）：点「宗」页的中路后楼跳到本页时显示。
+           ⚠️ 内容渲染由另一处实现：只要往 #archiveBody 里写 HTML 即可。
+              本容器默认隐藏，由 _game.js 的 openArchive() 打开。 -->
+      <div id="archiveBox" style="display:none">
+        <div id="archiveBody"></div>
+      </div>
       <div id="logBox"></div>
     </div>
     <div class="nav">
@@ -838,6 +975,14 @@ document.querySelectorAll('#win .nav div').forEach(function(d){
   else if (h === 'cheng') goTab('zong');   // 旧链接兼容
 })();
 </script>
-<script src="_game.js?v=1791884750"></script>
+<!-- ★ 缓存修复（Round 37）：
+     原来写的是 <script src="_game.js?v=1791884750"> —— 版本号硬编码、永不变化，
+     浏览器按"URL 未变"永久缓存 _game.js
+     ⇒ 本地改了代码却看不到效果（改了弟子立绘/地图/面板都像是"没生效"）。
+     现在改成每次加载都带一个新的时间戳，开发期保证拿到最新代码。
+     若将来要发布，可改回固定版本号以利用缓存。 -->
+<script>
+  document.write('<script src="_game.js?t=' + Date.now() + '"><\/script>');
+</script>
 </body>
 </html>

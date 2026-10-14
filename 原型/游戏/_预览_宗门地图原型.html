@@ -1,0 +1,114 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>宗门大图 · 交互原型</title><style>
+:root{--ink:#0c0d0e;--paper:#cfc8ba;--gold:#c9a227;--bg:#101113;--line:#ffffff14;--line2:#ffffff0f;
+--dim:#7e7768;--dim2:#5d574c;--txt:#d8d1c3;--bright:#e6ded0;--green:#6fa86f;--red:#c0604f}
+body{background:var(--bg);color:var(--paper);margin:0;padding:20px;
+font:13px/1.6 system-ui,"Microsoft YaHei",sans-serif}
+.win{width:400px;background:var(--ink);border:1px solid #ffffff17;border-radius:9px;
+padding:14px 0 0;box-shadow:0 20px 60px #000c}
+h3{font-size:11px;color:var(--gold);font-weight:400;letter-spacing:2px;margin:0 0 10px;padding:0 16px}
+.ranks{display:flex;gap:3px;padding:0 16px;margin-bottom:12px}
+.rk{flex:1;text-align:center;padding:5px 2px;border:1px solid var(--line2);border-radius:3px;
+font-size:9px;color:var(--dim2);line-height:1.3}
+.rk em{font-style:normal;display:block;font-size:8.5px;color:#4a463c}
+.rk.on{border-color:#c9a22755;color:#bbb4a6}
+.rk.on em{color:#8c8574}
+.rk.now{border-color:var(--gold);color:var(--gold);background:#c9a22714}
+
+/* ===== 宗门大图 ===== */
+.map{position:relative;margin:0 0 0;overflow:hidden;background:#0a0b0c}
+.map>img{display:block;width:100%;height:auto;
+filter:brightness(.72) saturate(.6) contrast(1.03)}
+.map .veil{position:absolute;inset:0;pointer-events:none;
+background:linear-gradient(180deg,rgba(10,11,12,.30),rgba(10,11,12,.62))}
+/* 热点 */
+.spot{position:absolute;cursor:pointer}
+.spot .ring{position:absolute;inset:0;border-radius:6px;
+border:1px solid transparent;transition:all .18s ease;pointer-events:none}
+.spot .tag{position:absolute;left:50%;top:-2px;transform:translate(-50%,-100%);
+font-size:9.5px;color:#e6ded0;background:#0c0d0edd;border:1px solid #ffffff26;
+border-radius:3px;padding:1px 5px;white-space:nowrap;opacity:0;
+transition:opacity .18s ease;pointer-events:none}
+.spot:hover .ring,.spot.on .ring{
+border-color:#e8cc72;
+box-shadow:0 0 0 2px #c9a22755, 0 0 22px 6px #c9a22766, inset 0 0 26px #c9a22733;
+background:#c9a2271f}
+.spot:hover .tag,.spot.on .tag{opacity:1}
+.spot:hover{z-index:5}
+
+/* ===== 功能面板 ===== */
+.panel{border-top:1px solid var(--line2);padding:10px 16px 12px;min-height:132px}
+.ph{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ph img{width:30px;height:30px;object-fit:contain;filter:drop-shadow(0 1px 2px #000a)}
+.ph b{color:var(--bright);font-weight:400;font-size:13px;letter-spacing:1px}
+.ph em{font-style:normal;display:block;font-size:9.5px;color:var(--dim2)}
+.prow{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+font-size:10.5px;padding:3px 0;border-top:1px solid var(--line2)}
+.prow>span{color:var(--dim);flex:0 0 auto}
+.prow>b{color:var(--txt);font-weight:400;text-align:right}
+.prow>b.pips{color:var(--gold);letter-spacing:1px}
+.prow>b.lock{color:#c0604f}
+.prow>b.none{color:var(--dim2);font-size:9.5px}
+.hint{padding:0 16px 12px;font-size:10px;color:var(--dim2);line-height:1.8}
+.hint b{color:var(--gold);font-weight:400}
+</style></head><body>
+<div class="win">
+  <h3>宗门 · 大图交互（原型）</h3>
+  <div class="ranks"><div class="rk on ">
+    <span>小宗门</span><em>0</em></div><div class="rk on ">
+    <span>中等宗门</span><em>30</em></div><div class="rk on now">
+    <span>大宗门</span><em>180</em></div><div class="rk  ">
+    <span>顶级宗门</span><em>450</em></div><div class="rk  ">
+    <span>仙门</span><em>1200</em></div></div>
+  <div class="map" id="map">
+    <img src="assets/宗门/宗门全景.png" srcset="assets/宗门/宗门全景@2x.png 2x" alt="">
+    <div class="veil"></div>
+    <div class="spot" data-fac="train" data-i="0"
+    style="left:45.9%;top:15.4%;width:9.5%;height:22%">
+    <span class="ring"></span>
+    <span class="tag">传功阁</span>
+  </div><div class="spot" data-fac="script" data-i="1"
+    style="left:45.9%;top:41.2%;width:17%;height:29%">
+    <span class="ring"></span>
+    <span class="tag">藏经阁</span>
+  </div><div class="spot" data-fac="forge" data-i="2"
+    style="left:19%;top:52%;width:12%;height:25%">
+    <span class="ring"></span>
+    <span class="tag">锻造部</span>
+  </div><div class="spot" data-fac="vault" data-i="3"
+    style="left:29%;top:56%;width:13.5%;height:26%">
+    <span class="ring"></span>
+    <span class="tag">宝库</span>
+  </div><div class="spot" data-fac="legacy" data-i="4"
+    style="left:75.5%;top:52%;width:13%;height:25%">
+    <span class="ring"></span>
+    <span class="tag">传承殿</span>
+  </div><div class="spot" data-fac="hall" data-i="5"
+    style="left:60.5%;top:38%;width:11.5%;height:24%">
+    <span class="ring"></span>
+    <span class="tag">议事堂</span>
+  </div><div class="spot" data-fac="life" data-i="6"
+    style="left:49.7%;top:76%;width:33%;height:47%">
+    <span class="ring"></span>
+    <span class="tag">延寿丹房</span>
+  </div>
+  </div>
+  <div class="panel" id="panel"></div>
+  <div class="hint"><b>鼠标移到建筑上</b>看光圈高亮 · <b>点一下</b>看该建筑的完整功能</div>
+</div>
+<script>
+const PANELS = {"train":"\n    <div class=\"ph\">\n      <img src=\"assets/宗门/设施_传功阁.png\"\n           srcset=\"assets/宗门/设施_传功阁@2x.png 2x\" alt=\"\">\n      <div><b>传功阁</b><em>中路·上殿 · 驻守 2/5</em></div>\n    </div>\n    <div class=\"prow\"><span>建筑效果</span><b>弟子修炼 +%</b></div>\n    <div class=\"prow\"><span>弟子驻守</span><b>2/5 人</b></div>\n    \n    <div class=\"prow\"><span>荣誉升级</span><b class=\"pips\">●●●○○ Lv3/5</b></div>\n    <div class=\"prow\"><span>升级效果</span><b>弟子修炼 +18%（灵气获取）</b></div>\n    <div class=\"prow\"><span>下一级</span><b class=\"\">耗荣誉 205</b></div>\n  ","script":"\n    <div class=\"ph\">\n      <img src=\"assets/宗门/设施_藏经阁.png\"\n           srcset=\"assets/宗门/设施_藏经阁@2x.png 2x\" alt=\"\">\n      <div><b>藏经阁</b><em>中路·正殿 · 驻守 1/3</em></div>\n    </div>\n    <div class=\"prow\"><span>建筑效果</span><b>功法研究（提高功法掉落）</b></div>\n    <div class=\"prow\"><span>弟子驻守</span><b>1/3 人</b></div>\n    <div class=\"prow\"><span>荣誉升级</span><b class=\"none\">该建筑无升级项，只靠弟子驻守</b></div>\n  ","forge":"\n    <div class=\"ph\">\n      <img src=\"assets/宗门/设施_锻造部.png\"\n           srcset=\"assets/宗门/设施_锻造部@2x.png 2x\" alt=\"\">\n      <div><b>锻造部</b><em>左侧·近亭 · 驻守 3/5</em></div>\n    </div>\n    <div class=\"prow\"><span>建筑效果</span><b>产出素材</b></div>\n    <div class=\"prow\"><span>弟子驻守</span><b>3/5 人</b></div>\n    <div class=\"prow\"><span>荣誉升级</span><b class=\"none\">该建筑无升级项，只靠弟子驻守</b></div>\n  ","vault":"\n    <div class=\"ph\">\n      <img src=\"assets/宗门/设施_宝库.png\"\n           srcset=\"assets/宗门/设施_宝库@2x.png 2x\" alt=\"\">\n      <div><b>宝库</b><em>左侧·远亭 · 驻守 0/3</em></div>\n    </div>\n    <div class=\"prow\"><span>建筑效果</span><b>装备掉落 +%</b></div>\n    <div class=\"prow\"><span>弟子驻守</span><b>0/3 人（空缺）</b></div>\n    \n    <div class=\"prow\"><span>荣誉升级</span><b class=\"pips\">●○○○ Lv1/4</b></div>\n    <div class=\"prow\"><span>升级效果</span><b>从传承池提取装备便宜 20%</b></div>\n    <div class=\"prow\"><span>下一级</span><b class=\"\">耗荣誉 180</b></div>\n  ","legacy":"\n    <div class=\"ph\">\n      <img src=\"assets/宗门/设施_传承殿.png\"\n           srcset=\"assets/宗门/设施_传承殿@2x.png 2x\" alt=\"\">\n      <div><b>传承殿</b><em>右侧·近亭 · 驻守 2/3</em></div>\n    </div>\n    <div class=\"prow\"><span>建筑效果</span><b>传承品级 +</b></div>\n    <div class=\"prow\"><span>弟子驻守</span><b>2/3 人</b></div>\n    \n    <div class=\"prow\"><span>荣誉升级</span><b class=\"pips\">●●○ Lv2/3</b></div>\n    <div class=\"prow\"><span>升级效果</span><b>直传传承位 +2（3 → 5）</b></div>\n    <div class=\"prow\"><span>下一级</span><b class=\"\">耗荣誉 480</b></div>\n  ","hall":"\n    <div class=\"ph\">\n      <img src=\"assets/宗门/设施_藏经阁.png\"\n           srcset=\"assets/宗门/设施_藏经阁@2x.png 2x\" alt=\"\">\n      <div><b>议事堂</b><em>右侧·远亭 · 驻守 1/2</em></div>\n    </div>\n    <div class=\"prow\"><span>建筑效果</span><b>秘境情报（提高倾向命中）</b></div>\n    <div class=\"prow\"><span>弟子驻守</span><b>1/2 人</b></div>\n    <div class=\"prow\"><span>荣誉升级</span><b class=\"none\">该建筑无升级项，只靠弟子驻守</b></div>\n  ","life":"\n    <div class=\"ph\">\n      <img src=\"assets/宗门/设施_传功阁.png\"\n           srcset=\"assets/宗门/设施_传功阁@2x.png 2x\" alt=\"\">\n      <div><b>延寿丹房</b><em>前景·牌坊 · 驻守 0/3</em></div>\n    </div>\n    <div class=\"prow\"><span>建筑效果</span><b>为驻宗弟子续命</b></div>\n    <div class=\"prow\"><span>弟子驻守</span><b>0/3 人（空缺）</b></div>\n    \n    <div class=\"prow\"><span>荣誉升级</span><b class=\"pips\">○○○ Lv0/3</b></div>\n    <div class=\"prow\"><span>升级效果</span><b>弟子寿元 +5 年（延寿丹）</b></div>\n    <div class=\"prow\"><span>下一级</span><b class=\"lock\">需宗门达到 顶级宗门</b></div>\n  "};
+const spots = document.querySelectorAll('.spot');
+const panel = document.getElementById('panel');
+function sel(fac){
+  spots.forEach(s => s.classList.toggle('on', s.dataset.fac === fac));
+  panel.innerHTML = PANELS[fac] || '';
+}
+spots.forEach(s => {
+  s.addEventListener('mouseenter', () => sel(s.dataset.fac));
+  s.addEventListener('click', () => sel(s.dataset.fac));
+});
+// 默认选中第一个
+sel(spots[0].dataset.fac);
+</script>
+</body></html>

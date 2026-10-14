@@ -58,29 +58,23 @@ if (fs.existsSync(bg)) {
   console.log('  ⚠️ 背景图缺失，画面会少一层山景');
 }
 
-// ---- ③之二 弟子立绘（AI 生成，54 KB，是游戏必需资源）----
-//   ⚠️ 不加这段，发布版的弟子头像会全部裂图
-const avDir = SRC + '/assets/弟子';
-if (fs.existsSync(avDir)) {
-  mk(PKG + '/assets/弟子');
-  let avN = 0;
-  for (const f of fs.readdirSync(avDir)) {
-    copy(avDir + '/' + f, PKG + '/assets/弟子/' + f);
-    avN++;
+// ---- ③之二 · 通用：整个 assets/ 递归拷进包 ----
+//   ⚠️ 原来是一段段"逐个目录拷"（背景图 / 弟子 / 经络图）—— 每次加新素材都要改这个脚本，
+//      漏一次就是发布版裂图（实际漏了：宗门地图、设施图标、妖怪立绘）
+//   ⇒ 改成通用递归拷贝 + 反向校验，加了什么素材都不会漏
+function copyDir(src, dst) {
+  if (!fs.existsSync(src)) return 0;
+  mk(dst);
+  let n = 0;
+  for (const f of fs.readdirSync(src)) {
+    const sp = src + '/' + f, dp = dst + '/' + f;
+    if (fs.statSync(sp).isDirectory()) n += copyDir(sp, dp);
+    else { copy(sp, dp); n++; }
   }
-  console.log('  ✅ 弟子立绘已打包（' + avN + ' 个）');
-} else {
-  console.log('  ⚠️ 找不到 assets/弟子/，发布版立绘会裂');
+  return n;
 }
-
-// ---- ③之三 经络图（装页的人体剪影 + 穴位）----
-//   ⚠️ 校验脚本抓出来的：index.html 引用 assets/经络图_*.png，
-//      但打包时只拷了背景图 ⇒ 发布版的「装」页会缺人体
-for (const n of ['经络图_剪影.png', '经络图_穴位.png']) {
-  const s = ROOT + '/美术资源/04_水墨背景/' + n;
-  if (fs.existsSync(s)) { copy(s, PKG + '/assets/' + n); console.log('  ✅ ' + n + ' 已打包'); }
-  else console.log('  ⚠️ 找不到 ' + n);
-}
+const assetN = copyDir(SRC + '/assets', PKG + '/assets');
+console.log('  ✅ assets/ 已打包（' + assetN + ' 个文件）');
 
 // ---- ④ 校验 ----
 const files = [];

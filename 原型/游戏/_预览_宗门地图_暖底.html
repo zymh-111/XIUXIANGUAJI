@@ -1,0 +1,68 @@
+﻿<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>宗门地图 · 白底版</title><style>
+body{background:#0d0e10;margin:0;padding:20px;font:13px/1.6 system-ui,"Microsoft YaHei",sans-serif;color:#cfc8ba}
+.win{width:400px;background:#0c0d0e;border:1px solid #ffffff17;border-radius:9px;
+padding:14px 0 0;box-shadow:0 20px 60px #000c}
+h3{font-size:11px;color:#c9a227;font-weight:400;letter-spacing:2px;margin:0 0 10px;padding:0 16px}
+.map{position:relative;overflow:hidden;background:#141518;border-top:1px solid #ffffff0f;
+border-bottom:1px solid #ffffff0f}
+.map>img{display:block;width:100%;height:auto}
+.spot{position:absolute;cursor:pointer;border-radius:6px}
+.ring{position:absolute;inset:0;border:1px solid transparent;border-radius:6px;
+transition:all .16s ease;pointer-events:none}
+.tag{position:absolute;left:50%;top:0;transform:translate(-50%,-105%);
+font-size:9.5px;color:#e6ded0;background:#0c0d0eeb;border:1px solid #ffffff30;
+border-radius:3px;padding:1px 5px;white-space:nowrap;opacity:0;
+transition:opacity .16s;pointer-events:none;z-index:6}
+.spot:hover .ring,.spot.on .ring{border-color:#e8cc72;
+box-shadow:0 0 0 2px #c9a22755,0 0 20px 5px #c9a22770,inset 0 0 24px #c9a2273a;
+background:#c9a2271c}
+.spot:hover .tag,.spot.on .tag{opacity:1}
+.spot:hover{z-index:5}
+.panel{padding:10px 16px 14px;min-height:120px}
+.panel b{color:#e6ded0;font-weight:400;font-size:13px;letter-spacing:1px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:8px}
+.it{font-size:10.5px;padding:4px 0;border-top:1px solid #ffffff0f;display:flex;
+justify-content:space-between;gap:6px}
+.it span{color:#7e7768}.it b{color:#d8d1c3;font-weight:400}
+.it b.g{color:#c9a227}
+</style></head><body>
+<div class="win">
+  <h3>宗门 · 地图交互（暖底 + 阶位滤镜）</h3>
+  <div class="map">
+    <img src="assets/宗门/宗门地图.png" srcset="assets/宗门/宗门地图@2x.png 2x" alt="">
+    <div class="spot" data-nm="传功阁"
+    style="left:40.39%;top:1.98%;width:16.16%;height:19.35%">
+    <span class="ring"></span><span class="tag">传功阁</span></div><div class="spot" data-nm="藏经阁"
+    style="left:36.14%;top:24.80%;width:17.43%;height:29.27%">
+    <span class="ring"></span><span class="tag">藏经阁</span></div><div class="spot" data-nm="锻造部"
+    style="left:15.31%;top:43.65%;width:19.98%;height:25.79%">
+    <span class="ring"></span><span class="tag">锻造部</span></div><div class="spot" data-nm="宝库"
+    style="left:27.21%;top:26.79%;width:11.05%;height:22.82%">
+    <span class="ring"></span><span class="tag">宝库</span></div><div class="spot" data-nm="传承殿"
+    style="left:64.63%;top:43.65%;width:20.83%;height:25.79%">
+    <span class="ring"></span><span class="tag">传承殿</span></div><div class="spot" data-nm="议事堂"
+    style="left:63.35%;top:25.79%;width:13.61%;height:23.81%">
+    <span class="ring"></span><span class="tag">议事堂</span></div><div class="spot" data-nm="延寿丹房"
+    style="left:31.04%;top:55.56%;width:37.84%;height:44.44%">
+    <span class="ring"></span><span class="tag">延寿丹房</span></div>
+  </div>
+  <div class="panel" id="panel"></div>
+</div>
+<script>
+const NAMES=['传功阁','藏经阁','锻造部','宝库','传承殿','议事堂','延寿丹房'];
+const spots=document.querySelectorAll('.spot');
+const panel=document.getElementById('panel');
+function sel(nm){
+  spots.forEach(s=>s.classList.toggle('on',s.dataset.nm===nm));
+  panel.innerHTML='<b>'+nm+'</b><div class="grid">'+
+    '<div class="it"><span>驻守</span><b>2/5</b></div>'+
+    '<div class="it"><span>升级</span><b class="g">●●●○○ Lv3/5</b></div>'+
+    '<div class="it"><span>建筑效果</span><b>弟子修炼 +%</b></div>'+
+    '<div class="it"><span>升级效果</span><b>修炼 +18%</b></div>'+
+    '</div>';
+}
+spots.forEach(s=>{s.addEventListener('mouseenter',()=>sel(s.dataset.nm));
+s.addEventListener('click',()=>sel(s.dataset.nm));});
+sel(NAMES[0]);
+</script></body></html>
