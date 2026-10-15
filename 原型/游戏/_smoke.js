@@ -3910,14 +3910,21 @@ const _J3 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.j
 // ---- 设施页骨架 ----
 chk('★ 有 #facPage 容器', /id="facPage"/.test(_H3));
 chk('★ 有返回按钮 #btnFacBack', /id="btnFacBack"/.test(_H3));
-chk('★ 7 个设施壳齐全', (_H3.match(/class="fac" data-fac="\w+"/g) || []).length === 7,
-  (_H3.match(/data-fac="(\w+)"/g) || []).join(','));
-chk('★ 7 个设施内容容器齐全（且默认隐藏）', (function () {
-  // ⚠️ Round 43 修订：内容容器加了 style="display:none"
-  //   （原来只有壳隐藏，内容容器没隐藏 ⇒ 设施内容被渲染到首屏！）
+chk('★ 设施壳与内容容器一一对应', (function () {
+  // ⚠️ 不再写死数量（Round 46 加了山门）—— 改成"两边集合相同"
+  const shells = [..._H3.matchAll(/class="fac" data-fac="(\w+)"/g)].map(m => m[1]).sort();
+  const holders = [..._H3.matchAll(/<div data-fac="(\w+)"[^>]*>/g)]
+    .map(m => m[1]).filter(x => true).sort();
+  const content = [..._H3.matchAll(/<div data-fac="(\w+)"[^>]*>/g)]
+    .filter(m => !/class="fac"/.test(m[0])).map(m => m[1]).sort();
+  return shells.length >= 7 && shells.length === content.length &&
+         shells.join() === content.join();
+})(), '壳=' + [..._H3.matchAll(/class="fac" data-fac="(\w+)"/g)].map(m => m[1]).join(','));
+chk('★ 设施内容容器默认隐藏', (function () {
+  // ⚠️ Round 43：内容容器必须 display:none（否则设施内容泄漏到首屏）
   const m = _H3.match(/<div data-fac="\w+"[^>]*>/g) || [];
   const content = m.filter(x => !/class="fac"/.test(x));
-  return content.length === 7 && content.every(x => /display:none/.test(x));
+  return content.length >= 7 && content.every(x => /display:none/.test(x));
 })(), ((_H3.match(/<div data-fac="\w+"[^>]*>/g) || []).filter(x => !/class="fac"/.test(x))).length + ' 个');
 chk('★ 有首屏容器 #zongHome', /id="zongHome"/.test(_H3));
 chk('★ 宗页 .scroll 有 id=zongScroll（选择器要用）', /id="zongScroll"/.test(_H3));

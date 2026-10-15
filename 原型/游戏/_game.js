@@ -1679,6 +1679,8 @@ const FACILITIES = [
     desc: '传承品级 +', rate: 0.5 },
   { id: 'life', name: '延寿丹房', slots: 3, out: 'life',
     desc: '为驻宗弟子续命', rate: 1.5 },
+  // ★ Round 46：山门 —— 门规 / 训话（宗门法纪）
+  { id: 'gate', name: '山门', slots: 2, out: 'none', desc: '宗门法纪（门规 · 训话）' },
   { id: 'hall', name: '议事堂', slots: 2, out: 'info',
     desc: '秘境情报（提高倾向命中）', rate: 0.01 },
 ];
@@ -2648,7 +2650,10 @@ const SECT_MAP = [
   { fac: 'vault',  name: '左·后亭',  x: 25.5, y: 24.8, w: 11.5, h: 26.8 },  // 宝库
   { fac: 'life',   name: '右·后亭',  x: 62.9, y: 24.8, w: 11.5, h: 26.8 },  // 延寿丹房
   { fac: 'script', name: '中路正殿', x: 37.4, y: 25.8, w: 16.6, h: 30.8 },  // 藏经阁
-  { fac: 'forge',  name: '左·前亭',  x: 15.3, y: 41.7, w: 18.7, h: 29.8 },  // 锻造部
+  { fac: 'forge',  name: '左·前亭',  x: 15.3, y: 41.7, w: 18.7, h: 29.8 },
+  // ★ Round 46：山门（最低处那座三重檐牌楼）—— 用户："把门规整到山门上"
+  //   热点避开下方的门洞，只取牌楼主体
+  { fac: 'gate',   name: '山门',     x: 33.0, y: 78.0, w: 30.0, h: 21.0 },  // 锻造部
   { fac: 'train',  name: '右·前亭',  x: 65.9, y: 41.7, w: 18.7, h: 29.8 },  // 传功阁
 ];
 // 当前选中的设施（点建筑切换）
@@ -2711,7 +2716,7 @@ function openArchive(on) {
 //      渲染代码一行没改。
 const FAC_TITLE = {
   forge: '锻造部', train: '传功阁', script: '藏经阁', vault: '宝库',
-  legacy: '传承殿', life: '延寿丹房', hall: '宗门大殿',
+  legacy: '传承殿', life: '延寿丹房', hall: '宗门大殿', gate: '山门',
 };
 let FAC_OPEN = false;
 let FAC_SEL = null;      // 当前打开的设施（供 render 刷新升级区）

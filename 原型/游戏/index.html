@@ -378,9 +378,14 @@
   /* ★★ Round 44：地图加大（用户："宗门地图页面扩大一点"）
      ⚠️ #win 是固定 400×648 —— 地图底图本身是 16:9，再放大就会挤压下面
         ⇒ 只能小幅加宽（18px→10px 边距）并给底图一点纵向填充，兼顾不出屏 */
-  .sect-map{position:relative;margin:6px 6px 0;border-radius:3px;overflow:hidden;
+  .sect-map{position:relative;margin:4px 4px 0;border-radius:3px;overflow:hidden;
     background:#141518;flex:0 0 auto;border:1px solid var(--line2)}
-  .sect-map .mimg{display:block;width:100%;height:auto;min-height:178px;object-fit:cover;
+  /* ★★ Round 46：按【自然比例】显示，不裁切
+     ⚠️ 之前加了 min-height:178px + object-fit:cover
+        ⇒ 图被裁掉上下（实测 348×178 vs 自然比例 348×149）
+        ⇒ 用户："我都看不见最上面是啥了"
+     ⇒ 去掉 min-height 与 cover，让图片按自身比例铺满宽度 */
+  .sect-map .mimg{display:block;width:100%;height:auto;
     transition:filter .35s ease}
   /* 阶位越高越"灵气充盈"（同图滤镜递进）
      ⚠️ 地图是「宗」页签的主视觉，基准亮度不能太低，否则建筑看不清 */
@@ -1062,6 +1067,7 @@
         <div class="fac" data-fac="legacy" style="display:none"></div>   <!-- 传承殿 -->
         <div class="fac" data-fac="life" style="display:none"></div>   <!-- 延寿丹房 -->
         <div class="fac" data-fac="hall" style="display:none"></div>   <!-- 宗门大殿 -->
+        <div class="fac" data-fac="gate" style="display:none"></div>   <!-- 山门 -->
       </div>
 
 <!-- ★★ Round 42：以下是【设施页的内容】—— JS 按当前设施把对应块搬进 #facPage 的壳里
@@ -1093,13 +1099,6 @@
 </div>
 
 <div data-fac="hall" style="display:none">
-        <div class="sec">
-          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
-            训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
-          <div id="speechBox"></div>
-          <!-- ★ 门规（训话的上锁版 · Round 34） -->
-          <div id="ruleBox" style="margin-top:10px"></div>
-        </div>
 
         <div id="archiveBox">
                     <div id="archiveBody"></div>
@@ -1153,6 +1152,19 @@
 </div>
 
 <!-- ★ Round 42：#sectBox 已在首屏（宗门现状卡），train 壳留空 -->
+<!-- ★★ Round 46：山门 —— 门规 + 训话
+     用户："把门规整到山门上"
+     （原来在宗门大殿，和史册馆挤在一起） -->
+<div data-fac="gate" style="display:none">
+        <div class="sec">
+          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+            训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
+          <div id="speechBox"></div>
+          <!-- ★ 门规（训话的上锁版 · Round 34） -->
+          <div id="ruleBox" style="margin-top:10px"></div>
+        </div>
+</div>
+
 <div data-fac="train" style="display:none"></div>
 
     </div><!-- /.scroll -->
