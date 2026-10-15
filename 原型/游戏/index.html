@@ -487,6 +487,17 @@
   #facPage .fac > *{margin-left:18px;margin-right:18px}
   #facPage .fac > .sec{margin-left:0;margin-right:0}
 
+  /* ★★ Round 43：横幅播报（擂台战果 / 宗门大事）
+     用户："就像正常网游一个横幅播报一下，保存到史册馆的生平就行" */
+  #evBanner{position:absolute;left:12px;right:12px;top:8px;z-index:60;
+    display:none;padding:7px 12px;border-radius:3px;
+    background:#0d0e0fee;border:1px solid var(--gold);
+    color:var(--gold);font-size:11px;letter-spacing:1px;text-align:center;
+    box-shadow:0 4px 16px #000000aa;pointer-events:none}
+  #evBanner.on{display:block;animation:evbIn .22s ease-out}
+  @keyframes evbIn{from{transform:translateY(-10px);opacity:0}to{transform:translateY(0);opacity:1}}
+  #evBanner b{color:var(--paper);font-weight:400}
+
   .sec{margin-top:14px;border-top:1px solid var(--line2);padding-top:9px}
   .sec:first-of-type{margin-top:10px}
   .sec-hd{display:flex;justify-content:space-between;align-items:baseline;
@@ -802,6 +813,8 @@
     <div id="eventBar" style="display:none"></div>
 
     <!-- 场景（含战斗） -->
+    <div id="evBanner"></div>
+
     <div class="scene">
       <img src="assets/asian-mountain-forest-bg__sprite_northWindShrineBG.webp" alt="">
       <div class="veil"></div>
@@ -996,6 +1009,27 @@
 
       <!-- ★ Round 42：点地图建筑 ⇒ 整页替换
            （用户："其他设施信息都应该点击地图建筑以后出现新的页面包含对应信息"） -->
+<!-- ★★ Round 42：不属于任何设施的，留在首屏 -->
+        <div class="sec">
+          <div class="sec-hd">
+            <span>弟子名册</span>
+            <span id="rosterStat" style="color:#8c8574;font-size:10px"></span>
+          </div>
+          <div id="rosterBox"></div>
+        </div>
+        <div class="sec">
+          <div class="sec-hd">
+            <span>擂台战报</span>
+            <span id="pvpStat" style="color:#8c8574;font-size:10px"></span>
+          </div>
+          <div id="pvpBox"></div>
+        </div>
+
+        <!-- ★ 重置 / 导出存档（Round 42：留在首屏底部） -->
+        <div class="sec">
+          <div id="resetBox"></div>
+        </div>
+
       </div><!-- /#zongHome -->
 
       <div id="facPage" style="display:none">
@@ -1015,7 +1049,7 @@
 <!-- ★★ Round 42：以下是【设施页的内容】—— JS 按当前设施把对应块搬进 #facPage 的壳里
      保留在同一父级（初始隐藏）⇒ 所有 getElementById 照旧能拿到，渲染代码不用改 -->
 
-<div data-fac="forge">
+<div data-fac="forge" style="display:none">
         <div class="sec">
           <div class="sec-hd">
             <span>锻造部</span>
@@ -1037,7 +1071,7 @@
         </div>
 </div>
 
-<div data-fac="script">
+<div data-fac="script" style="display:none">
         <div id="archiveBox">
           <div class="sec-hd" style="margin-bottom:6px">
             <span>宗门史册</span>
@@ -1059,7 +1093,7 @@
         </div>
 </div>
 
-<div data-fac="hall">
+<div data-fac="hall" style="display:none">
         <div class="sec">
           <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
             训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
@@ -1069,7 +1103,7 @@
         </div>
 </div>
 
-<div data-fac="vault">
+<div data-fac="vault" style="display:none">
         <div class="sec">
           <div class="sec-hd">
             <span>传承池</span>
@@ -1079,7 +1113,7 @@
         </div>
 </div>
 
-<div data-fac="legacy">
+<div data-fac="legacy" style="display:none">
           <div class="vwin">
             <div class="vwin-t">传承</div>
             <div id="legacyBox" class="vwin-b">
@@ -1096,7 +1130,7 @@
           </div>
 </div>
 
-<div data-fac="life">
+<div data-fac="life" style="display:none">
           <div class="vwin">
             <div class="vwin-t">给赠</div>
             <div id="giftBox" class="vwin-b"></div>
@@ -1104,28 +1138,8 @@
 </div>
 
 <!-- ★ Round 42：#sectBox 已在首屏（宗门现状卡），train 壳留空 -->
-<div data-fac="train"></div>
+<div data-fac="train" style="display:none"></div>
 
-<!-- ★★ Round 42：不属于任何设施的，留在首屏 -->
-        <div class="sec">
-          <div class="sec-hd">
-            <span>弟子名册</span>
-            <span id="rosterStat" style="color:#8c8574;font-size:10px"></span>
-          </div>
-          <div id="rosterBox"></div>
-        </div>
-        <div class="sec">
-          <div class="sec-hd">
-            <span>擂台战报</span>
-            <span id="pvpStat" style="color:#8c8574;font-size:10px"></span>
-          </div>
-          <div id="pvpBox"></div>
-        </div>
-
-        <!-- ★ 重置 / 导出存档（Round 42：留在首屏底部） -->
-        <div class="sec">
-          <div id="resetBox"></div>
-        </div>
     </div><!-- /.scroll -->
 
     <div class="nav">

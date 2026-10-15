@@ -3896,6 +3896,75 @@ chk('★ 读档后门规的轴/值/署名都对',
 // ============================================================
 // ============================================================
 // ============================================================
+// ============================================================
+hdr('测试 53：设施页 + 按代生平 + 横幅（Round 42/43）');
+//
+//   Round 42：点地图建筑 ⇒ 整页替换成设施页
+//   Round 43：生平按【代】归类（SECT.chronicle）+ 横幅播报
+const _H3 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
+const _J3 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8');
+
+// ---- 设施页骨架 ----
+chk('★ 有 #facPage 容器', /id="facPage"/.test(_H3));
+chk('★ 有返回按钮 #btnFacBack', /id="btnFacBack"/.test(_H3));
+chk('★ 7 个设施壳齐全', (_H3.match(/class="fac" data-fac="\w+"/g) || []).length === 7,
+  (_H3.match(/data-fac="(\w+)"/g) || []).join(','));
+chk('★ 7 个设施内容容器齐全（且默认隐藏）', (function () {
+  // ⚠️ Round 43 修订：内容容器加了 style="display:none"
+  //   （原来只有壳隐藏，内容容器没隐藏 ⇒ 设施内容被渲染到首屏！）
+  const m = _H3.match(/<div data-fac="\w+"[^>]*>/g) || [];
+  const content = m.filter(x => !/class="fac"/.test(x));
+  return content.length === 7 && content.every(x => /display:none/.test(x));
+})(), ((_H3.match(/<div data-fac="\w+"[^>]*>/g) || []).filter(x => !/class="fac"/.test(x))).length + ' 个');
+chk('★ 有首屏容器 #zongHome', /id="zongHome"/.test(_H3));
+chk('★ 宗页 .scroll 有 id=zongScroll（选择器要用）', /id="zongScroll"/.test(_H3));
+chk('★ openFacility 在模块级（不在 buildUI 内）', (function () {
+  const a = _J3.indexOf('function openFacility');
+  const b = _J3.indexOf('function buildUI()');
+  return a > 0 && a < b;
+})());
+chk('★ holder 选择器排除了 .fac 壳', (function () {
+  // ⚠️ 原来 querySelector('div[data-fac=x]') 会命中 #facPage 里的壳 ⇒ 搬 0 个节点
+  return /#zongScroll > div\[data-fac=/.test(_J3) && /:not\(\.fac\)/.test(_J3);
+})());
+
+// ---- 常驻状态栏 ----
+chk('★ 常驻状态栏 4 个字段', ['zbGen', 'zbDisc', 'zbHonor', 'zbMat'].every(id => new RegExp('id="' + id + '"').test(_H3)));
+chk('★ 状态栏在 #zongHome 外面（设施页也可见）', (function () {
+  const bar = _H3.indexOf('id="zongBar"'), home = _H3.indexOf('id="zongHome"');
+  return bar > 0 && home > 0 && bar < home;
+})());
+
+// ---- 按代生平 ----
+chk('★ SECT 有 chronicle 字段', /chronicle: \{\}/.test(_J3));
+chk('★ 有 snapshotChronicle 函数', /function snapshotChronicle/.test(_J3));
+chk('★ endDisciple 里会快照', /snapshotChronicle\(gen\)/.test(_J3));
+chk('★ chronicle 进存档（saveGame）', /chronicle: SECT\.chronicle/.test(_J3));
+chk('★ chronicle 读档（loadGame）', /SECT\.chronicle = \(d\.sect && d\.sect\.chronicle\)/.test(_J3));
+chk('★ 生平渲染按代分组（用 SECT.chronicle）', /SECT\.chronicle\)\.map\(Number\)/.test(_J3));
+
+// ---- banner ----
+chk('★ 有 banner() 函数', /function banner\(/.test(_J3));
+chk('★ 擂台上走横幅播报（不再只 log）', /banner\('⚔ '/.test(_J3));
+chk('★ 横幅 DOM #evBanner', /id="evBanner"/.test(_H3));
+chk('★ 横幅进了 tick 计时', /BANNER_T -= dt/.test(_J3));
+chk('★ banner 已导出', /banner, snapshotChronicle|snapshotChronicle,|banner,/.test(_J3));
+
+// ---- 运行时：banner 能调用、chronicle 能快照 ----
+chk('★ snapshotChronicle 可运行', (function () {
+  A.ROSTER.list.length = 0; A.ROSTER.front = null; A.ROSTER.nextId = 1;
+  A.SECT.chronicle = {};
+  A.newDisciple([A.makeSlotItem('主手', 6, 1, 'sword')]);
+  const g = A.SECT.generation;
+  const n = A.snapshotChronicle(g);
+  return n >= 0 && !!A.SECT.chronicle[g];
+})());
+chk('★ banner 不抛错，且写进 G.log', (function () {
+  const before = (globalThis.__G.log || []).length;
+  A.banner('测试横幅');
+  const after = (globalThis.__G.log || []).length;
+  return after >= before;
+})());
 hdr('测试 52：境/宗 两页签重构（Round 40）');
 //
 //   用户要求：删减到只有【境】和【宗】两个页签
@@ -3912,12 +3981,14 @@ chk('★ 底部导航只有 境/宗', (_H.match(/data-go="[a-z]+"/g) || []).leng
   (_H.match(/data-go="[a-z]+"/g) || []).join(' '));
 chk('★ 已经没有 data-go="zhuang"/"lu"',
   !/data-go="(zhuang|lu)"/.test(_H));
-chk('★ 史册馆已并入宗页（与宗门地图同页）', (function () {
-  // ⚠️ 不能比较 index 大小：archiveBox 被插在 scroll 开头，在 sectMap 之前
-  const z = _H.slice(_H.indexOf('data-v="zong"'));
-  const zongScreen = z.slice(0, z.indexOf('data-v=') < 0 ? z.length : z.indexOf('</div>\n\n  <!-- '));
-  return z.indexOf('archiveBox') >= 0 && z.indexOf('sectMap') >= 0 &&
-         z.indexOf('archiveBox') < z.indexOf('rosterBox');
+chk('★ 史册馆在宗页（且已搬进设施页容器）', (function () {
+  // ⚠️ Round 42/43 修订：史册馆从"宗页顶部"搬进了【藏经阁】设施页容器
+  //   ⇒ 不再比较 index，改成：archiveBox 在 script 的 data-fac 容器里
+  const zs = _H.indexOf('data-v="zong"');
+  const a = _H.indexOf('id="archiveBox"');
+  const holder = _H.indexOf('<div data-fac="script"');
+  const nextHolder = _H.indexOf('<div data-fac="hall"');
+  return zs >= 0 && a > zs && holder > 0 && a > holder && a < nextHolder;
 })());
 chk('★ 生平流水也并入宗页', /id="logBox"/.test(_H));
 chk('★ 装页的经络图搬进背包抽屉', (function () {

@@ -2478,8 +2478,8 @@ function evRunTourney(st) {
   const honor = Math.round(f.honor * bk.honor);
   addHonor(honor, bk.name + ' · ' + rank);
   ev('tourney', 8, { rank, honor, place, opp: f.oppName, mine: f.mine, oppP: f.opp, bracket: bk.name });
-  log('⚔ ' + place + '【' + bk.name + '】：' + rank + '（我方 ' + f.mine + ' vs ' +
-    f.oppName + ' ' + f.opp + '）· 荣誉 +' + honor, f.rank === '败' ? 'sys' : 'break');
+  banner('⚔ ' + place + '【' + bk.name + '】：' + rank + '（我方 ' + f.mine + ' vs ' +
+    f.oppName + ' ' + f.opp + '）· 荣誉 +' + honor, f.rank === '败' ? 'sys' : 'break');   // ★ Round 43：改横幅播报
   return { rank, honor, rival: f.opp, mine: f.mine, rankRaw: f.rank,
     oppName: f.oppName, bracket: bk.name };
 }
@@ -2637,10 +2637,14 @@ const SECT_MAP = [
   //             像其他宗门设施一样，然后定个名字表明它的作用"
   //   ★ 名字用「录」：宗主那一辈传下来的宗门编年 —— 弟子传 / 大事记 / 突破录
   //   热点只取【后楼屋顶】，避开左右双塔（塔从 y≈10% 起）
-  { fac: 'arch',   name: '中路后楼', x: 39.0, y:  0.8, w: 10.2, h: 13.5, special: 'arch' },
+  // ★ Round 43 坐标校准：用户指出红虚线框没框住"两座塔中间的房子"
+  //   原来 arch 在 x:39（偏左），和左塔 x:34 重叠
+  //   ⇒ 改成：两塔之间【有间隙】，中间的后楼独立框出来
+  //     左塔 ≈ 38%   中楼 ≈ 47.5%   右塔 ≈ 64%
+  { fac: 'arch',   name: '中路后楼', x: 44.0, y:  2.0, w:  9.0, h: 15.5, special: 'arch' },
   // fac（= FACILITIES 的 id）  显示位置           热点（x%, y%, w%, h%）
-  { fac: 'legacy', name: '后楼左塔', x: 34.0, y:  9.9, w:  8.1, h: 19.8 },  // 传承殿
-  { fac: 'hall',   name: '后楼右塔', x: 57.4, y:  9.9, w:  8.1, h: 19.8 },  // 议事堂（双塔共用）
+  { fac: 'legacy', name: '后楼左塔', x: 34.5, y:  2.0, w:  7.5, h: 19.5 },  // 传承殿
+  { fac: 'hall',   name: '后楼右塔', x: 58.5, y:  2.0, w:  7.5, h: 19.5 },  // 议事堂
   { fac: 'vault',  name: '左·后亭',  x: 25.5, y: 24.8, w: 11.5, h: 26.8 },  // 宝库
   { fac: 'life',   name: '右·后亭',  x: 62.9, y: 24.8, w: 11.5, h: 26.8 },  // 延寿丹房
   { fac: 'script', name: '中路正殿', x: 37.4, y: 25.8, w: 16.6, h: 30.8 },  // 藏经阁
@@ -2671,7 +2675,9 @@ const ARCHIVE_FAC = 'script';     // ⚠️ Round 40 后已不用（中路后楼
 // ★ Round 40：中路后楼 = 录（宗门史册）的【常驻热点】。
 //   用户要求："放在宗门全景那个中间后楼的里面，像其他宗门设施一样，然后定个名字表明作用"
 //   名字取「录」—— 和页签名一致，作用写清楚在面板里。
-const ARCHIVE_NAME = '录';
+// ★ Round 42/43：arch 热点 = 宗门大殿（放门训+门规）
+//   史册馆搬去了【藏经阁】(script) ⇒ 这个名字只用于宗门大殿的热点标签
+const ARCHIVE_NAME = '宗门大殿';
 const ARCHIVE_DESC = '宗门编年 · 历代弟子传 / 大事记 / 突破录';
 const ARCHIVE_TOPIC = 'arch';     // SECT_MAP 里的特殊 fac 值
 let ARCHIVE_OPEN = false;         // 「录」页是否处于史册模式
@@ -2944,6 +2950,11 @@ const SECT = {
   lostLegacy: [],         // 遗落在外的传承（待取回）
   history: [],            // 历代弟子记录
   ascended: false,        // 是否已有人飞仙
+  // ★★ Round 43：每代生平（用户："史册馆的生平记得有归类喔，
+  //   毕竟有很多代历练弟子，每代都该有自己的生平"）
+  //   { [代]: [{msg, cls, t, atk, kills, qi, tier}, ...] }
+  //   ⚠️ G.log 只有 60 条且【不进存档】⇒ 弟子死时把这一代的记录快照到这里
+  chronicle: {},
   // ★ Round 13：宗门层
   honor: 0,               // 荣誉点（永久 · 跨代累积）
   rank: 0,                // 宗门等级下标（SECT_RANKS）
@@ -3280,6 +3291,8 @@ function endDisciple(cause) {
   }
   // ★ 宗门：按弟子一生的成就发放荣誉点
   addHonor(honorForDisciple(), '第 ' + gen + ' 代弟子的一生');
+  // ★★ Round 43：把这一代的生平快照存档（G.log 会滚动淘汰，且不进存档）
+  try { snapshotChronicle(gen); } catch (e) { }
   SECT.history.push({
     gen, cause, tier: DISCIPLE.peakTier, runs: DISCIPLE.runs,
     hoursLeft: Math.round(DISCIPLE.lifespanLeft / 36) / 100,
@@ -3457,7 +3470,7 @@ function saveGame() {
       dropped: G.dropped, disenchanted: G.disenchanted,
       filterQ: G.filterQ, onlyUpgrade: G.onlyUpgrade,
       rule: LEGACY_RULE.key,
-      sect: { g: SECT.generation, ascended: SECT.ascended, history: SECT.history,
+      sect: { g: SECT.generation, ascended: SECT.ascended, chronicle: SECT.chronicle, history: SECT.history,
         honor: SECT.honor, rank: SECT.rank, up: SECT.up,
       sectMat: SECT_RES.materials, sectForged: SECT_RES.forged, sectSpent: SECT_RES.spent,
       trainLevel: TRAIN.level,
@@ -3505,6 +3518,7 @@ function loadGame() {
     if (d.rule && LEGACY_RULES[d.rule]) LEGACY_RULE.key = d.rule;
     SECT.generation = (d.sect && d.sect.g) | 0;
     SECT.ascended = !!(d.sect && d.sect.ascended);
+    SECT.chronicle = (d.sect && d.sect.chronicle) || {};   // ★ Round 43
     SECT.history = (d.sect && d.sect.history) || [];
     if (d.linggen && d.linggen.id) {
       const g = LINGGEN.find(x => x.id === d.linggen.id);
@@ -5593,6 +5607,14 @@ function wanderHero(dt) {
     }
   }
   if (G.dodgeFlash > 0) G.dodgeFlash -= dt;
+  // ★ Round 43：横幅播报计时（几秒后自动消失）
+  if (BANNER_T > 0) {
+    BANNER_T -= dt;
+    if (BANNER_T <= 0) {
+      const _eb = document.getElementById('evBanner');
+      if (_eb && _eb.classList) _eb.classList.remove('on');
+    }
+  }
 }
 
 // ★ 避怪权重：清怪能力越弱 ⇒ 权重越大（越躲着怪群走）
@@ -6442,6 +6464,46 @@ function fmtLifeReal(sec) {
 function fmtLife(sec) {
   if (sec <= 0) return "寿元已尽";
   return lifeToYears(sec) + " 年";
+}
+
+// ★★ Round 43：把指定代的生平记录快照进 SECT.chronicle
+//   ⚠️ G.log 上限 60 条且不进存档 ⇒ 弟子死时必须立刻抓住这一代的记录
+//   ⚠️ 去重：log() 里 t 是 Date.now()，同一毫秒可能重复 ⇒ 用 t+msg 做键
+function snapshotChronicle(gen) {
+  if (gen == null) return 0;
+  const mine = G.log.filter(function (l) { return l.gen === gen; });
+  if (!mine.length) return 0;
+  const old = SECT.chronicle[gen] || [];
+  const seen = {};
+  for (const l of old) seen[l.t + '|' + l.msg] = 1;
+  const merged = old.slice();
+  for (const l of mine) {
+    const k = l.t + '|' + l.msg;
+    if (seen[k]) continue;
+    seen[k] = 1;
+    merged.push({ msg: l.msg, cls: l.cls || '', t: l.t });
+  }
+  merged.sort(function (a, b2) { return a.t - b2.t; });
+  SECT.chronicle[gen] = merged.slice(-80);      // 每代最多留 80 条
+  // 只保留最近 20 代
+  const keys = Object.keys(SECT.chronicle).map(Number).sort(function (a, b2) { return a - b2; });
+  while (keys.length > 20) { delete SECT.chronicle[keys.shift()]; }
+  return merged.length;
+}
+
+// ★★ Round 43：横幅播报（擂台战果 / 宗门大事）
+//   用户："就像正常网游一个横幅播报一下，保存到史册馆的生平就行"
+//   ⇒ 播报 = 屏幕顶部一条横幅（几秒后消失）
+//      同时 log() 一条 ⇒ 进生平（按代归类）
+let BANNER_T = 0;
+function banner(msg, cls) {
+  const el = document.getElementById('evBanner');
+  if (el) {
+    el.innerHTML = msg;
+    el.classList.add('on');
+    BANNER_T = 3.2;
+  }
+  log(String(msg).replace(/<[^>]*>/g, ''), cls || 'ok');
 }
 
 function log(msg, cls) {
@@ -7788,19 +7850,51 @@ function render() {
     try { renderArchiveBody(); } catch (e) { }
   }
 
-  // 日志（★ Round 24：带【第几代】标签 + 换代分隔线）
-  {
-    const rows = G.log.slice(0, 14);
-    let html = '', prevGen = null;
-    for (const l of rows) {
-      const g = l.gen == null ? null : l.gen;
-      // 换代 ⇒ 插一条分隔线（说明"以下是第 N 代的记录"）
-      if (g != null && prevGen != null && g !== prevGen) {
-        html += '<div class="lg gen-sep">— 第 ' + g + ' 代 —</div>';
+  // ★★ 生平（Round 43 重做：按【代】归类）
+  //
+  //   用户："就像正常网游一个横幅播报一下，保存到史册馆的生平就行，
+  //         史册馆的生平记得有归类喔，毕竟有很多代历练弟子，每代都该有自己的生平"
+  //
+  //   来源两块：
+  //     ① SECT.chronicle[代]  —— 已故弟子的生平快照（持久化，进存档）
+  //     ② G.log 当前代        —— 正在历练的这一代（内存，实时）
+  //   显示：最近 5 代，新的在上；每代一个标题 + 该代记录
+  if ($('#logBox')) {
+    const CAUSE2 = { old_age: '善终', battle: '战死秘境', handover: '主动交接' };
+    const gens = Object.keys(SECT.chronicle).map(Number).sort(function (a, b2) { return b2 - a; });
+    const cur = SECT.generation;
+    const show = gens.slice(0, 5);
+    // 当前代也列出来（如果还没死）
+    if (show.indexOf(cur) < 0 && G.log.some(function (l) { return l.gen === cur; })) show.unshift(cur);
+
+    let html = '';
+    if (!show.length) {
+      html = '<div class="arc-empty">还没有生平记录。<br>' +
+        '弟子在秘境里做的事（突破 / 得宝 / 渡劫 / 结仇）都会按代记在这里。</div>';
+    } else {
+      for (const g of show) {
+        const rec = SECT.history.find(function (x) { return x.gen === g; });
+        const rows = (g === cur)
+          ? G.log.filter(function (l) { return l.gen === g; }).slice(0, 14)
+          : (SECT.chronicle[g] || []).slice().reverse();
+        // 代标题
+        let sub = (g === cur) ? '正在历练' : (rec ? (CAUSE2[rec.cause] || rec.cause || '') : '');
+        if (rec) {
+          sub += ' · 峰值 ' + ((rec.tier | 0) + 1) + ' 档' +
+            (rec.runs ? ' · ' + rec.runs + ' 局' : '') +
+            (rec.carried ? ' · 带回 ' + rec.carried + ' 件' : '') +
+            (rec.lost ? ' · 遗落 ' + rec.lost + ' 件' : '');
+        }
+        html += '<div class="arc-hd" style="margin-top:8px">第 ' + g + ' 代 <em>' + sub + '</em></div>';
+        if (!rows.length) {
+          html += '<div class="arc-empty">（这一代没有留下记录）</div>';
+        } else {
+          for (const l of rows) {
+            const msg = String(l.msg || '').replace(/<[^>]*>/g, '');
+            html += '<div class="lg ' + (l.cls || '') + '">' + msg + '</div>';
+          }
+        }
       }
-      prevGen = g;
-      html += '<div class="lg ' + (l.cls || '') + '">' +
-        (g != null ? '<b class="gen-tag">' + g + '代</b>' : '') + l.msg + '</div>';
     }
     $('#logBox').innerHTML = html;
   }
@@ -8246,7 +8340,7 @@ globalThis.__api = {
   setBagOpen, setDiscOpen, viewDisciple, BAG_OPEN,
   reforge, reforgeCost, transferAffixes, transferCost, targetForge, targetCost, targetPool,
   FORGE_BASE, affixScoreOf,
-  SECT_DOCTRINE, doctrineReset, renderArchiveBody, openArchive,
+  SECT_DOCTRINE, doctrineReset, renderArchiveBody, openArchive, banner, snapshotChronicle,
   openFacility, closeFacility,
   get FAC_OPEN() { return FAC_OPEN; },
   get ARCHIVE_OPEN() { return ARCHIVE_OPEN; }, idleReportData, renderIdleReport, fmtClock, RULE_CFG, RULE_ROLL, AXIS_NAME,
