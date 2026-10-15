@@ -38,8 +38,14 @@
   }
 
   /* ============ 窄窗 ============ */
+  /* ★★ Round 47：窗口加大（用户："把整个窗口改高"）
+     ⚠️ 原来固定 400×648 —— 地图受图比例限制只能 ~153px 高，占比上不去
+     ⇒ 加高到 760、加宽到 420：
+        宽 +20px ⇒ 地图按比例自然变高 ~8px
+        高 +112px ⇒ 建筑面板/名册/宗门现状都能多显示几行
+     ⚠️ 用 min(...,100%) 保证在矮视口里不溢出（body 是 flex 居中，溢出会被切） */
   #win{
-    width:400px; height:648px; position:relative;
+    width:420px; height:min(760px, 100%); position:relative;
     border-radius:9px; overflow:hidden; background:var(--ink);
     border:1px solid #ffffff17;
     box-shadow:0 26px 70px #000000e0,0 0 0 1px #00000090;
