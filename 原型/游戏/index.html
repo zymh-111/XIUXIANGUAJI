@@ -479,6 +479,14 @@
      ⇒ 改成：能放下就 3 列，放不下自动换 2 列 / 1 列；标题恢复横排 */
   /* ★ Round 41：区块容器与会话标题（原来内联重复 9 次 / 5 次）
      统一间距与分隔线 —— 以后再调区块节奏只改这里 */
+  /* ★★ Round 42：常驻状态栏（宗页顶部，进设施页也不隐藏）*/
+  #zongBar{display:flex;gap:14px;align-items:baseline;padding:7px 18px 0;
+    font-size:10.5px;color:#8c8574;letter-spacing:1px;flex:0 0 auto}
+  #zongBar b{color:var(--gold);font-weight:400;font-variant-numeric:tabular-nums}
+  /* 设施页 */
+  #facPage .fac > *{margin-left:18px;margin-right:18px}
+  #facPage .fac > .sec{margin-left:0;margin-right:0}
+
   .sec{margin-top:14px;border-top:1px solid var(--line2);padding-top:9px}
   .sec:first-of-type{margin-top:10px}
   .sec-hd{display:flex;justify-content:space-between;align-items:baseline;
@@ -956,125 +964,170 @@
       <div class="gen">宗门 · <b id="sectName">小宗门</b></div>
       <div class="seal"><span>宗门</span></div>
     </div>
-    <div class="scroll">
-      <!-- ★ 史册馆 + 生平（Round 37 建 · Round 40 并入本页 · Round 41 加返回按钮）
-           入口：宗门全景的【中路后楼】→「翻阅宗门史册 ▸」
-           ⚠️ 已不再跳「录」页（那个页签 Round 40 删了）—— 它就在本页顶部 -->
-      <div id="archiveBox">
-        <div class="sec-hd" style="margin-bottom:6px">
-          <span>宗门史册</span>
-          <button id="btnArchiveBack">返回宗门 ▸</button>
-        </div>
-        <div id="archiveBody"></div>
-      </div>
-            <div class="arc-tabs">
-        <button id="arcTabHis" class="on">史册</button>
-        <button id="arcTabLog">生平</button>
-      </div>
-      <div id="logBox"></div>
+    <!-- ★★ Round 42：常驻状态栏（不管在首屏还是设施页都能看到全局信息）
+         用户："进设施页后，荣誉/弟子数这类全局信息还要不要常驻可见" → 常驻 -->
+    <div id="zongBar">
+      <span>第 <b id="zbGen">1</b> 代</span>
+      <span>弟子 <b id="zbDisc">0</b></span>
+      <span>荣誉 <b id="zbHonor">0</b></span>
+      <span>素材 <b id="zbMat">0</b></span>
+    </div>
+    <div class="scroll" id="zongScroll">
 
-      <!-- ★ 宗门地图（AI 生成 · 三档图）
-           建筑热点：鼠标移上去 → 金色光圈；点一下 → 下方显示该设施功能与升级 -->
-      <div class="sect-map" id="sectMap">
-        <img class="mimg" id="sectMapImg"
-             src="assets/宗门/宗门_档1_素.webp"
-             srcset="assets/宗门/宗门_档1_素@2x.webp 2x" alt="">
-        <div id="sectSpots"></div>
-      </div>
-      <div id="sectPanel" style="margin:0 18px"></div>
+      <!-- ★★ Round 42：首屏内容（地图 + 名册 + 擂台）—— 进设施页时整体隐藏 -->
+      <div id="zongHome">
 
-      <!-- ★ 极简竖窗：五条窄长竖窗并列 -->
-      <div class="vwin-row">
-        <div class="vwin">
-          <div class="vwin-t">宗门</div>
-          <div id="sectBox" class="vwin-b"></div>
+        <div class="sect-map" id="sectMap">
+          <img class="mimg" id="sectMapImg"
+               src="assets/宗门/宗门_档1_素.webp"
+               srcset="assets/宗门/宗门_档1_素@2x.webp 2x" alt="">
+          <div id="sectSpots"></div>
         </div>
-        <div class="vwin">
-          <div class="vwin-t">传承</div>
-          <div id="legacyBox" class="vwin-b">
-            <div class="lg-rule">
-              <select id="legacyRule">
-                <option value="power">均衡</option>
-                <option value="weapon">武器</option>
-                <option value="small">小件</option>
-                <option value="speed">速度</option>
-                <option value="quality">品质</option>
-              </select>
+        <div id="sectPanel" style="margin:0 18px"></div>
+
+        <!-- ★★ Round 42：宗门现状卡
+             ⚠️ zongGap 原来放在 #sectPanel 里面 —— 但 renderSectPanel() 会整个重写
+                #sectPanel 的 innerHTML ⇒ 那个 <em> 立刻被冲掉，"距下一阶"跑到了设施面板末尾。
+                必须把卡片容器放在 #sectPanel 【外面】。 -->
+        <div class="sec" style="margin-left:18px;margin-right:18px">
+          <div class="sec-hd"><span>宗门现状</span><em id="zongGap" class="sub"></em></div>
+          <div id="sectBox"></div>
+        </div>
+
+      <!-- ★ Round 42：点地图建筑 ⇒ 整页替换
+           （用户："其他设施信息都应该点击地图建筑以后出现新的页面包含对应信息"） -->
+      </div><!-- /#zongHome -->
+
+      <div id="facPage" style="display:none">
+        <div class="sec-hd" style="margin:2px 0 8px">
+          <span id="facName">设施</span>
+          <button id="btnFacBack">返回宗门 ▸</button>
+        </div>
+        <div class="fac" data-fac="forge" style="display:none"></div>   <!-- 锻造部 -->
+        <div class="fac" data-fac="train" style="display:none"></div>   <!-- 传功阁 -->
+        <div class="fac" data-fac="script" style="display:none"></div>   <!-- 藏经阁 -->
+        <div class="fac" data-fac="vault" style="display:none"></div>   <!-- 宝库 -->
+        <div class="fac" data-fac="legacy" style="display:none"></div>   <!-- 传承殿 -->
+        <div class="fac" data-fac="life" style="display:none"></div>   <!-- 延寿丹房 -->
+        <div class="fac" data-fac="hall" style="display:none"></div>   <!-- 宗门大殿 -->
+      </div>
+
+<!-- ★★ Round 42：以下是【设施页的内容】—— JS 按当前设施把对应块搬进 #facPage 的壳里
+     保留在同一父级（初始隐藏）⇒ 所有 getElementById 照旧能拿到，渲染代码不用改 -->
+
+<div data-fac="forge">
+        <div class="sec">
+          <div class="sec-hd">
+            <span>锻造部</span>
+            <span>素材 <b id="sectMat" style="color:var(--gold);font-weight:400">0</b></span>
+          </div>
+          <div id="forgeBox"></div>
+          <!-- ★ 铸造四层（Round 19）：重铸 / 转移 / 定向 -->
+          <div id="castBox" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:7px"></div>
+        </div>
+
+        <div class="sec">
+          <div id="vaultPolicyBox"></div>
+          </div>
+
+        <div class="sec">
+          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+            门装模板 <span style="color:var(--dim2);font-size:9.5px">（弟子出去后按这个挑装备）</span></div>
+          <div id="tmplBox"></div>
+        </div>
+</div>
+
+<div data-fac="script">
+        <div id="archiveBox">
+          <div class="sec-hd" style="margin-bottom:6px">
+            <span>宗门史册</span>
+            <button id="btnArchiveBack">返回宗门 ▸</button>
+          </div>
+          <div id="archiveBody"></div>
+        </div>
+
+              <div class="arc-tabs">
+          <button id="arcTabHis" class="on">史册</button>
+          <button id="arcTabLog">生平</button>
+        </div>
+
+        <div id="logBox"></div>
+
+        <div class="sec">
+          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">历代弟子</div>
+          <div id="genList"></div>
+        </div>
+</div>
+
+<div data-fac="hall">
+        <div class="sec">
+          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+            训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
+          <div id="speechBox"></div>
+          <!-- ★ 门规（训话的上锁版 · Round 34） -->
+          <div id="ruleBox" style="margin-top:10px"></div>
+        </div>
+</div>
+
+<div data-fac="vault">
+        <div class="sec">
+          <div class="sec-hd">
+            <span>传承池</span>
+            <span>共 <b id="honorTxt" style="color:var(--gold);font-weight:400">0</b> 件</span>
+          </div>
+          <div id="poolList"></div>
+        </div>
+</div>
+
+<div data-fac="legacy">
+          <div class="vwin">
+            <div class="vwin-t">传承</div>
+            <div id="legacyBox" class="vwin-b">
+              <div class="lg-rule">
+                <select id="legacyRule">
+                  <option value="power">均衡</option>
+                  <option value="weapon">武器</option>
+                  <option value="small">小件</option>
+                  <option value="speed">速度</option>
+                  <option value="quality">品质</option>
+                </select>
+              </div>
             </div>
           </div>
+</div>
+
+<div data-fac="life">
+          <div class="vwin">
+            <div class="vwin-t">给赠</div>
+            <div id="giftBox" class="vwin-b"></div>
+          </div>
+</div>
+
+<!-- ★ Round 42：#sectBox 已在首屏（宗门现状卡），train 壳留空 -->
+<div data-fac="train"></div>
+
+<!-- ★★ Round 42：不属于任何设施的，留在首屏 -->
+        <div class="sec">
+          <div class="sec-hd">
+            <span>弟子名册</span>
+            <span id="rosterStat" style="color:#8c8574;font-size:10px"></span>
+          </div>
+          <div id="rosterBox"></div>
         </div>
-        <div class="vwin">
-          <div class="vwin-t">给赠</div>
-          <div id="giftBox" class="vwin-b"></div>
+        <div class="sec">
+          <div class="sec-hd">
+            <span>擂台战报</span>
+            <span id="pvpStat" style="color:#8c8574;font-size:10px"></span>
+          </div>
+          <div id="pvpBox"></div>
         </div>
-      </div>
 
-      <!-- ★ 宝库处置策略（Round 27） -->
-      <div class="sec">
-        <div id="vaultPolicyBox"></div>
-        <div id="resetBox" style="margin-top:14px"></div>
-      </div>
-
-      <!-- ★ 传承池（可花荣誉点提取） -->
-      <div class="sec">
-        <div class="sec-hd">
-          <span>传承池</span>
-          <span>共 <b id="honorTxt" style="color:var(--gold);font-weight:400">0</b> 件</span>
+        <!-- ★ 重置 / 导出存档（Round 42：留在首屏底部） -->
+        <div class="sec">
+          <div id="resetBox"></div>
         </div>
-        <div id="poolList"></div>
-      </div>
+    </div><!-- /.scroll -->
 
-      <!-- ★ 弟子名册 + 后勤岗位（Round 22） -->
-      <div class="sec">
-        <div class="sec-hd">
-          <span>弟子名册</span>
-          <span id="rosterStat" style="color:#8c8574;font-size:10px"></span>
-        </div>
-        <div id="rosterBox"></div>
-      </div>
-
-      <!-- ★ 锻造部（Round 18） -->
-      <div class="sec">
-        <div class="sec-hd">
-          <span>锻造部</span>
-          <span>素材 <b id="sectMat" style="color:var(--gold);font-weight:400">0</b></span>
-        </div>
-        <div id="forgeBox"></div>
-        <!-- ★ 铸造四层（Round 19）：重铸 / 转移 / 定向 -->
-        <div id="castBox" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:7px"></div>
-      </div>
-
-      <!-- ★ 训话（Round 18） -->
-      <div class="sec">
-        <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
-          训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
-        <div id="speechBox"></div>
-        <!-- ★ 门规（训话的上锁版 · Round 34） -->
-        <div id="ruleBox" style="margin-top:10px"></div>
-      </div>
-
-      <!-- ★ 门装模板（Round 18） -->
-      <div class="sec">
-        <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
-          门装模板 <span style="color:var(--dim2);font-size:9.5px">（弟子出去后按这个挑装备）</span></div>
-        <div id="tmplBox"></div>
-      </div>
-
-      <!-- ★ 擂台战报（异步 PVP） -->
-      <div class="sec">
-        <div class="sec-hd">
-          <span>擂台战报</span>
-          <span id="pvpStat" style="color:#8c8574;font-size:10px"></span>
-        </div>
-        <div id="pvpBox"></div>
-      </div>
-
-      <!-- 历代弟子 -->
-      <div class="sec">
-        <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">历代弟子</div>
-        <div id="genList"></div>
-      </div>
-    </div>
     <div class="nav">
       <div data-go="jing">境</div>
       <div class="on" data-go="zong">宗</div>

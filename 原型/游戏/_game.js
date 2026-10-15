@@ -2686,6 +2686,71 @@ function openArchive(on) {
   if (typeof goTab === 'function') goTab('zong');
 }
 
+// ★★ Round 42：设施页（点地图建筑 ⇒ 整页替换）
+//
+//   用户："宗页面应该显示地图和宗门基础信息，
+//          其他设施信息都应该点击地图建筑以后出现新的页面包含对应信息"
+//
+//   实现：
+//     1. HTML 里每个设施一个 <div data-fac="xxx">（初始 display:none），是各块的原生父级
+//     2. openFacility(fid) 把该块 append 进 #facPage 里对应的 <div class="fac"> 壳
+//     3. 显示 #facPage、隐藏 #zongHome（首屏）
+//     4. 返回时把块放回原父级、恢复首屏
+//
+//   ⚠️ 关键：块【只是换父级】，元素 id 不变 ⇒ render() 里所有 getElementById 照旧能用，
+//      渲染代码一行没改。
+const FAC_TITLE = {
+  forge: '锻造部', train: '传功阁', script: '藏经阁', vault: '宝库',
+  legacy: '传承殿', life: '延寿丹房', hall: '宗门大殿',
+};
+let FAC_OPEN = false;
+
+function openFacility(fid) {
+  const page = document.getElementById('facPage');
+  const home = document.getElementById('zongHome');
+  if (!page) return;
+  // ① 清空所有壳（把上次的块放回它们原来的 data-fac 父级）
+  page.querySelectorAll('.fac').forEach(function (shell) {
+    while (shell.firstChild) shell.removeChild(shell.firstChild);
+  });
+  // ② 把该设施的块搬进壳
+  // ★★ 修正：必须排除 #facPage 里的壳 —— 否则命中壳自己，搬 0 个节点
+  const holder = document.querySelector('#zongScroll > div[data-fac="' + fid + '"]:not(.fac)');
+  const shell = page.querySelector('.fac[data-fac="' + fid + '"]');
+  if (!holder || !shell) return;
+  while (holder.firstChild) shell.appendChild(holder.firstChild);
+
+  const nm = document.getElementById('facName');
+  if (nm) nm.textContent = FAC_TITLE[fid] || fid;
+
+  FAC_OPEN = true;
+  if (home) home.style.display = 'none';
+  page.style.display = '';
+
+  // ③ 藏经阁 = 史册馆，顺手打开史册
+  if (fid === 'script' && typeof openArchive === 'function') {
+    try { openArchive(true); } catch (e) { }
+  }
+}
+
+function closeFacility() {
+  const page = document.getElementById('facPage');
+  const home = document.getElementById('zongHome');
+  // 把块放回原父级
+  if (page) {
+    page.querySelectorAll('.fac').forEach(function (shell) {
+      const fid = shell.getAttribute('data-fac');
+      const holder = document.querySelector('#zongScroll > div[data-fac="' + fid + '"]:not(.fac)');
+      if (!holder) return;
+      while (shell.firstChild) holder.appendChild(shell.firstChild);
+    });
+    page.style.display = 'none';
+  }
+  if (home) home.style.display = '';
+  FAC_OPEN = false;
+}
+
+
 // ---------------- 史册馆（Round 38）----------------
 //
 // 用户（另一个会话）已搭好骨架：
@@ -6481,6 +6546,21 @@ function render() {
     //   ⇒ 重复。改成"共 N 件"（传承池件数），荣誉只在宗页顶部显示一处
     const ht = document.getElementById('honorTxt');
     if (ht) ht.textContent = SECT.legacyPool.length;
+    // ★★ Round 42：常驻状态栏（宗页顶部）
+    const _set = function (id, v) { const el = document.getElementById(id); if (el) el.textContent = v; };
+    _set('zbGen', SECT.generation);
+    _set('zbDisc', ROSTER.list.filter(function (v) { return v.alive; }).length);
+    _set('zbHonor', Math.round(SECT.honor || 0));
+    _set('zbMat', Math.round(SECT_RES.materials || 0));
+    // 宗门现状卡右上角：距下一阶还差多少
+    const _zg = document.getElementById('zongGap');
+    if (_zg) {
+      const _nx = SECT_RANKS[SECT.rank + 1];
+      _zg.textContent = _nx
+        ? ('距 ' + _nx.n + ' 还差 ' + Math.max(0, _nx.need - SECT.honor) + ' 荣誉')
+        : '已至顶阶';
+      _zg.className = 'sub';
+    }
   }
 
   // ★★ 境 · 当前历练弟子的数据（Round 40）
@@ -7611,8 +7691,10 @@ function render() {
               });
               s.addEventListener("click", function () {
                 SECT_SEL = s.getAttribute("data-b");
-                // 点中路后楼 ⇒ 直接进史册（和其他设施一样"点建筑开功能"）
-                if (isArch) { openArchive(true); return; }
+                // ★ Round 42：点建筑 ⇒ 整页替换成该设施页
+                if (isArch) { openFacility("script"); return; }   // 中路后楼 → 藏经阁（史册馆）
+                openFacility(s.getAttribute("data-b")); return;
+                /* eslint-disable no-unreachable */
                 renderSectPanel();
               });
             });
@@ -7908,6 +7990,9 @@ $('#btnCloseDisc')?.addEventListener('click', function () { setDiscOpen(false); 
 // ★ Round 41：史册馆返回（回到宗门全景）
 $('#btnArchiveBack')?.addEventListener('click', function () { openArchive(false); });
 
+// ★★ Round 42：设施页的按钮监听（函数已移到模块级）
+$('#btnFacBack')?.addEventListener('click', closeFacility);
+
 // 史册 / 生平 切换（原来靠底部「录」页签，现在并进宗页）
 $('#arcTabHis')?.addEventListener('click', function () {
   const a = document.getElementById('archiveBox'), l = document.getElementById('logBox');
@@ -8162,6 +8247,8 @@ globalThis.__api = {
   reforge, reforgeCost, transferAffixes, transferCost, targetForge, targetCost, targetPool,
   FORGE_BASE, affixScoreOf,
   SECT_DOCTRINE, doctrineReset, renderArchiveBody, openArchive,
+  openFacility, closeFacility,
+  get FAC_OPEN() { return FAC_OPEN; },
   get ARCHIVE_OPEN() { return ARCHIVE_OPEN; }, idleReportData, renderIdleReport, fmtClock, RULE_CFG, RULE_ROLL, AXIS_NAME,
   ruleAdd, ruleDrop, ruleLift, ruleCount, ruleHasAxis, ruleValue, ruleEffective, ruleNoteDeath, ruleRollReset, TEMPLATE_LEVELS, TEMPLATE_AXES, SPEECH_PRESETS, setSpeech, speechMargin,
   itemAxes, doctrineScore, assembleBest, autoScrapByDoctrine,
