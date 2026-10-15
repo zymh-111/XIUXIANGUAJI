@@ -2684,8 +2684,10 @@ let ARCHIVE_OPEN = false;         // 「录」页是否处于史册模式
 
 function openArchive(on) {
   ARCHIVE_OPEN = !!on;
+  // ★ Round 44：史册馆在【藏经阁】设施页里，默认可见
+  //   ⚠️ 不再用 display 开关它（用「史册/生平」页签切换）
   const box = document.getElementById('archiveBox');
-  if (box && box.style) box.style.display = ARCHIVE_OPEN ? '' : 'none';
+  if (box && box.style && ARCHIVE_OPEN && box.style.display === 'none') box.style.display = '';
   if (ARCHIVE_OPEN) { try { renderArchiveBody(); } catch (e) { } }
   // ★ Round 40：史册馆已【并入「宗」页】（用户："录不是合并到宗门的那个历史馆了吗"）
   //   ⇒ 不再跳到「录」页，只切到「宗」页
@@ -2710,6 +2712,47 @@ const FAC_TITLE = {
   legacy: '传承殿', life: '延寿丹房', hall: '宗门大殿',
 };
 let FAC_OPEN = false;
+let FAC_SEL = null;      // 当前打开的设施（供 render 刷新升级区）
+
+// ★★ Round 44：设施页顶部的"该建筑升级"区
+//   用户："宗门现状下面的各设施的升级情况直接搬到对应建筑的页面"
+function renderFacilityUpgrade(fid) {
+  const box = document.getElementById('facUpBox');
+  if (!box) return;
+  const f = FAC_BY_ID[fid];
+  const u = SECT_UP_BY_FAC[fid];
+  const lv = u ? (SECT.up[u.id] || 0) : 0;
+  const alive = ROSTER.list.filter(function (v) { return v.alive; });
+  const guard = alive.filter(function (v) { return v.post === fid; }).length;
+  let html = '<div class="sec-hd"><span>建筑</span></div>';
+  if (f) {
+    html += '<div class="bp"><span>作用</span><b>' + f.desc + '</b></div>' +
+      '<div class="bp"><span>弟子驻守</span><b>' + guard + '/' + f.slots +
+      (guard ? '' : '（空缺）') + '</b></div>';
+  }
+  if (u) {
+    const cost = sectUpCost(u.id);
+    const locked = SECT.rank < u.rank;
+    const can = !locked && lv < u.max && SECT.honor >= cost;
+    html += '<div class="bp"><span>荣誉升级</span><b class="g">Lv' + lv + '/' + u.max + '</b></div>' +
+      '<div class="bp"><span>' + (lv >= u.max ? '满级效果' : '下一级效果') + '</span><b>' +
+      u.desc(Math.max(1, lv + (lv >= u.max ? 0 : 1))) + '</b></div>';
+    if (lv < u.max) {
+      const btn = locked ? ('需 ' + SECT_RANKS[u.rank].n) : (cost + ' 荣誉');
+      html += '<div class="bbtn" style="margin-top:6px">' +
+        '<button data-facup="' + u.id + '"' + (can ? '' : ' disabled') + '>' +
+        (locked ? btn : ('升级 · ' + btn)) + '</button></div>';
+    }
+  } else if (f) {
+    html += '<div class="bp"><span>荣誉升级</span><b class="none">该建筑无升级项，只靠弟子驻守</b></div>';
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('button[data-facup]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (buySectUpgrade(btn.getAttribute('data-facup'))) render();
+    });
+  });
+}
 
 function openFacility(fid) {
   const page = document.getElementById('facPage');
@@ -2730,10 +2773,17 @@ function openFacility(fid) {
   if (nm) nm.textContent = FAC_TITLE[fid] || fid;
 
   FAC_OPEN = true;
+  FAC_SEL = fid;
   if (home) home.style.display = 'none';
   page.style.display = '';
+  // 🔴 关键修复：壳自己原来是 display:none（HTML 里写死的）
+  //   ⇒ 只显示 #facPage 是不够的，必须把【当前这个壳】也显示出来
+  //   否则设施页一片空白（用户报："现在每个建筑点进去的页面也是空的"）
+  page.querySelectorAll('.fac').forEach(function (s) {
+    s.style.display = (s === shell) ? 'block' : 'none';
+  });
 
-  // ③ 藏经阁 = 史册馆，顺手打开史册
+  // ③ 藏经阁 = 史册馆：默认展示史册
   if (fid === 'script' && typeof openArchive === 'function') {
     try { openArchive(true); } catch (e) { }
   }
@@ -2791,6 +2841,7 @@ function renderArchiveBody() {
 
   let h = '';
   // ---- 分册标题 ----
+  // ★ Round 44：不再重复渲染「返回宗门」（外层的设施页头已有）
   h += '<div class="arc-hd">宗门史册 <em>历代 ' + gens + ' 代 · 已录 ' +
     recorded + ' 卷' + (stillAlive ? ' · 当代历练中' : '') + '</em></div>';
 
@@ -2885,7 +2936,10 @@ function renderSectPanel() {
           '<button data-arch-open="1">翻阅宗门史册 ▸</button></div>' +
       '</div>';
     box.querySelectorAll('button[data-arch-open]').forEach(function (btn) {
-      btn.addEventListener('click', function () { openArchive(true); });
+      // ★ Round 44：用户报"最上面的翻阅宗门史册也点不进去"
+      //   ⇒ 原来只 openArchive(true)，但史册已经搬到【藏经阁】页里了
+      //      ⇒ 应该跳到藏经阁设施页
+      btn.addEventListener('click', function () { openFacility('script'); });
     });
     return;
   }
@@ -7843,6 +7897,11 @@ function render() {
         }
       }
     }
+  }
+
+  // ★ Round 44：设施页打开时刷新它的升级区
+  if (typeof FAC_OPEN !== 'undefined' && FAC_OPEN && FAC_SEL) {
+    try { renderFacilityUpgrade(FAC_SEL); } catch (e) { }
   }
 
   // ★ 史册馆（Round 38）：打开时随 render 刷新（否则停在史册页时宗门变化看不到）

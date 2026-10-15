@@ -3784,9 +3784,12 @@ chk('★ 渲染 5 次长度稳定（不累积）', (function () {
 A.openArchive(true);
 chk('★ openArchive(true) 显示容器',
   global.document.getElementById('archiveBox').style.display !== 'none');
-A.openArchive(false);
-chk('★ openArchive(false) 隐藏容器',
-  global.document.getElementById('archiveBox').style.display === 'none');
+// ⚠️ Round 44 修订：史册馆搬进【藏经阁】设施页后，默认可见，
+//   openArchive 不再用 display 开关它（改用「史册/生平」页签切换）
+A.openArchive(true);
+chk('★ openArchive(true) 后史册可见',
+  global.document.getElementById('archiveBox').style.display !== 'none',
+  JSON.stringify(global.document.getElementById('archiveBox').style.display));
 hdr('测试 48：门规（训话的上锁版 · Round 34）');
 //
 //   用户决策："上锁吧" ⇒ 门规 = 把训话某轴锁住，跨代保留 + 署名

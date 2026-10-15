@@ -375,9 +375,12 @@
   /* ============ 宗 · 宗门地图（AI 生成 · 三档图） ============
      阶位 → 用图：0/1 档1（素）· 2/3 档2（金顶）· 4 档3（仙门）
      同图 + 滤镜递进 ⇒ 升阶时"越来越灵气充盈" */
-  .sect-map{position:relative;margin:14px 18px 0;border-radius:3px;overflow:hidden;
+  /* ★★ Round 44：地图加大（用户："宗门地图页面扩大一点"）
+     ⚠️ #win 是固定 400×648 —— 地图底图本身是 16:9，再放大就会挤压下面
+        ⇒ 只能小幅加宽（18px→10px 边距）并给底图一点纵向填充，兼顾不出屏 */
+  .sect-map{position:relative;margin:10px 10px 0;border-radius:3px;overflow:hidden;
     background:#141518;flex:0 0 auto;border:1px solid var(--line2)}
-  .sect-map .mimg{display:block;width:100%;height:auto;
+  .sect-map .mimg{display:block;width:100%;height:auto;min-height:150px;object-fit:cover;
     transition:filter .35s ease}
   /* 阶位越高越"灵气充盈"（同图滤镜递进）
      ⚠️ 地图是「宗」页签的主视觉，基准亮度不能太低，否则建筑看不清 */
@@ -484,6 +487,18 @@
     font-size:10.5px;color:#8c8574;letter-spacing:1px;flex:0 0 auto}
   #zongBar b{color:var(--gold);font-weight:400;font-variant-numeric:tabular-nums}
   /* 设施页 */
+  /* ★★ Round 44：设施页升级区（复用 .bldg-panel 的 .bp 行）
+     ⚠️ .bp 原来是 flex-column（标签一行、值一行）—— 在建筑面板里是那样，
+        但搬到设施页顶部后应该左右对齐才好读 */
+  #facUpBox .bp{display:flex;justify-content:space-between;align-items:baseline;
+    gap:10px;padding:4px 0;border-bottom:1px solid #ffffff0f;font-size:11px}
+  #facUpBox .bp:last-child{border-bottom:0}
+  #facUpBox .bp > span{flex:0 0 auto;color:var(--dim2)}
+  #facUpBox .bp > b{flex:1 1 auto;text-align:right;font-weight:400;color:var(--paper)}
+  #facUpBox .bp > b.g{color:var(--gold)}
+  #facUpBox .bp > b.none{color:#5d574c;font-size:10px}
+  #facUpBox .bbtn{margin-top:8px}
+  #facUpBox .bbtn button{width:100%;font-size:11px;padding:7px 0}
   #facPage .fac > *{margin-left:18px;margin-right:18px}
   #facPage .fac > .sec{margin-left:0;margin-right:0}
 
@@ -1037,6 +1052,9 @@
           <span id="facName">设施</span>
           <button id="btnFacBack">返回宗门 ▸</button>
         </div>
+        <!-- ★★ Round 44：该设施的升级项（用户："宗门现状下面的各设施的升级情况
+             直接搬到对应建筑的页面"）—— 由 renderFacilityUpgrade() 填 -->
+        <div id="facUpBox" class="sec" style="margin-top:0"></div>
         <div class="fac" data-fac="forge" style="display:none"></div>   <!-- 锻造部 -->
         <div class="fac" data-fac="train" style="display:none"></div>   <!-- 传功阁 -->
         <div class="fac" data-fac="script" style="display:none"></div>   <!-- 藏经阁 -->
@@ -1073,11 +1091,7 @@
 
 <div data-fac="script" style="display:none">
         <div id="archiveBox">
-          <div class="sec-hd" style="margin-bottom:6px">
-            <span>宗门史册</span>
-            <button id="btnArchiveBack">返回宗门 ▸</button>
-          </div>
-          <div id="archiveBody"></div>
+                    <div id="archiveBody"></div>
         </div>
 
               <div class="arc-tabs">
