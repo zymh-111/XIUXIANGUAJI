@@ -2667,7 +2667,7 @@ let SECT_MAP_TIER = 0;
 // ★ 史册馆（Round 37）
 //   中路后楼 = 史册馆入口：在它的建筑面板上多一个按钮，点了跳到「录」页。
 //   史册的具体内容由「录」页的 #archiveBody 承载（渲染逻辑在别处实现）。
-const ARCHIVE_FAC = 'script';     // （保留：旧的"进入史册馆"按钮用）
+const ARCHIVE_FAC = 'script';     // ⚠️ Round 40 后已不用（中路后楼改成 special:'arch' 走自己的面板）
 // ★ Round 40：中路后楼 = 录（宗门史册）的【常驻热点】。
 //   用户要求："放在宗门全景那个中间后楼的里面，像其他宗门设施一样，然后定个名字表明作用"
 //   名字取「录」—— 和页签名一致，作用写清楚在面板里。
@@ -6477,8 +6477,10 @@ function render() {
         P.REALMS[realm()] + '</b><br>弟子 <b>' + aliveN + '</b> · 荣誉 <b>' +
         Math.round(SECT.honor || 0) + '</b>';
     }
+    // ★ Round 41：这个标题原来是【荣誉】—— 但荣誉在地图下方那行已经显示一次了
+    //   ⇒ 重复。改成"共 N 件"（传承池件数），荣誉只在宗页顶部显示一处
     const ht = document.getElementById('honorTxt');
-    if (ht) ht.textContent = SECT.honor;
+    if (ht) ht.textContent = SECT.legacyPool.length;
   }
 
   // ★★ 境 · 当前历练弟子的数据（Round 40）
@@ -7902,6 +7904,9 @@ function setDiscOpen(on) {
 }
 $('#btnCurDisciple')?.addEventListener('click', function () { setDiscOpen(!DP_OPEN); });
 $('#btnCloseDisc')?.addEventListener('click', function () { setDiscOpen(false); });
+
+// ★ Round 41：史册馆返回（回到宗门全景）
+$('#btnArchiveBack')?.addEventListener('click', function () { openArchive(false); });
 
 // 史册 / 生平 切换（原来靠底部「录」页签，现在并进宗页）
 $('#arcTabHis')?.addEventListener('click', function () {

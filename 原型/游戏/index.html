@@ -473,13 +473,47 @@
     font-size:10.5px;color:#8c8574;letter-spacing:1px;text-align:right;line-height:1.6}
   .sect-banner .bnr b{color:var(--paper);font-weight:400}
 
-  .vwin-row{display:flex;gap:8px;align-items:stretch;padding:8px 0 0}
-  .vwin{flex:1;min-width:0;border:1px solid var(--line2);border-radius:3px;
-    padding:8px 7px;position:relative;display:flex;flex-direction:column}
-  .vwin-t{writing-mode:vertical-rl;font-size:11.5px;color:#8c8574;letter-spacing:4px;
-    height:22px;margin:0 auto}
-  .vwin-b{flex:1;min-width:0;font-size:11px;margin-top:6px;
-    border-top:1px solid var(--line2);padding-top:6px}
+  /* ★ Round 41：三列竖窗 → 自适应
+     ⚠️ 原来 .vwin-t 用 writing-mode:vertical-rl（竖排标题），因为三列挤在 400px 里
+        每列只剩 ~128px，横排标题放不下 ⇒ 标题竖着、内容被压扁
+     ⇒ 改成：能放下就 3 列，放不下自动换 2 列 / 1 列；标题恢复横排 */
+  /* ★ Round 41：区块容器与会话标题（原来内联重复 9 次 / 5 次）
+     统一间距与分隔线 —— 以后再调区块节奏只改这里 */
+  .sec{margin-top:14px;border-top:1px solid var(--line2);padding-top:9px}
+  .sec:first-of-type{margin-top:10px}
+  .sec-hd{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:7px}
+  .sec-hd .sub{color:var(--dim2);font-size:9.5px;letter-spacing:1px}
+  .sec-hd b{color:var(--gold);font-weight:400}
+  /* 区块标题左侧金色短线：让 14 个区块不再糊成一片 */
+  .sec-hd > span:first-child{position:relative;padding-left:9px}
+  .sec-hd > span:first-child::before{content:"";position:absolute;left:0;top:50%;
+    width:2px;height:10px;margin-top:-5px;background:var(--gold);opacity:.55;
+    border-radius:1px}
+
+  /* ★★ Round 41：三列窄窗 → 单列堆叠
+     ⚠️ 走过的弯路：先试过"自适应 3 列/2 列"——但没用。
+        真正的问题是【子元素按宽栏设计】：
+          .sc-head（宗门名 + 荣誉一行）、.sc-pool（历代/传承池/遗落/直传一行）
+        塞进 ~128px 窄窗后，每行都被拆成 2~3 行
+        （截图里"荣誉 0（距 中等宗门 还差 30）"横跨三行，非常难读）
+     ⇒ 单列堆叠，宽度 = 整页宽（约 360px），不再换行。
+        三个窗都保留（它们是不同区块），只是不再并排。 */
+  .vwin-row{display:flex;flex-direction:column;gap:9px;padding:8px 0 0}
+  .vwin{min-width:0;border:1px solid var(--line2);border-radius:3px;
+    padding:9px 10px 10px;position:relative;background:#ffffff05}
+  .vwin-t{font-size:10.5px;color:var(--gold);letter-spacing:2px;
+    padding-bottom:5px;margin-bottom:7px;border-bottom:1px solid var(--line2);
+    font-weight:400;display:flex;justify-content:space-between;align-items:baseline}
+  .vwin-b{min-width:0;font-size:11px}
+  /* ★ Round 41：单列堆叠后的保险 —— 这两个在窄窗里会逐字换行 */
+  .vwin .lg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vwin .lc{flex-direction:row;justify-content:space-between;align-items:baseline;
+    gap:8px;padding:4px 0;border-bottom:1px solid #ffffff0d}
+  .vwin .lc:last-child{border-bottom:0}
+  .vwin .lc .hint{flex:1 1 100%}
+  .vwin .lc > span:first-child{flex:0 0 auto}
+  .vwin .lc > b{flex:0 0 auto}
   .sc-head{display:flex;flex-direction:column;gap:2px;font-size:10.5px}
   .sc-head .rank{color:var(--gold);font-weight:400;letter-spacing:1px}
   /* 设施图标（AI 生成 · assets/宗门/设施_*.webp） */
@@ -861,9 +895,8 @@
                 <button id="btnEquipAll" class="primary">一键穿上所有提升</button>
                 <button id="btnScrap">分解无提升</button>
               </div>
-              <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
-                <div style="display:flex;justify-content:space-between;align-items:baseline;
-                  font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:4px">
+              <div class="sec">
+                <div class="sec-hd" style="margin-bottom:4px">
                   <span>掉落</span><span>素材 <b id="mats" style="color:var(--gold);font-weight:400">0</b></span>
                 </div>
                 <div class="flt">
@@ -924,12 +957,16 @@
       <div class="seal"><span>宗门</span></div>
     </div>
     <div class="scroll">
-      <!-- ★ Round 40：原「录」页的【史册馆】+【生平流水】合并到这里
-           （用户："录不是合并到宗门的那个历史馆了吗"）
-           默认隐藏，从「宗」页宗门地图的藏经阁点「进入史册馆」打开 -->
+      <!-- ★ 史册馆 + 生平（Round 37 建 · Round 40 并入本页 · Round 41 加返回按钮）
+           入口：宗门全景的【中路后楼】→「翻阅宗门史册 ▸」
+           ⚠️ 已不再跳「录」页（那个页签 Round 40 删了）—— 它就在本页顶部 -->
       <div id="archiveBox">
-              <div id="archiveBody"></div>
-            </div>
+        <div class="sec-hd" style="margin-bottom:6px">
+          <span>宗门史册</span>
+          <button id="btnArchiveBack">返回宗门 ▸</button>
+        </div>
+        <div id="archiveBody"></div>
+      </div>
             <div class="arc-tabs">
         <button id="arcTabHis" class="on">史册</button>
         <button id="arcTabLog">生平</button>
@@ -973,25 +1010,23 @@
       </div>
 
       <!-- ★ 宝库处置策略（Round 27） -->
-      <div style="margin-top:12px;border-top:1px solid var(--line2);padding-top:8px">
+      <div class="sec">
         <div id="vaultPolicyBox"></div>
         <div id="resetBox" style="margin-top:14px"></div>
       </div>
 
       <!-- ★ 传承池（可花荣誉点提取） -->
-      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;
-          font-size:10.5px;color:var(--dim);letter-spacing:2px">
+      <div class="sec">
+        <div class="sec-hd">
           <span>传承池</span>
-          <span>荣誉 <b id="honorTxt" style="color:var(--gold);font-weight:400">0</b></span>
+          <span>共 <b id="honorTxt" style="color:var(--gold);font-weight:400">0</b> 件</span>
         </div>
         <div id="poolList"></div>
       </div>
 
       <!-- ★ 弟子名册 + 后勤岗位（Round 22） -->
-      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;
-          font-size:10.5px;color:var(--dim);letter-spacing:2px">
+      <div class="sec">
+        <div class="sec-hd">
           <span>弟子名册</span>
           <span id="rosterStat" style="color:#8c8574;font-size:10px"></span>
         </div>
@@ -999,9 +1034,8 @@
       </div>
 
       <!-- ★ 锻造部（Round 18） -->
-      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;
-          font-size:10.5px;color:var(--dim);letter-spacing:2px">
+      <div class="sec">
+        <div class="sec-hd">
           <span>锻造部</span>
           <span>素材 <b id="sectMat" style="color:var(--gold);font-weight:400">0</b></span>
         </div>
@@ -1011,7 +1045,7 @@
       </div>
 
       <!-- ★ 训话（Round 18） -->
-      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+      <div class="sec">
         <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
           训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
         <div id="speechBox"></div>
@@ -1020,16 +1054,15 @@
       </div>
 
       <!-- ★ 门装模板（Round 18） -->
-      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+      <div class="sec">
         <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
           门装模板 <span style="color:var(--dim2);font-size:9.5px">（弟子出去后按这个挑装备）</span></div>
         <div id="tmplBox"></div>
       </div>
 
       <!-- ★ 擂台战报（异步 PVP） -->
-      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;
-          font-size:10.5px;color:var(--dim);letter-spacing:2px">
+      <div class="sec">
+        <div class="sec-hd">
           <span>擂台战报</span>
           <span id="pvpStat" style="color:#8c8574;font-size:10px"></span>
         </div>
@@ -1037,7 +1070,7 @@
       </div>
 
       <!-- 历代弟子 -->
-      <div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:8px">
+      <div class="sec">
         <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">历代弟子</div>
         <div id="genList"></div>
       </div>
