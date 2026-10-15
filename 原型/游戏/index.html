@@ -378,9 +378,9 @@
   /* ★★ Round 44：地图加大（用户："宗门地图页面扩大一点"）
      ⚠️ #win 是固定 400×648 —— 地图底图本身是 16:9，再放大就会挤压下面
         ⇒ 只能小幅加宽（18px→10px 边距）并给底图一点纵向填充，兼顾不出屏 */
-  .sect-map{position:relative;margin:10px 10px 0;border-radius:3px;overflow:hidden;
+  .sect-map{position:relative;margin:6px 6px 0;border-radius:3px;overflow:hidden;
     background:#141518;flex:0 0 auto;border:1px solid var(--line2)}
-  .sect-map .mimg{display:block;width:100%;height:auto;min-height:150px;object-fit:cover;
+  .sect-map .mimg{display:block;width:100%;height:auto;min-height:178px;object-fit:cover;
     transition:filter .35s ease}
   /* 阶位越高越"灵气充盈"（同图滤镜递进）
      ⚠️ 地图是「宗」页签的主视觉，基准亮度不能太低，否则建筑看不清 */
@@ -483,7 +483,7 @@
   /* ★ Round 41：区块容器与会话标题（原来内联重复 9 次 / 5 次）
      统一间距与分隔线 —— 以后再调区块节奏只改这里 */
   /* ★★ Round 42：常驻状态栏（宗页顶部，进设施页也不隐藏）*/
-  #zongBar{display:flex;gap:14px;align-items:baseline;padding:7px 18px 0;
+  #zongBar{display:flex;gap:12px;align-items:baseline;padding:5px 12px 0;
     font-size:10.5px;color:#8c8574;letter-spacing:1px;flex:0 0 auto}
   #zongBar b{color:var(--gold);font-weight:400;font-variant-numeric:tabular-nums}
   /* 设施页 */
@@ -1090,6 +1090,17 @@
 </div>
 
 <div data-fac="script" style="display:none">
+</div>
+
+<div data-fac="hall" style="display:none">
+        <div class="sec">
+          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+            训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
+          <div id="speechBox"></div>
+          <!-- ★ 门规（训话的上锁版 · Round 34） -->
+          <div id="ruleBox" style="margin-top:10px"></div>
+        </div>
+
         <div id="archiveBox">
                     <div id="archiveBody"></div>
         </div>
@@ -1104,16 +1115,6 @@
         <div class="sec">
           <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">历代弟子</div>
           <div id="genList"></div>
-        </div>
-</div>
-
-<div data-fac="hall" style="display:none">
-        <div class="sec">
-          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
-            训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
-          <div id="speechBox"></div>
-          <!-- ★ 门规（训话的上锁版 · Round 34） -->
-          <div id="ruleBox" style="margin-top:10px"></div>
         </div>
 </div>
 

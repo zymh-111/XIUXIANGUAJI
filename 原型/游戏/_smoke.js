@@ -3984,14 +3984,19 @@ chk('★ 底部导航只有 境/宗', (_H.match(/data-go="[a-z]+"/g) || []).leng
   (_H.match(/data-go="[a-z]+"/g) || []).join(' '));
 chk('★ 已经没有 data-go="zhuang"/"lu"',
   !/data-go="(zhuang|lu)"/.test(_H));
-chk('★ 史册馆在宗页（且已搬进设施页容器）', (function () {
-  // ⚠️ Round 42/43 修订：史册馆从"宗页顶部"搬进了【藏经阁】设施页容器
-  //   ⇒ 不再比较 index，改成：archiveBox 在 script 的 data-fac 容器里
+chk('★ 史册馆在宗页的【宗门大殿】容器里', (function () {
+  // ⚠️ Round 45 修订：Round 44 我把史册塞进了【藏经阁】(script) —— 顺序搞错了。
+  //   正确：宗门大殿(hall) = 门规 + 史册馆；藏经阁(script) = 功法研究
   const zs = _H.indexOf('data-v="zong"');
   const a = _H.indexOf('id="archiveBox"');
-  const holder = _H.indexOf('<div data-fac="script"');
-  const nextHolder = _H.indexOf('<div data-fac="hall"');
-  return zs >= 0 && a > zs && holder > 0 && a > holder && a < nextHolder;
+  const hall = _H.indexOf('<div data-fac="hall"');
+  const next = _H.indexOf('<div data-fac="', hall + 10);
+  return zs >= 0 && a > zs && hall > 0 && a > hall && (next < 0 || a < next);
+})(), (function () {
+  const a = _H.indexOf('id="archiveBox"');
+  const s = _H.indexOf('<div data-fac="script"');
+  const hh = _H.indexOf('<div data-fac="hall"');
+  return a > hh ? '在 hall' : (a > s ? '在 script(错)' : '?');
 })());
 chk('★ 生平流水也并入宗页', /id="logBox"/.test(_H));
 chk('★ 装页的经络图搬进背包抽屉', (function () {

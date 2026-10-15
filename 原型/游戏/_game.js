@@ -2671,7 +2671,9 @@ let SECT_MAP_TIER = 0;
 // ★ 史册馆（Round 37）
 //   中路后楼 = 史册馆入口：在它的建筑面板上多一个按钮，点了跳到「录」页。
 //   史册的具体内容由「录」页的 #archiveBody 承载（渲染逻辑在别处实现）。
-const ARCHIVE_FAC = 'script';     // ⚠️ Round 40 后已不用（中路后楼改成 special:'arch' 走自己的面板）
+const ARCHIVE_FAC = 'arch';     // ★ Round 45：史册馆在【宗门大殿】(arch)，不是藏经阁(script)
+                                //   ⚠️ Round 44 我把它设成 script，导致"翻阅宗门史册"按钮
+                                //      出现在藏经阁上，而用户在藏经阁看到的就是史册馆 —— 错位
 // ★ Round 40：中路后楼 = 录（宗门史册）的【常驻热点】。
 //   用户要求："放在宗门全景那个中间后楼的里面，像其他宗门设施一样，然后定个名字表明作用"
 //   名字取「录」—— 和页签名一致，作用写清楚在面板里。
@@ -2783,9 +2785,13 @@ function openFacility(fid) {
     s.style.display = (s === shell) ? 'block' : 'none';
   });
 
-  // ③ 藏经阁 = 史册馆：默认展示史册
-  if (fid === 'script' && typeof openArchive === 'function') {
-    try { openArchive(true); } catch (e) { }
+  // ③ 宗门大殿 = 门规 + 史册馆：默认展示史册那一卷
+  if (fid === 'hall') {
+    try { renderArchiveBody(); } catch (e) { }
+    const _ab = document.getElementById('archiveBox');
+    const _lb = document.getElementById('logBox');
+    if (_ab) _ab.style.display = '';
+    if (_lb) _lb.style.display = 'none';
   }
 }
 
@@ -2936,10 +2942,16 @@ function renderSectPanel() {
           '<button data-arch-open="1">翻阅宗门史册 ▸</button></div>' +
       '</div>';
     box.querySelectorAll('button[data-arch-open]').forEach(function (btn) {
-      // ★ Round 44：用户报"最上面的翻阅宗门史册也点不进去"
-      //   ⇒ 原来只 openArchive(true)，但史册已经搬到【藏经阁】页里了
-      //      ⇒ 应该跳到藏经阁设施页
-      btn.addEventListener('click', function () { openFacility('script'); });
+      // ★ Round 45：史册馆在【宗门大殿】本页里
+      //   ⚠️ Round 44 我搞错了顺序，把史册塞进了【藏经阁】(script)
+      //      正确：宗门大殿(hall) = 门规 + 史册馆；藏经阁(script) = 功法研究
+      btn.addEventListener('click', function () {
+        try { renderArchiveBody(); } catch (e) { }
+        const ab = document.getElementById('archiveBox');
+        const lb = document.getElementById('logBox');
+        if (ab) ab.style.display = '';
+        if (lb) lb.style.display = 'none';
+      });
     });
     return;
   }
@@ -2985,7 +2997,7 @@ function renderSectPanel() {
       // ★ 中路后楼 = 史册馆入口（点了跳到「录」页的史册）
       (b.fac === ARCHIVE_FAC
         ? '<div class="bbtn" style="margin-top:4px">' +
-            '<button data-arc="1">进入史册馆 ▸</button></div>'
+            '<button data-arc="1">翻阅宗门史册 ▸</button></div>'
         : '') +
     '</div>';
 
