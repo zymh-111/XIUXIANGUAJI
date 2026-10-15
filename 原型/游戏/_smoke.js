@@ -41,8 +41,13 @@ function makeEl() {
 const els = {};
 global.document = {
   querySelector(s) { return els[s] || (els[s] = makeEl()); },
+  querySelectorAll() { return []; },
   getElementById(id) { return els['#' + id] || (els['#' + id] = makeEl()); },
   createElement() { return makeEl(); },
+  // ★ Round 38：桩补上 addEventListener
+  //   （_game.js 里有 document.addEventListener('click', ...) 做弟子详情的事件委托，
+  //     桩漏了会 TypeError: document.addEventListener is not a function）
+  addEventListener() {},
 };
 global.window = { addEventListener() {} };
 global.document.readyState = 'complete';   // 让 boot() 直接执行

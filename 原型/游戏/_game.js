@@ -1426,7 +1426,7 @@ const ROSTER = {
 };
 const ROLES = { front: '前线', back: '后勤', idle: '候补' };
 
-// ★ 弟子头像素材表（AI 生成 · assets/弟子/ 弟子_1..7.png）
+// ★ 弟子头像素材表（AI 生成 · assets/弟子/ 弟子_1..7.webp）
 //   形象与圆盘配色各自独立散列 ⇒ 同代弟子外观不重复，且同一弟子始终不变。
 //   ⚠️ 素材按【角色高度归一化】过（都占画布 80%），所以不同来源的图大小一致。
 //   ⚠️ AV_COUNT 必须与 assets/弟子/ 里的形象数一致；AV_DISC 数量 = AV_COUNT 时，
@@ -1445,9 +1445,11 @@ const AV_DISC = [
 const AV_LG_SHORT = { dan: '单', shuang: '双', san: '三', si: '四', wu: '五', wei: '伪' };
 // 场景主角当前用的是哪个形象编号（避免每帧重复写 DOM）
 let HERO_AV = 0;
-// ★ 妖怪贴图映射（Round 38 · assets/妖怪/妖_<名>.png）
+// 当前场景背景用的是哪张（避免每帧重复写 DOM）
+let SCENE_BG_KEY = '';
+// ★ 妖怪贴图映射（Round 38 · assets/妖怪/妖_<名>.webp）
 //   键 = MOB_KINDS 的 id；没有映射的（域外天魔 3 种）自动退回五行色块。
-//   小怪用 妖_<名>.png（16px），精英用 妖_<名>_精英.png（24px），Boss 用 _Boss.png（36px）
+//   小怪用 妖_<名>.webp（16px），精英用 妖_<名>_精英.webp（24px）
 const MOB_SPRITE = {
   m_jin_a:  '金甲狮', m_jin_b:  '金角鼠',
   m_mu_a:   '万灵鹿', m_mu_b:   '滕蔓兔',
@@ -1455,7 +1457,19 @@ const MOB_SPRITE = {
   m_huo_a:  '赤焰狐', m_huo_b:  '焚天雀',
   m_tu_a:   '辟地熊', m_tu_b:   '岩壳蝎',
 };
-// ★ 宗门设施图标映射（assets/宗门/设施_<名>.png）
+// ★ Boss 贴图映射（Round 39）：键 = MOB_KINDS_BOSS 的 id
+//   两套 Boss（用户要求"两套一起用"）：
+//     · 魔系妖尊  Boss_B_<id>.webp        —— 就是现在 MOB_KINDS_BOSS 里那 5 个名字
+//     · 五方神兽  Boss_<五行>_<神兽>.webp —— 备用：留给更高阶的 Boss 档（尚未接入）
+//   Boss 的贴图文件名不带 _Boss 后缀（它本身就是 36px 规格）
+const BOSS_SPRITE = {
+  B_jin:  'Boss_B_jin',
+  B_mu:   'Boss_B_mu',
+  B_shui: 'Boss_B_shui',
+  B_huo:  'Boss_B_huo',
+  B_tu:   'Boss_B_tu',
+};
+// ★ 宗门设施图标映射（assets/宗门/设施_<名>.webp）
 //   ⚠️ 文件名必须与 assets/宗门/ 里实际存在的图标一致！
 //   没有映射的项（入门礼 / 传承殿 / 延寿丹房）自动不显示图标，只显示文字 ——
 //   出好图后往这里加一行即可。
@@ -2618,6 +2632,12 @@ SECT_UPGRADES.forEach(u => { if (u.fac) SECT_UP_BY_FAC[u.fac] = u; });
 //      若某张图偏移明显，给该档单独加一套（SECT_MAP_BY_TIER）。
 // ============================================================
 const SECT_MAP = [
+  // ★ 中路后楼 = 录（宗门史册），和其他设施一样点
+  //   用户原话："不是把录的界面放在宗里面，而是放在宗门全景那个中间后楼的里面，
+  //             像其他宗门设施一样，然后定个名字表明它的作用"
+  //   ★ 名字用「录」：宗主那一辈传下来的宗门编年 —— 弟子传 / 大事记 / 突破录
+  //   热点只取【后楼屋顶】，避开左右双塔（塔从 y≈10% 起）
+  { fac: 'arch',   name: '中路后楼', x: 39.0, y:  0.8, w: 10.2, h: 13.5, special: 'arch' },
   // fac（= FACILITIES 的 id）  显示位置           热点（x%, y%, w%, h%）
   { fac: 'legacy', name: '后楼左塔', x: 34.0, y:  9.9, w:  8.1, h: 19.8 },  // 传承殿
   { fac: 'hall',   name: '后楼右塔', x: 57.4, y:  9.9, w:  8.1, h: 19.8 },  // 议事堂（双塔共用）
@@ -2647,7 +2667,13 @@ let SECT_MAP_TIER = 0;
 // ★ 史册馆（Round 37）
 //   中路后楼 = 史册馆入口：在它的建筑面板上多一个按钮，点了跳到「录」页。
 //   史册的具体内容由「录」页的 #archiveBody 承载（渲染逻辑在别处实现）。
-const ARCHIVE_FAC = 'script';     // 哪座建筑当史册馆（= 中路后楼 · 藏经阁）
+const ARCHIVE_FAC = 'script';     // （保留：旧的"进入史册馆"按钮用）
+// ★ Round 40：中路后楼 = 录（宗门史册）的【常驻热点】。
+//   用户要求："放在宗门全景那个中间后楼的里面，像其他宗门设施一样，然后定个名字表明作用"
+//   名字取「录」—— 和页签名一致，作用写清楚在面板里。
+const ARCHIVE_NAME = '录';
+const ARCHIVE_DESC = '宗门编年 · 历代弟子传 / 大事记 / 突破录';
+const ARCHIVE_TOPIC = 'arch';     // SECT_MAP 里的特殊 fac 值
 let ARCHIVE_OPEN = false;         // 「录」页是否处于史册模式
 
 function openArchive(on) {
@@ -2775,6 +2801,23 @@ function renderSectPanel() {
   const box = document.getElementById('sectPanel');
   if (!box) return;
   const b = SECT_MAP.find(v => v.fac === SECT_SEL) || SECT_MAP[0];
+  // ★ Round 40：中路后楼 =「录」（宗门史册）—— 它不是 FACILITIES 里的设施，
+  //   所以单独给一个说明面板 + "翻阅"按钮（点热点本身也会直接进史册）
+  if (b.special === 'arch') {
+    box.innerHTML =
+      '<div class="bldg-panel">' +
+        '<div class="bh"><div><b>' + ARCHIVE_NAME + '</b><em>' + b.name + '</em></div></div>' +
+        '<div class="bp"><span>作用</span><b>' + ARCHIVE_DESC + '</b></div>' +
+        '<div class="bp"><span>收录</span><b>历代弟子 ' + SECT.history.length + ' 位 · 事迹 ' +
+          (Array.isArray(G.log) ? G.log.length : 0) + ' 条</b></div>' +
+        '<div class="bbtn" style="margin-top:6px">' +
+          '<button data-arch-open="1">翻阅宗门史册 ▸</button></div>' +
+      '</div>';
+    box.querySelectorAll('button[data-arch-open]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openArchive(true); });
+    });
+    return;
+  }
   const f = FAC_BY_ID[b.fac];
   if (!f) { box.innerHTML = ''; return; }
   const u = SECT_UP_BY_FAC[b.fac];
@@ -2791,8 +2834,8 @@ function renderSectPanel() {
   box.innerHTML =
     '<div class="bldg-panel">' +
       '<div class="bh">' +
-        (ico ? '<img src="assets/宗门/设施_' + ico + '.png" ' +
-               'srcset="assets/宗门/设施_' + ico + '@2x.png 2x" alt="">' : '') +
+        (ico ? '<img src="assets/宗门/设施_' + ico + '.webp" ' +
+               'srcset="assets/宗门/设施_' + ico + '@2x.webp 2x" alt="">' : '') +
         '<div><b>' + f.name + '</b><em>' + b.name +
           (u ? (' · ' + (SECT_UPGRADES.find(v => v.id === u.id) ? '' : '')) : '') +
         '</em></div>' +
@@ -6383,6 +6426,25 @@ function render() {
       sl.innerHTML = G.running
         ? ('秘境 · <b>' + place + '</b> · 已入 ' + G.t.toFixed(0) + ' 息')
         : ('秘境 · <b>待入</b>');
+      // ★ Round 38：场景背景按【当前秘境五行】切换（assets/秘境/秘境_<五行>.webp）
+      //   五行交汇（wx=null）用原水墨背景兜底。
+      //   只在秘境变化时写 DOM（同 heroImg 的做法：避免每帧改 src）
+      const sceneImg = (typeof document.querySelector === 'function')
+        ? document.querySelector('.scene > img') : null;
+      if (sceneImg && 'src' in sceneImg) {
+        const zw = invadeActive() ? null : zbNow().wx;
+        const key = zw ? ('秘境_' + zw) : '__base';
+        if (SCENE_BG_KEY !== key) {
+          SCENE_BG_KEY = key;
+          if (zw) {
+            sceneImg.src = 'assets/秘境/秘境_' + zw + '.webp';
+            sceneImg.srcset = 'assets/秘境/秘境_' + zw + '@2x.webp 2x';
+          } else {
+            sceneImg.src = 'assets/asian-mountain-forest-bg__sprite_northWindShrineBG.webp';
+            sceneImg.srcset = '';
+          }
+        }
+      }
     }
     // ★ 主角立绘 = 当前【前线弟子】的形象（本来就是弟子在历练，不是抽象主角）
     //   形象编号与名册用同一套散列 ⇒ 名册里"前线 凌霄"和场景里站着的必定是同一个人。
@@ -6394,7 +6456,7 @@ function render() {
         const n = 1 + ((hf.id || 0) % AV_COUNT);
         if (HERO_AV !== n) {
           HERO_AV = n;
-          heroImg.src = 'assets/弟子/弟子_' + n + '@2x.png';
+          heroImg.src = 'assets/弟子/弟子_' + n + '@2x.webp';
         }
         if (heroImg.style) heroImg.style.display = '';
       } else {
@@ -6463,8 +6525,8 @@ function render() {
           let dh = '';
           dh += '<div class="rs-row has-av" style="padding:8px 18px">' +
             '<span class="av" style="--c1:' + c1 + ';--c2:' + c2 + '">' +
-            '<img src="assets/弟子/弟子_' + avNo + '.png" ' +
-              'srcset="assets/弟子/弟子_' + avNo + '@2x.png 2x" alt="" draggable="false"></span>' +
+            '<img src="assets/弟子/弟子_' + avNo + '.webp" ' +
+              'srcset="assets/弟子/弟子_' + avNo + '@2x.webp 2x" alt="" draggable="false"></span>' +
             '<span class="role ' + (isFront ? 'front' : 'back') + '">' +
               (isFront ? '前线' : (ROLES[d.role] || '')) + '</span>' +
             '<span class="nm">' + d.name + '</span>' +
@@ -6673,8 +6735,11 @@ function render() {
     el.classList.toggle('hit', e.hit > 0);
     // ★ 妖怪贴图（Round 38）：有图的用图，没图的（域外天魔）退回五行色块
     //   贴图挂 .sprite（::before 会挡住 hpbar，所以用真实子元素更好控制层级）
-    const spName = MOB_SPRITE[e.mk];
-    if (spName) {
+    //   Round 39：Boss 走独立映射表 BOSS_SPRITE（文件名不带 _Boss 后缀）
+    const isBossKind = (e.kind === 'boss');
+    const spName = isBossKind ? null : MOB_SPRITE[e.mk];
+    const bossFile = isBossKind ? BOSS_SPRITE[e.mk] : null;
+    if (spName || bossFile) {
       let sp = el._sp;
       if (!sp) {
         sp = document.createElement('div');
@@ -6684,9 +6749,11 @@ function render() {
         el.appendChild(sp);
         el._sp = sp;
       }
-      // 精英 / Boss 换用更大的贴图（尺寸差异由 CSS 决定）
-      const suf = e.kind === 'boss' ? '_Boss' : (e.kind === 'elite' ? '_精英' : '');
-      const url = 'url(assets/妖怪/妖_' + spName + suf + '.png)';
+      // ★ Round 41：精英【复用同一张图】（只靠 CSS 放大 + 金环/金辉/菱形区分）
+      //   ⇒ 不再有 _精英 后缀贴图
+      const url = bossFile
+        ? 'url(assets/妖怪/' + bossFile + '.webp)'
+        : 'url(assets/妖怪/妖_' + spName + '.webp)';
       if (el._spUrl !== url) {
         el._spUrl = url;
         sp.style.backgroundImage = url;
@@ -7085,8 +7152,8 @@ function render() {
               h7 += '<div class="rs-row has-av" data-rid="' + (x.id || 0) + '" title="点一下看他的数据">' +
                 '<span class="av" style="--c1:' + dc1 + ';--c2:' + dc2 +
                   ';margin-top:' + avShift.toFixed(1) + 'px">' +
-                '<img src="assets/弟子/弟子_' + avNo + '.png" ' +
-                  'srcset="assets/弟子/弟子_' + avNo + '@2x.png 2x" ' +
+                '<img src="assets/弟子/弟子_' + avNo + '.webp" ' +
+                  'srcset="assets/弟子/弟子_' + avNo + '@2x.webp 2x" ' +
                   'alt="" loading="lazy" draggable="false" ' +
                   'style="animation-delay:-' + avDelay.toFixed(2) + 's"></span>' +
                 '<span class="role ' + rc + '">' + ROLES[x.role] + '</span>' +
@@ -7487,8 +7554,8 @@ function render() {
           // ★ 设施图标（AI 生成）。没有图标的项自动跳过，只显示文字。
           const ico = FAC_ICON[u.id];
           const icoHtml = ico
-            ? '<img class="sc-icon" src="assets/宗门/设施_' + ico + '.png" ' +
-              'srcset="assets/宗门/设施_' + ico + '@2x.png 2x" alt="" draggable="false">'
+            ? '<img class="sc-icon" src="assets/宗门/设施_' + ico + '.webp" ' +
+              'srcset="assets/宗门/设施_' + ico + '@2x.webp 2x" alt="" draggable="false">'
             : '';
           html2 += "<div class=\"sc-up\">" + icoHtml +
             "<span class=\"nm\">" + u.name + "</span>" +
@@ -7517,25 +7584,34 @@ function render() {
           if (SECT_MAP_TIER !== tier) {
             SECT_MAP_TIER = tier;
             // 用属性赋值（不用 setAttribute）—— 测试桩只实现了属性/样式
-            imgEl.src = "assets/宗门/" + IMGNAME + ".png";
-            imgEl.srcset = "assets/宗门/" + IMGNAME + "@2x.png 2x";
+            imgEl.src = "assets/宗门/" + IMGNAME + ".webp";
+            imgEl.srcset = "assets/宗门/" + IMGNAME + "@2x.webp 2x";
           }
           // 阶位滤镜 class
           for (let i = 0; i <= 4; i++) mapEl.classList.toggle("r" + i, i === SECT.rank);
           // 热点（只在建筑数变化时重建；位置固定）
           if (spotsEl.childElementCount !== SECT_MAP.length) {
             spotsEl.innerHTML = SECT_MAP.map(function (b) {
-              return '<div class="spot" data-b="' + b.fac + '" style="left:' +
+              // ★ 特殊热点（中路后楼 = 录）：没有对应 FACILITIES 项，
+              //   标签用 ARCHIVE_NAME，点击直接开史册而不是显示设施面板
+              const label = b.special === 'arch'
+                ? ARCHIVE_NAME : FAC_BY_ID[b.fac].name;
+              const cls = 'spot' + (b.special === 'arch' ? ' arch' : '');
+              return '<div class="' + cls + '" data-b="' + b.fac + '" style="left:' +
                 b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%">' +
                 '<span class="ring"></span>' +
-                '<span class="tag">' + FAC_BY_ID[b.fac].name + '</span></div>';
+                '<span class="tag">' + label + '</span></div>';
             }).join('');
             spotsEl.querySelectorAll(".spot").forEach(function (s) {
+              const isArch = s.classList.contains("arch");
               s.addEventListener("mouseenter", function () {
                 SECT_SEL = s.getAttribute("data-b"); renderSectPanel();
               });
               s.addEventListener("click", function () {
-                SECT_SEL = s.getAttribute("data-b"); renderSectPanel();
+                SECT_SEL = s.getAttribute("data-b");
+                // 点中路后楼 ⇒ 直接进史册（和其他设施一样"点建筑开功能"）
+                if (isArch) { openArchive(true); return; }
+                renderSectPanel();
               });
             });
           }

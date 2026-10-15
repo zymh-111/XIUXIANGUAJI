@@ -17,14 +17,17 @@
   @font-face{font-family:'Smiley';src:url('../../美术资源/02_字体/SmileySans_得意黑/SmileySans-Oblique.ttf') format('truetype');font-display:swap}
 
   :root{
-    /* ★ 四色收敛（设计稿定义） */
-    --ink:#0c0d0e; --paper:#cfc8ba; --gold:#c9a227; --cinnabar:#a8392c;
+    /* ★ 四色收敛（设计稿定义）
+       ★ Round 38（用户要求："把 UI 界面的颜色搞的明亮艳丽一点，只是看着和角色不违和"）
+       量化依据：改前 UI 平均明度 50% / 饱和 32%；角色素材 明度 46~53% / 饱和 24~37%。
+       改法：整体【提亮 + 提饱和】，保持同一套色相（暖宣纸 + 金 + 朱），只加"亮度与艳度"。 */
+    --ink:#16171b; --paper:#eae2d0; --gold:#e8bd38; --cinnabar:#cc4636;
     /* 派生色 */
-    --bg:#101113; --line:#ffffff14; --line2:#ffffff0f;
-    --dim:#7e7768; --dim2:#5d574c; --txt:#d8d1c3; --bright:#e6ded0;
-    --green:#63b394; --red:#c0604f;
+    --bg:#1b1c21; --line:#ffffff2e; --line2:#ffffff1f;
+    --dim:#9c9484; --dim2:#726b5e; --txt:#eee7d8; --bright:#f8f2e6;
+    --green:#6fd3ab; --red:#e0785f;
     /* 品质色（保留，装备需要） */
-    --q0:#8b93a3; --q1:#5fb8a0; --q2:#4a7fbf; --q3:#a45ec0; --q4:#d4a53a;
+    --q0:#9aa3b6; --q1:#6fd8ba; --q2:#5b96dc; --q3:#bd72d8; --q4:#e8bd48;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -74,12 +77,15 @@
   /* ★ Round 35：场景加高（用户选定"方案C"）246px → 380px，战斗区更宽敞 */
   .scene{position:relative;isolation:isolate;margin:14px 18px 0;height:380px;border-radius:3px;
     overflow:hidden;background:#0a0b0c;flex:0 0 auto}
-  /* ★ 亮度/饱和度放宽（原 .5/.42 把场景压得几乎看不见） */
+  /* ★ 亮度/饱和度放宽（原 .5/.42 把场景压得几乎看不见）
+     ★ Round 38：这批 .7/.5 是给【旧的低对比水墨背景】调的，会把新绘制的
+     五行秘境场地压灰 ⇒ 放宽到 .88/.78，并让 veil 轻一些（文字靠 sceneLabel
+     自己的半透明底 + .veil 底部渐变保持可读性）。 */
   .scene img{width:100%;height:100%;object-fit:cover;object-position:center 30%;
-    filter:brightness(.7) saturate(.5) contrast(1.05)}
+    filter:brightness(1.06) saturate(.95) contrast(1.02)}
   .scene .veil{position:absolute;inset:0;z-index:1;pointer-events:none;
-    background:radial-gradient(ellipse at 50% 42%,transparent 0%,rgba(8,9,10,.72) 100%),
-               linear-gradient(180deg,rgba(10,11,12,.5),rgba(10,11,12,.86))}
+    background:radial-gradient(ellipse at 50% 42%,transparent 0%,rgba(8,9,10,.52) 100%),
+               linear-gradient(180deg,rgba(10,11,12,.34),rgba(10,11,12,.62))}
   /* ★ Round 37 修复：sceneLabel 与 battleInfo 原来【都】绝对定位在场景底部
      ⇒ 窄屏（400px 手机框）下必然重叠 —— "秘境·金煞谷·已入 12 息" 和战斗统计
      糊成一行（截图可复现）。
@@ -190,7 +196,7 @@
   /* ★ 敌人（Round 14 补全：此前重写 HTML 时把这段写残了，
        只剩 position/border-radius、没有尺寸 ⇒ 宽高 0 ⇒ 完全看不见怪）
      ★ Round 38（用户要求）：小怪放大 12→16px，并改用【妖怪贴图】
-       （assets/妖怪/妖_<名>.png）。贴图挂 ::before，不影响 hpbar / bossTag / hit */
+       （assets/妖怪/妖_<名>.webp）。贴图挂 ::before，不影响 hpbar / bossTag / hit */
   .mob{position:absolute;width:16px;height:16px;border-radius:50%;
     transform:translate(-50%,-50%);
     transition:left .28s linear, top .28s linear, opacity .15s;z-index:3}
@@ -202,7 +208,23 @@
   .mob.nosprite{border-radius:50%;border:1px solid #ff6b5a;
     background:radial-gradient(circle at 35% 32%,#ff9a8a,#b8332a)}
   .mob.nosprite .sprite{display:none}
+  /* ★ Round 41（用户要求："精英复用小怪的，变大一点然后随便加点精英该有的变化区别"）
+     ⇒ 精英【不再单独出贴图】：同一张 16px 源图放大到 24px（够用，Q版缩小再放大损失小），
+        再叠三样"精英标识" —— 金环 / 金辉 / 头顶菱形
+     好处：省掉 10 套 _精英 贴图（约 60 个文件），且以后换小怪图精英自动跟着变 */
   .mob.elite{width:24px;height:24px;z-index:4}
+  /* 金环 + 外发光（用 border 不用 box-shadow，避免和 .hit 的 filter 打架） */
+  .mob.elite .sprite{
+    border:1.5px solid #e8bd38;
+    border-radius:6px;
+    box-shadow:0 0 7px #e8bd38aa, inset 0 0 5px #e8bd3866;
+    animation:elitePulse 1.6s ease-in-out infinite}
+  /* 头顶菱形：一眼区分精英 */
+  .mob.elite::after{content:'';position:absolute;left:50%;top:-6px;
+    transform:translateX(-50%) rotate(45deg);width:4px;height:4px;
+    background:#e8bd38;box-shadow:0 0 4px #e8bd38cc}
+  @keyframes elitePulse{0%,100%{box-shadow:0 0 5px #e8bd3888, inset 0 0 4px #e8bd3844}
+    50%{box-shadow:0 0 11px #e8bd38cc, inset 0 0 7px #e8bd3888}}
   .mob.elite.nosprite{border-radius:5px;border:1px solid #ffc84a;
     background:radial-gradient(circle at 35% 32%,#ffdf90,#c9871b)}
   .mob.hit{filter:brightness(2.6)}
@@ -382,6 +404,13 @@
     background:#c9a2271c}
   .spot:hover .tag,.spot.on .tag{opacity:1}
   .spot:hover{z-index:8}
+  /* ★ Round 40：中路后楼 =「录」（宗门史册）—— 用朱色描边区分于普通设施，
+     提示"这是档案/编年，不是可升级的设施" */
+  .spot.arch .ring{border:1px dashed #cc463688}
+  .spot.arch:hover .ring,.spot.arch.on .ring{border-style:solid;border-color:#e0785f;
+    box-shadow:0 0 0 2px #cc463655,0 0 18px 5px #cc463670,inset 0 0 22px #cc463638;
+    background:#cc46361c}
+  .spot.arch .tag{color:#f0b2a2;border-color:#cc463666}
 
   /* 选中建筑的功能面板 */
   .bldg-panel{padding:9px 0 4px;border-top:1px solid var(--line2);margin-top:8px}
@@ -453,7 +482,7 @@
     border-top:1px solid var(--line2);padding-top:6px}
   .sc-head{display:flex;flex-direction:column;gap:2px;font-size:10.5px}
   .sc-head .rank{color:var(--gold);font-weight:400;letter-spacing:1px}
-  /* 设施图标（AI 生成 · assets/宗门/设施_*.png） */
+  /* 设施图标（AI 生成 · assets/宗门/设施_*.webp） */
   .sc-up .sc-icon{flex:0 0 auto;width:24px;height:24px;object-fit:contain;
     align-self:center;filter:drop-shadow(0 1px 2px #000000aa)}
   .sc-head .honor{color:#c9a227;font-size:10px}
@@ -732,14 +761,14 @@
 
     <!-- 场景（含战斗） -->
     <div class="scene">
-      <img src="assets/asian-mountain-forest-bg__sprite_northWindShrineBG.png" alt="">
+      <img src="assets/asian-mountain-forest-bg__sprite_northWindShrineBG.webp" alt="">
       <div class="veil"></div>
       <div id="battleWrap">
         <div id="reachRing"></div>
         <div id="hero">
           <div class="halo"></div>
           <div class="hpwrap"><i id="heroHp"></i></div>
-          <img id="heroImg" src="assets/弟子/弟子_2@2x.png" alt="">
+          <img id="heroImg" src="assets/弟子/弟子_2@2x.webp" alt="">
         </div>
         <div id="arena"></div>
         <div id="battleBarWrap"><div id="battleBar"></div></div>
@@ -797,8 +826,8 @@
               <div class="body-area">
                 <div class="fig-wrap">
                   <div class="fig-glow"></div>
-                  <img class="fig-sil" src="assets/经络图_剪影.png" alt="">
-                  <img class="fig-pts" src="assets/经络图_穴位.png" alt="">
+                  <img class="fig-sil" src="assets/经络图_剪影.webp" alt="">
+                  <img class="fig-pts" src="assets/经络图_穴位.webp" alt="">
                   <svg class="fig-qi" viewBox="0 0 220 340" aria-hidden="true">
                     <g fill="#d9b84a">
                       <circle cx="72" cy="86" r="1.7" opacity=".50"/>
@@ -911,8 +940,8 @@
            建筑热点：鼠标移上去 → 金色光圈；点一下 → 下方显示该设施功能与升级 -->
       <div class="sect-map" id="sectMap">
         <img class="mimg" id="sectMapImg"
-             src="assets/宗门/宗门_档1_素.png"
-             srcset="assets/宗门/宗门_档1_素@2x.png 2x" alt="">
+             src="assets/宗门/宗门_档1_素.webp"
+             srcset="assets/宗门/宗门_档1_素@2x.webp 2x" alt="">
         <div id="sectSpots"></div>
       </div>
       <div id="sectPanel" style="margin:0 18px"></div>
