@@ -2664,11 +2664,6 @@ let SECT_SEL = 'script';
 //             你现在改的是啥啊，之前能一眼看到的东西，都找不到了"
 //   ⇒ 我第一版把它改成默认展开是【理解错了】—— 用户要的正是"收进拉取框"，
 //     不该把面板摊开、把下面的东西挤走
-let DP_OPEN = false;
-// ★ Round 40：弟子数据层当前"查看对象"（null = 正在外出历练的前线弟子）
-//   ⚠️⚠️ 必须声明在【模块级】—— 我第一版写在 buildUI() 里（块作用域），
-//       而 render() 里要用 ⇒ "VIEW_DISC_ID is not defined"（截图才发现的运行时错误）
-//   ⚠️ 不持久化：这是纯视图状态，换弟子/刷新都该回到"看当前前线"
 let VIEW_DISC_ID = null;
 // 当前地图用的是哪一档图（避免每帧改 src）
 let SECT_MAP_TIER = 0;
@@ -6696,99 +6691,26 @@ function render() {
     }
   }
 
-  // ★★ 境 · 当前历练弟子的数据（Round 40）
-  //
-  //   用户："境页不要有弟子名册这种东西，这东西是宗门才该有的"
-  //        "弟子名册可以跳转到当前外出历练的弟子，但是不能反向"
-  //
-  //   ⇒ 这里【只显示一个弟子】：
-  //        VIEW_DISC_ID == null  → 正在外出历练的前线弟子（默认）
-  //        VIEW_DISC_ID == <id>  → 从「宗」页名册点进来的那个（临时查看，不改前线）
-  //   ⚠️ 详细战力（境界/气血/杀伐/护体/天赋/寿元…）已经在下面的 #hud 里，
-  //      这里只补 hud 没有的：【身份】+【六项战斗摘要】+【本局进度】。
-  {
-    const dpb = document.getElementById('discipleBox');
-    const dps = document.getElementById('dpStat');
-    if (dpb || dps) {
-      const front = ROSTER.front;
-      const viewing = (VIEW_DISC_ID != null)
-        ? ROSTER.list.find(function (v) { return v.id === VIEW_DISC_ID; })
-        : null;
-      const d = viewing || ((front && front.alive) ? front : null);
-      const isFront = !!(d && front && d.id === front.id);
-
-      if (dps) {
-        dps.textContent = d
-          ? (isFront ? ('外出历练 · 第 ' + SECT.generation + ' 代')
-                     : '宗门在册 · ' + (ROLES[d.role] || ''))
-          : '前线空缺（等宗门补员）';
-      }
-      if (dpb) {
-        if (!d) {
-          dpb.innerHTML = '<div class="rs-row" style="color:#5d574c;padding:10px 18px">' +
-            '前线空缺 —— 弟子交接中，稍后会有新的前线弟子入门。</div>';
-        } else {
-          const avNo = 1 + ((d.id || 0) % AV_COUNT);
-          const [c1, c2] = AV_DISC[((d.id || 0) + AV_DISC.length - 1) % AV_DISC.length];
-          const lgShort = AV_LG_SHORT[d.linggen] || (d.linggen ? '灵' : '—');
-          const lgDot = WX_COLOR[WUXING[(d.id || 0) % WUXING.length]] || '#888';
-          const lifeWarn = isFront && DISCIPLE.lifespanLeft < 1800;
-          const lifeTxt = isFront
-            ? fmtLife(DISCIPLE.lifespanLeft)
-            : (d.lifespanLeft != null ? Math.round(d.lifespanLeft) + ' 年' : '—');
-
-          let dh = '';
-          dh += '<div class="rs-row has-av" style="padding:8px 18px">' +
-            '<span class="av" style="--c1:' + c1 + ';--c2:' + c2 + '">' +
-            '<img src="assets/弟子/弟子_' + avNo + '.webp" ' +
-              'srcset="assets/弟子/弟子_' + avNo + '@2x.webp 2x" alt="" draggable="false"></span>' +
-            '<span class="role ' + (isFront ? 'front' : 'back') + '">' +
-              (isFront ? '前线' : (ROLES[d.role] || '')) + '</span>' +
-            '<span class="nm">' + d.name + '</span>' +
-            '<span class="lg" title="' + (d.linggenName || '') + '">' +
-              '<i style="background:' + lgDot + '"></i>' + lgShort + '</span>' +
-            '<span class="tal">' + (d.talentName || '') + '</span>' +
-            '<span class="life' + (lifeWarn ? ' low' : '') + '">' + lifeTxt + '</span></div>';
-
-          // 六项战斗摘要 —— 只有【正在历练的那个】才有实时战斗数据
-          // （后勤弟子的战力是按宗门结算的，不是实时战斗数值）
-          if (isFront) {
-            const cells = [
-              ['杀伐', st.atk.toFixed(0)], ['气血', Math.round(st.hp)],
-              ['护体', st.def.toFixed(0)], ['出手', st.actFreq.toFixed(1) + '/s'],
-              ['闪避', (st.evade * 100).toFixed(0) + '%'],
-              ['暴击', (st.crit * 100).toFixed(0) + '%'],
-            ];
-            dh += '<div class="dp-grid">';
-            for (const [k, v] of cells) {
-              dh += '<div class="dp-cell"><span class="k">' + k + '</span>' +
-                '<span class="v">' + v + '</span></div>';
-            }
-            dh += '</div>';
-            dh += '<div class="dp-note">本局 ' + G.t.toFixed(0) + ' / ' + P.RUN_SECONDS + ' 息' +
-              ' · 击杀 ' + G.kills + ' · 场上 ' + G.field.length +
-              (G.spawned >= G.budget ? ' · 预算已尽' : '') + '</div>';
-          } else {
-            dh += '<div class="dp-note">宗门在册弟子（后勤）。实时战力只在' +
-              '外出历练的弟子身上生效。<br>' +
-              '参战弟子：<b>' + (front && front.alive ? front.name : '空缺') + '</b></div>';
-          }
-          const backs = ROSTER.list.filter(function (v) { return v.alive && v.role === 'back'; });
-          if (backs.length) {
-            dh += '<div class="dp-note">后勤 ' + backs.length + ' 人 · ' +
-              backs.slice(0, 4).map(function (v) { return v.name; }).join('、') +
-              (backs.length > 4 ? ' 等' : '') + '</div>';
-          }
-          dpb.innerHTML = dh;
-        }
-      }
-    }
-  }
-
   // ★ 顶部：极简竖窗风格（.stat 纵列，无方框）
   {
     const lifeWarn = DISCIPLE.lifespanLeft < 1800;
+    // ★★ Round 49：HUD 顶部加【弟子身份行】
+    //   用户："境页面这里显示的和当前弟子里面不是一样的吗，那把当前弟子这个模块删除了把"
+    //   ⇒ 弟子面板里【面板独有】的东西（头像/名字/灵根缩写/天赋）并进 HUD，
+    //     然后删掉弟子面板
+    const _fd = ROSTER.front;
+    const _fdAv = _fd ? (1 + ((_fd.id || 0) % AV_COUNT)) : 2;
+    const _fdLg = _fd ? (AV_LG_SHORT[_fd.linggen] || (_fd.linggen ? '灵' : '—')) : '—';
+    const _fdDot = _fd ? (WX_COLOR[WUXING[(_fd.id || 0) % WUXING.length]] || '#888') : '#888';
     $('#hud').innerHTML =
+      '<div class="hud-disc">' +
+        '<span class="av"><img src="assets/弟子/弟子_' + _fdAv + '.png" ' +
+          'srcset="assets/弟子/弟子_' + _fdAv + '@2x.png 2x" alt="" draggable="false"></span>' +
+        '<span class="nm">' + (_fd ? _fd.name : '（前线空缺）') + '</span>' +
+        '<span class="lg" title="' + (_fd ? (_fd.linggenName || '') : '') + '">' +
+          '<i style="background:' + _fdDot + '"></i>' + _fdLg + '</span>' +
+        '<span class="tal">' + (_fd ? (_fd.talentName || '') : '') + '</span>' +
+      '</div>' +
       '<div class="stat"><span class="k">境界</span><span class="v">' + P.REALMS[realm()] +
         '<small>' + (G.tier + 1) + ' / ' + P.TIERS + ' 档</small></span></div>' +
       '<div class="stat"><span class="k">秘境</span><span class="v">' + zbNow().name +
@@ -6802,7 +6724,13 @@ function render() {
         '<small>' + st.weapon.name + ' · 范围' + (st.reach * 200).toFixed(0) + ' · 打' + st.aoe + '</small></span></div>' +
       '<div class="stat"><span class="k">气血</span><span class="v' + (G.hp / st.hpMax < 0.35 ? ' low' : '') + '">' +
         Math.max(0, Math.round(G.hp)) + ' / ' + Math.round(st.hp) +
-        '<small>闪避 ' + (st.evade * 100).toFixed(0) + '% · 阈值 ' + st.thresh + '</small></span></div>' +
+        '<small>闪避 ' + (st.evade * 100).toFixed(0) + '% · 暴击 ' +
+          (st.crit * 100).toFixed(0) + '% · 阈值 ' + st.thresh + '</small></span></div>' +
+      // ★ Round 49：本局进度（原来只在弟子面板里）
+      '<div class="stat"><span class="k">本局</span><span class="v">' +
+        G.t.toFixed(0) + ' / ' + P.RUN_SECONDS + ' 息' +
+        '<small>击杀 ' + G.kills + ' · 场上 ' + G.field.length +
+        (G.spawned >= G.budget ? ' · 预算已尽' : '') + '</small></span></div>' +
       '<div class="stat"><span class="k">杀伐</span><span class="v">' + st.atk.toFixed(0) +
         '<small>出手 ' + st.actFreq.toFixed(1) + '/s</small></span></div>' +
       '<div class="stat"><span class="k">护体</span><span class="v">' + st.def.toFixed(0) +
@@ -8196,17 +8124,6 @@ function setBagOpen(on) {
 $('#btnBag')?.addEventListener('click', function () { setBagOpen(!BAG_OPEN); });
 $('#btnCloseBag')?.addEventListener('click', function () { setBagOpen(false); });
 
-DP_OPEN = false;
-function setDiscOpen(on) {
-  DP_OPEN = !!on;
-  const p = document.getElementById('disciplePanel');
-  const b = document.getElementById('btnCurDisciple');
-  if (p) p.classList.toggle('on', DP_OPEN);
-  if (b) b.classList.toggle('on', DP_OPEN);
-  if (DP_OPEN) { try { render(); } catch (e) { } }
-}
-$('#btnCurDisciple')?.addEventListener('click', function () { setDiscOpen(!DP_OPEN); });
-$('#btnCloseDisc')?.addEventListener('click', function () { setDiscOpen(false); });
 
 // ★ Round 41：史册馆返回（回到宗门全景）
 $('#btnArchiveBack')?.addEventListener('click', function () { openArchive(false); });
@@ -8232,9 +8149,21 @@ $('#arcTabLog')?.addEventListener('click', function () {
 //   用户："弟子名册可以跳转到当前外出历练的弟子，但是不能反向"
 //   ⚠️ 名册里大多是后勤弟子 ⇒ 点他们【不改动前线归属】，只是把"查看对象"临时指向他
 function viewDisciple(id) {
+  // ★ Round 49：弟子面板已删（用户："境页面这里显示的和当前弟子里面不是一样的吗"）
+  //   面板独有的信息（头像/名字/灵根/天赋/暴击/本局进度）已并进 #hud
+  //   ⇒ 宗页名册点击改成：跳到境页 + 横幅提示（前端弟子的数据就在 HUD 里）
+  const d = ROSTER.list.find(function (v) { return v.id === (id | 0); });
   VIEW_DISC_ID = (id === null || id === undefined) ? null : (id | 0);
   if (typeof goTab === 'function') goTab('jing');
-  setDiscOpen(true);
+  if (!d) return;
+  const f = ROSTER.front;
+  if (f && d.id === f.id) {
+    banner('当前历练：<b>' + d.name + '</b> · 数据见下方属性栏', 'ok');
+  } else {
+    // 后勤弟子没有实时战斗数值 ⇒ 只报身份
+    banner('宗门在册：<b>' + d.name + '</b> · ' + (ROLES[d.role] || '') +
+      ' · ' + (d.talentName || '') + ' · 寿元 ' + Math.round(d.lifespanDue == null ? d.lifespanLeft : d.lifespanDue) + ' 年', 'sys');
+  }
 }
 document.addEventListener('click', function (e) {
   const row = e.target && e.target.closest ? e.target.closest('#rosterBox .rs-row[data-rid]') : null;
@@ -8243,7 +8172,6 @@ document.addEventListener('click', function (e) {
   if (id) viewDisciple(id);
 });
 window.__setBagOpen = setBagOpen;
-window.__setDiscOpen = setDiscOpen;
 window.__viewDisciple = viewDisciple;
 $('#btnFast')?.addEventListener('click', () => { for (let i = 0; i < 120 && G.running; i++) tickN(1); });
 // ★ 一键穿上所有"有提升"的
@@ -8464,7 +8392,7 @@ globalThis.__api = {
   DUJIE, dujieReset, dujieRate, doDujie, dujieBaseRate, dujieDaoji, dujieLifeFactor, dujieQiMul, isRealmBreak,
   TRAIN, trainCost, trainStepCost, trainTotalCost, trainStartTier, trainUpgrade, trainNewDisciple,
   SECT_RES, FORGE_RECIPES, forge, forgeAll, forgeCost, canForge,
-  setBagOpen, setDiscOpen, viewDisciple, BAG_OPEN,
+  setBagOpen, viewDisciple, BAG_OPEN,
   reforge, reforgeCost, transferAffixes, transferCost, targetForge, targetCost, targetPool,
   FORGE_BASE, affixScoreOf,
   SECT_DOCTRINE, doctrineReset, renderArchiveBody, openArchive, banner, snapshotChronicle,

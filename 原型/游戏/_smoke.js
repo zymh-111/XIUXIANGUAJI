@@ -4045,15 +4045,18 @@ chk('★ 装页的经络图搬进背包抽屉', (function () {
   return d.indexOf('body-area') >= 0 && d.indexOf('zones') >= 0 &&
          d.indexOf('gongfaBox') >= 0 && d.indexOf('fabaoBox') >= 0 && d.indexOf('bagList') >= 0;
 })());
-chk('★ 境页有【背包】与【当前弟子】两个按钮',
-  /id="btnBag"/.test(_H) && /id="btnCurDisciple"/.test(_H));
+chk('★ 境页只剩【背包】按钮（Round 49 删了当前弟子）',
+  /id="btnBag"/.test(_H) && !/id="btnCurDisciple"/.test(_H));
+chk('★ 弟子面板已删除（信息并进 HUD）',
+  !/id="disciplePanel"/.test(_H) && !/discipleBox/.test(_H));
+chk('★ HUD 有弟子身份行（.hud-disc）', /hud-disc/.test(_H) && /hud-disc/.test(_J));
 chk('★ 境页没有弟子名册（名册归宗页）', (function () {
   const jing = _H.slice(_H.indexOf('data-v="jing"'), _H.indexOf('data-v="zong"'));
   return jing.indexOf('btnDisciple') < 0 && jing.indexOf('rosterBox') < 0;
 })());
 chk('★ 宗页仍有弟子名册', /id="rosterBox"/.test(_H));
-chk('★ 抽屉样式存在（盖住场景）',
-  /#bagDrawer,#disciplePanel\{/.test(_H) && /#bagDrawer\.on,#disciplePanel\.on\{display:flex\}/.test(_H));
+chk('★ 背包抽屉样式存在（盖住场景）',
+  _H.indexOf('#bagDrawer') >= 0 && /#bagDrawer\.on/.test(_H), "#bagDrawer 出现 " + (_H.match(/#bagDrawer/g)||[]).length + " 次");
 chk('★ 深链只留 jing/zong（旧链接有兼容）',
   /views = \['jing','zong'\]/.test(_H) && /h === 'zhuang'/.test(_H) && /h === 'lu'/.test(_H));
 
@@ -4069,14 +4072,11 @@ chk('★ render() 能安全执行（不抛 VIEW_DISC_ID 错）', (function () {
     return String(e.message).indexOf('VIEW_DISC_ID') < 0;
   }
 })());
-chk('★ 无头渲染：弟子层只列 1 行（不是名册）', (function () {
-  A.ROSTER.list.length = 0; A.ROSTER.front = null; A.ROSTER.nextId = 1;
-  A.newDisciple([A.makeSlotItem('主手', 6, 1, 'sword')]);
-  A.render();
-  const b = global.document.getElementById('discipleBox');
-  const h = (b && (b.innerHTML || b._html)) || '';
-  return (h.match(/rs-row/g) || []).length === 1;
-})(), '1 行');
+chk('★ 无头渲染：弟子面板已不存在', (function () {
+  // ⚠️ 测试桩的 getElementById 会【自动造元素】⇒ 不能靠它返回 null 判断
+  //   ⇒ 查 HTML 里是否还有这个 id
+  return !/id="discipleBox"/.test(_H3);
+})());
 hdr('测试 51：「境」页布局（Round 39 用户报：看不到底部导航）');
 //
 //   用户原话："我怎么看不到下面的界面跳转键位了"
@@ -4107,9 +4107,7 @@ chk('★ 底部导航键位齐全', (function () {
 })(), 'nav = [' + (_navGot || []).join(',') + ']');
 chk('★ #hud 不再自己滚动（交给父层 .scroll）',
   !/#hud\{[^}]*overflow-y:auto/.test(_idx));
-chk('★ 弟子面板默认【收起】（用户要的是拉取框）',
-  /<div id="disciplePanel">/.test(_idx) && /let DP_OPEN = false/.test(
-    require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8')));
+chk('★ 弟子面板已删（Round 49）', !/id="disciplePanel"/.test(_idx));
 hdr('测试 50：开局名册 + 编制稳定（Round 39 用户报）');
 //
 //   用户原话：① 看不到历练的弟子图片　② 下面怎么是弟子名册
@@ -4141,12 +4139,15 @@ chk('★ 立绘未被隐藏', !(_hi && _hi.style && _hi.style.display === 'none'
 // ---- 弟子面板显示当前弟子而不是名册 ----
 const _db = global.document.getElementById('discipleBox');
 const _dh = (_db && (_db.innerHTML || _db._html)) || '';
-chk('★ 弟子面板有内容', _dh.length > 0, _dh.length + ' 字符');
-chk('★ 弟子面板只列当前弟子一行（不是名册）',
-  (_dh.match(/rs-row/g) || []).length === 1,
-  (_dh.match(/rs-row/g) || []).length + ' 行');
-chk('★ 弟子面板有六项战斗摘要（dp-grid）', _dh.indexOf('dp-grid') >= 0);
-chk('★ 弟子面板有本局进度（dp-note）', _dh.indexOf('dp-note') >= 0);
+chk('★ 弟子面板已不存在（查 HTML，不信桩）', !/id="discipleBox"/.test(
+  require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8')));
+const _hudEl = global.document.getElementById('hud');
+const _hs = String((_hudEl && (_hudEl.innerHTML || _hudEl._html)) || '');
+chk('★ HUD 有弟子身份行', _hs.indexOf('hud-disc') >= 0);
+chk('★ HUD 显示前线弟子名字', _hs.indexOf(A.ROSTER.front ? A.ROSTER.front.name : '@@') >= 0,
+  A.ROSTER.front ? A.ROSTER.front.name : '无前线');
+chk('★ HUD 有暴击（面板独有项已并入）', _hs.indexOf('暴击') >= 0);
+chk('★ HUD 有本局进度（面板独有项已并入）', _hs.indexOf('本局') >= 0);
 
 // ---- 连绵多代：名册不膨胀、前线恒为 1 ----
 let _maxRoster = 0, _frontOk = true;

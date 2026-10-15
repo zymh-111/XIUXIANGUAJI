@@ -120,13 +120,15 @@
   /* ★★ Round 40：滑出式抽屉 / 数据层（盖住场景，不占满屏）
      用户选的是【滑出式抽屉盖住场景】—— 挂机时能看到自动换装，手动调整时也不占满屏
      两者共用 .bd-hd（标题+收起按钮）与 .bd-body（滚动内容） */
-  #bagDrawer,#disciplePanel{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;
-    display:none;flex-direction:column;background:#0d0e0f;
-    border-bottom:1px solid var(--line);box-shadow:0 10px 30px #000000cc}
-  #bagDrawer.on,#disciplePanel.on{display:flex}
   /* 从顶部滑出 */
   @keyframes bdSlide{from{transform:translateY(-14px);opacity:0}to{transform:translateY(0);opacity:1}}
-  #bagDrawer.on,#disciplePanel.on{animation:bdSlide .18s ease-out}
+  /* ★★ Round 40/49：背包抽屉（滑出式，盖住场景）
+     ⚠️ 原来这条和 #disciplePanel 写成联合选择器，Round 49 删弟子面板时
+        整行被一起删掉了 ⇒ 抽屉失去定位/背景/层级。这里恢复（只留 bagDrawer） */
+  #bagDrawer{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;
+    display:none;flex-direction:column;background:#0d0e0f;
+    border-bottom:1px solid var(--line);box-shadow:0 10px 30px #000000cc}
+  #bagDrawer.on{display:flex;animation:bdSlide .18s ease-out}
   .bd-hd{display:flex;justify-content:space-between;align-items:center;
     padding:10px 18px;border-bottom:1px solid var(--line2);flex:0 0 auto;background:#101112}
   .bd-hd b{font-size:11.5px;color:var(--gold);font-weight:400;letter-spacing:2px}
@@ -134,31 +136,13 @@
     border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;font-family:inherit}
   .bd-hd button:hover{border-color:var(--gold);color:var(--gold)}
   .bd-body{flex:1 1 auto;overflow-y:auto;padding:0 0 14px}
+  @keyframes bdSlide{from{transform:translateY(-14px);opacity:0}to{transform:translateY(0);opacity:1}}
 
-  /* ★ 弟子数据层内部（dp-* 沿用原来的样式） */
-  #disciplePanel .dp-hd{display:flex;justify-content:space-between;align-items:baseline;
-    padding:8px 18px 0;font-size:10.5px;color:var(--dim);letter-spacing:2px}
-  #disciplePanel .dp-hd em{font-style:normal;color:var(--gold);
-    font-variant-numeric:tabular-nums;font-size:10px}
-  #disciplePanel .dp-grid{display:grid;grid-template-columns:repeat(3,1fr);
-    gap:4px 8px;margin:7px 18px 2px}
-  #disciplePanel .dp-cell{display:flex;justify-content:space-between;align-items:baseline;
-    font-size:10px;padding:2px 0;border-bottom:1px dashed #ffffff0f}
-  #disciplePanel .dp-cell .k{color:var(--dim2)}
-  #disciplePanel .dp-cell .v{color:var(--paper);font-variant-numeric:tabular-nums}
-  #disciplePanel .dp-note{font-size:9.5px;color:#5d574c;margin:5px 18px 0;line-height:1.6}
-/* ★ Round 39：当前弟子面板 —— 六项战斗摘要（hud 里没单独列的）*/
-#disciplePanel .dp-grid{display:grid;grid-template-columns:repeat(3,1fr);
-  gap:4px 8px;margin:7px 0 2px}
-#disciplePanel .dp-cell{display:flex;justify-content:space-between;align-items:baseline;
-  font-size:10px;padding:2px 0;border-bottom:1px dashed #ffffff0f}
-#disciplePanel .dp-cell .k{color:var(--dim2)}
-#disciplePanel .dp-cell .v{color:var(--paper);font-variant-numeric:tabular-nums}
-#disciplePanel .dp-note{font-size:9.5px;color:#5d574c;margin-top:5px;line-height:1.6}
-  #disciplePanel .dp-hd{display:flex;justify-content:space-between;align-items:baseline;
-    font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:5px}
-  #disciplePanel .dp-hd em{font-style:normal;color:var(--gold);
-    font-variant-numeric:tabular-nums}
+  .bd-hd b{font-size:11.5px;color:var(--gold);font-weight:400;letter-spacing:2px}
+  .bd-hd button{font-size:11px;padding:4px 10px;background:transparent;
+    border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;font-family:inherit}
+  .bd-hd button:hover{border-color:var(--gold);color:var(--gold)}
+
 
   /* 战斗角色（保留原有观感，缩到窄窗里） */
   #battleWrap{position:absolute;inset:0;z-index:4}
@@ -266,7 +250,20 @@
     letter-spacing:1px;text-align:right;font-variant-numeric:tabular-nums}
 
   /* ============ 属性行（.stat 风格） ============ */
-  #hud{padding:0 18px;margin-top:12px}   /* Round 39：滚动交给父层 .scroll（原来双滚动）*/
+  #hud{padding:0 18px;margin-top:12px}
+  /* ★★ Round 49：HUD 顶部的弟子身份行（头像/名字/灵根/天赋）
+     —— 原来在"当前弟子"面板里，面板删掉后并进 HUD */
+  #hud .hud-disc{display:flex;align-items:center;gap:7px;
+    padding:5px 0 7px;margin-bottom:2px;border-bottom:1px solid var(--line2)}
+  #hud .hud-disc .av{flex:0 0 auto;width:26px;height:26px;border-radius:50%;
+    position:relative;overflow:hidden;background:radial-gradient(circle at 40% 32%,
+      #f2ece0 0%,#d5cdbe 72%,#b8ae9c 100%);box-shadow:0 0 0 1px #ffffff1c}
+  #hud .hud-disc .av img{position:absolute;left:0;top:0;width:100%;height:100%}
+  #hud .hud-disc .nm{flex:0 0 auto;color:var(--paper);font-size:11.5px}
+  #hud .hud-disc .lg{flex:0 0 auto;font-size:9px;padding:0 3px;border-radius:2px;
+    border:1px solid #ffffff1a;color:#9a9284;display:inline-flex;align-items:center;gap:2px}
+  #hud .hud-disc .lg i{display:inline-block;width:6px;height:6px;border-radius:50%}
+  #hud .hud-disc .tal{flex:0 0 auto;color:#c9a86e;font-size:10px}   /* Round 39：滚动交给父层 .scroll（原来双滚动）*/
   #hud .stat{display:flex;justify-content:space-between;align-items:baseline;
     padding:7px 0;border-top:1px solid var(--line2);font-size:12px}
   #hud .stat .k{color:var(--dim);letter-spacing:2px;font-size:11px}
@@ -882,7 +879,6 @@
          ⚠️ 境页【不放弟子名册】—— 名册是宗门的事务（用户："这东西是宗门才该有的"） -->
     <div class="jing-acts">
       <button id="btnBag">背包</button>
-      <button id="btnCurDisciple">当前弟子</button>
     </div>
 
 <div class="scroll">
@@ -987,20 +983,6 @@
                 <div id="cmpBox"></div>
                 <div id="bagList"></div>
               </div>
-      </div>
-    </div>
-
-    <!-- ★ Round 40：当前弟子数据层（点「当前弟子」打开，盖住场景）
-         ⚠️ 这里【只显示正在外出历练的那一个弟子】—— 不是名册
-            （用户："境页不要有弟子名册这种东西，这东西是宗门才该有的"） -->
-    <div id="disciplePanel">
-      <div class="bd-hd">
-        <b>当前历练弟子</b>
-        <button id="btnCloseDisc">收起 ▾</button>
-      </div>
-      <div class="bd-body">
-        <div class="dp-hd"><span>外出历练</span><em id="dpStat"></em></div>
-        <div id="discipleBox"></div>
       </div>
     </div>
 
