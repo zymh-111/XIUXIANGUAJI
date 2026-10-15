@@ -381,15 +381,20 @@
   /* ★★ Round 44：地图加大（用户："宗门地图页面扩大一点"）
      ⚠️ #win 是固定 400×648 —— 地图底图本身是 16:9，再放大就会挤压下面
         ⇒ 只能小幅加宽（18px→10px 边距）并给底图一点纵向填充，兼顾不出屏 */
-  .sect-map{position:relative;margin:4px 4px 0;border-radius:3px;overflow:hidden;
-    background:#141518;flex:0 0 auto;border:1px solid var(--line2)}
-  /* ★★ Round 46：按【自然比例】显示，不裁切
-     ⚠️ 之前加了 min-height:178px + object-fit:cover
-        ⇒ 图被裁掉上下（实测 348×178 vs 自然比例 348×149）
-        ⇒ 用户："我都看不见最上面是啥了"
-     ⇒ 去掉 min-height 与 cover，让图片按自身比例铺满宽度 */
-  .sect-map .mimg{display:block;width:100%;height:auto;
+  /* ★★ Round 50：地图加大 —— 从"按宽度铺满"（376×161）改成"按高度铺满"（420×230）
+     · 底图 364×156（比例 2.333），左右两侧是山体、建筑都在中间 ≈70% ⇒ 允许横向裁掉
+     · 【纵向不裁】⇒ 顶上那排建筑（后楼 + 双塔）完整可见
+     · 新增 .map-in 包裹层：热点按 % 定位于包裹层（= 图片本身）
+       ⇒ 无论横向裁掉多少，热点都不会错位（这是 Round 43 踩过坑的地方）
+     · 用户："能不能让这个宗门全景占比变大一些" */
+  .sect-map{position:relative;margin:0 -18px 0;overflow:hidden;
+    background:#141518;flex:0 0 auto;
+    height:230px;display:flex;justify-content:center;
+    border-top:1px solid var(--line2);border-bottom:1px solid var(--line2)}
+  .sect-map .map-in{position:relative;height:100%;flex:0 0 auto}
+  .sect-map .mimg{display:block;height:100%;width:auto;
     transition:filter .35s ease}
+  #sectSpots{position:absolute;inset:0}
   /* 阶位越高越"灵气充盈"（同图滤镜递进）
      ⚠️ 地图是「宗」页签的主视觉，基准亮度不能太低，否则建筑看不清 */
   .sect-map.r0 .mimg{filter:brightness(.80) saturate(.58)}
@@ -410,6 +415,10 @@
     font-size:9px;color:#e6ded0;background:#0c0d0ef0;border:1px solid #ffffff30;
     border-radius:3px;padding:1px 4px;white-space:nowrap;opacity:0;
     transition:opacity .16s;pointer-events:none;z-index:9}
+  /* ★★ Round 50：顶上那排建筑（y=2%）的标签原本被 overflow:hidden 裁掉了
+     —— 用户："上面的建筑都看不到名字了"
+     ⇒ y 很小的热点，标签改放到【热点下方】 */
+  .spot.tag-b .tag{top:100%;transform:translate(-50%,8%)}
   .spot:hover .ring,.spot.on .ring{border-color:#e8cc72;
     box-shadow:0 0 0 2px #c9a22755,0 0 18px 5px #c9a22770,inset 0 0 22px #c9a22738;
     background:#c9a2271c}
@@ -823,6 +832,12 @@
   #reportBody{font:14px/2 "WenKai","KaiTi","Songti SC",serif;color:#e8e0cc;text-indent:2em}
   #reportBody p{margin:6px 0}
   #reportBody b{color:var(--gold)}
+  .rp-master{font-size:12px;color:var(--gold);margin:0 0 10px;letter-spacing:.5px;text-indent:0}
+  .rp-elders{margin:10px 0 12px;padding:10px 0;border-top:1px solid #ffffff14;border-bottom:1px solid #ffffff14;text-indent:0}
+  .rp-elders-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:6px}
+  .rp-el{font-size:10.5px;color:#9a9284;line-height:1.85;margin:3px 0}
+  .rp-el b{color:var(--paper);font-weight:400;letter-spacing:.5px}
+  .cr-handover{color:#c8b08a}
   #btnCloseRp{float:right;flex:0 0 auto;width:auto;padding:2px 10px;font-size:11px}
 
   /* 报错 */
@@ -1012,10 +1027,12 @@
       <div id="zongHome">
 
         <div class="sect-map" id="sectMap">
-          <img class="mimg" id="sectMapImg"
-               src="assets/宗门/宗门_档1_素.webp"
-               srcset="assets/宗门/宗门_档1_素@2x.webp 2x" alt="">
-          <div id="sectSpots"></div>
+          <div class="map-in" id="sectMapIn">
+            <img class="mimg" id="sectMapImg"
+                 src="assets/宗门/宗门_档1_素.webp"
+                 srcset="assets/宗门/宗门_档1_素@2x.webp 2x" alt="">
+            <div id="sectSpots"></div>
+          </div>
         </div>
         <div id="sectPanel" style="margin:0 18px"></div>
 
@@ -1067,7 +1084,8 @@
         <div class="fac" data-fac="vault" style="display:none"></div>   <!-- 宝库 -->
         <div class="fac" data-fac="legacy" style="display:none"></div>   <!-- 传承殿 -->
         <div class="fac" data-fac="life" style="display:none"></div>   <!-- 延寿丹房 -->
-        <div class="fac" data-fac="hall" style="display:none"></div>   <!-- 宗门大殿 -->
+        <div class="fac" data-fac="arch" style="display:none"></div>   <!-- 宗门大殿（史册馆） -->
+        <div class="fac" data-fac="hall" style="display:none"></div>   <!-- 议事堂 -->
         <div class="fac" data-fac="gate" style="display:none"></div>   <!-- 山门 -->
       </div>
 
@@ -1099,7 +1117,10 @@
 <div data-fac="script" style="display:none">
 </div>
 
-<div data-fac="hall" style="display:none">
+<!-- ★★ Round 50：宗门大殿 = 史册馆
+     ⚠️ 原来这块挂在 hall 里 —— 而 hall 是【议事堂】（后楼右塔）
+        ⇒ 用户报："议事堂里面怎么是宗门史册"；同时点【宗门大殿】却进了藏经阁（硬编码 bug） -->
+<div data-fac="arch" style="display:none">
 
         <div id="archiveBox">
                     <div id="archiveBody"></div>
@@ -1115,6 +1136,20 @@
         <div class="sec">
           <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">历代弟子</div>
           <div id="genList"></div>
+        </div>
+</div>
+
+<!-- ★★ Round 50：议事堂 —— 内容待定
+     下一轮做【BD 打法倾向】（偏攻/偏守/偏速/均衡）+ 派遣历练 -->
+<div data-fac="hall" style="display:none">
+        <div class="sec">
+          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+            议事堂</div>
+          <div style="font-size:10px;color:var(--dim2);line-height:1.8">
+            此处将用来设定弟子的 <b>打法倾向</b>（偏攻 / 偏守 / 偏速 / 均衡），<br>
+            并决定 <b>派哪一位弟子出去历练</b>。<br>
+            <span style="color:var(--dim2)">（内容设计中，暂未开放）</span>
+          </div>
         </div>
 </div>
 

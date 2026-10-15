@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>纸面原型 · 叙事层（生平卷 + 归山见闻）</title>
+<!--
+  ============================================================================
+  纸面原型（Paper Prototype）· 不改游戏代码
+  ----------------------------------------------------------------------------
+  验证的两件事（用户 2026-10-15 确认）：
+    ① 方向A【生平卷】：每代弟子一份"他是谁"的小传（现在只有事件流水）
+    ② 【归山见闻】：挂机回来时，"你不在的时候发生了什么"要能看进去
+
+  数据来源（全部已存在，无需新机制）：
+    · SECT.chronicle[代]  → 该代的人话日志快照（{msg, cls, t}，进存档，每代≤80条，留最近20代）
+    · SECT.history[代]    → 该代总结（gen/cause/tier/runs/hoursLeft/carried/lost）
+    · EVENTS              → 带时刻+强度快照的事件（type/imp/t/gen/atk/kills/qi/tier）
+    · lifeMaxYears()      → 已定换算「3小时 = 一生 = 100年」P.LIFESPAN_YEARS
+
+  新增数据（仅此 2 个字段，写进 SECT.history.push 即可）：
+    · lifeYears  = lifeMaxYears()          （死亡瞬间快照，之后宗门加成会漂）
+    · realmAtDeath = P.REALMS[realmOf(tier)]（同上，避免事后反推不准）
+
+  ⚠️ 待用户拍板的 1 个设计选择：性格标签从哪来（详见右侧说明卡「②」）
+  ============================================================================
+-->
+<style>
+  @font-face{font-family:'WenKai';src:url('../../美术资源/02_字体/LXGWWenKai-Regular.ttf') format('truetype');font-display:swap}
+  @font-face{font-family:'WenKaiM';src:url('../../美术资源/02_字体/LXGWWenKai-Medium.ttf') format('truetype');font-display:swap}
+
+  :root{
+    --ink:#16171b; --paper:#eae2d0; --gold:#e8bd38; --cinnabar:#cc4636;
+    --bg:#1b1c21; --line:#ffffff2e; --line2:#ffffff1f;
+    --dim:#9c9484; --dim2:#726b5e; --txt:#eee7d8; --bright:#f8f2e6;
+    --green:#6fd3ab; --red:#e0785f;
+    --q0:#9aa3b6; --q1:#6fd8ba; --q2:#5b96dc; --q3:#bd72d8; --q4:#e8bd48;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:#0e0f11; color:var(--paper);
+    font:13px/1.65 "WenKai","KaiTi","Songti SC",serif;
+    padding:22px 20px 60px;
+  }
+  .head{max-width:1180px;margin:0 auto 20px}
+  .head h1{font-size:18px;font-weight:400;letter-spacing:3px;color:var(--paper);margin:0 0 6px}
+  .head h1 em{font-style:normal;font-size:11px;letter-spacing:1px;color:var(--cinnabar);
+    border:1px solid var(--cinnabar);border-radius:2px;padding:1px 6px;margin-left:10px;vertical-align:3px;opacity:.9}
+  .head p{margin:0;font-size:11.5px;color:var(--dim);letter-spacing:.5px;line-height:1.9}
+  .head code{color:var(--gold);font-family:inherit}
+
+  .row{max-width:1180px;margin:0 auto;display:flex;gap:26px;align-items:flex-start}
+  @media (max-width:1120px){ .row{flex-direction:column;align-items:center} }
+
+  /* ================= 左：舞台 ================= */
+  .stage{flex:0 0 auto}
+  .bar{display:flex;gap:8px;margin-bottom:9px;flex-wrap:wrap;align-items:center}
+  .bar .lbl{font-size:10.5px;color:var(--dim2);letter-spacing:2px;margin-right:2px}
+  .bar button{
+    font:11px "WenKai",serif;padding:6px 12px;background:transparent;cursor:pointer;
+    border:1px solid #ffffff22;border-radius:3px;color:#8c8574;letter-spacing:1px
+  }
+  .bar button:hover{border-color:#ffffff44;color:var(--paper)}
+  .bar button.on{border-color:var(--gold);color:var(--gold);background:#c9a22714}
+  .bar .sep{flex:1}
+  .bar .tg{display:flex;border:1px solid #ffffff22;border-radius:3px;overflow:hidden}
+  .bar .tg button{border:none;border-radius:0;padding:6px 14px}
+  .bar .tg button.on{background:#c9a2271c;color:var(--gold)}
+
+  /* ================= 手机框 ================= */
+  .phone{
+    width:420px;height:760px;position:relative;border-radius:9px;overflow:hidden;
+    background:var(--ink);border:1px solid #ffffff17;
+    box-shadow:0 26px 70px #000000e0,0 0 0 1px #00000090;
+    display:flex;flex-direction:column;flex:0 0 auto;
+  }
+  .phone .scr{position:absolute;inset:0;display:none;flex-direction:column;z-index:1;overflow:hidden}
+  .phone .scr.on{display:flex}
+
+  /* 顶部世代行 */
+  .ghead{display:flex;align-items:flex-start;justify-content:space-between;padding:15px 18px 0;flex:0 0 auto}
+  .gen{font-size:11px;color:var(--dim);letter-spacing:2px;padding-top:3px}
+  .gen b{color:var(--paper);font-weight:400;font-size:12px}
+  .seal{width:26px;height:26px;border:1px solid var(--cinnabar);color:var(--cinnabar);
+    display:flex;align-items:center;justify-content:center;border-radius:2px;opacity:.85;flex:0 0 auto}
+  .seal span{writing-mode:vertical-rl;font-size:9px;line-height:1.05;letter-spacing:1px}
+
+  /* 设施页头 */
+  .fac-hd{display:flex;align-items:baseline;gap:10px;padding:10px 18px 0;flex:0 0 auto}
+  .fac-hd .back{font-size:10.5px;color:var(--dim);letter-spacing:1px;cursor:pointer}
+  .fac-hd .ttl{font-size:12px;color:var(--gold);letter-spacing:3px}
+  .fac-in{flex:1 1 auto;overflow-y:auto;padding:8px 18px 20px}
+  .fac-in::-webkit-scrollbar{width:4px}
+  .fac-in::-webkit-scrollbar-thumb{background:#ffffff22;border-radius:2px}
+
+  /* 底部页签 */
+  .nav{flex:0 0 auto;display:flex;border-top:1px solid var(--line2);height:46px}
+  .nav div{flex:1;display:flex;align-items:center;justify-content:center;
+    font-size:12px;color:var(--dim2);letter-spacing:4px}
+  .nav div.on{color:var(--gold)}
+
+  /* ================= 改前样式（复刻现有渲染） ================= */
+  .rp-hd{font-size:12px;color:var(--gold);margin-bottom:8px;letter-spacing:2px;
+    display:flex;justify-content:space-between;align-items:baseline}
+  .rp-hd i{font-style:normal;font-size:14px;color:var(--dim2)}
+  .cr-ch{margin:0 0 12px;padding:0 0 10px;border-bottom:1px solid #ffffff0f}
+  .cr-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:5px;gap:6px}
+  .cr-hd b{color:var(--gold);font-weight:400;letter-spacing:1px}
+  .cr-grow{font-size:9.5px;color:#8fd8b8;text-align:right}
+  .cr-li{font-size:10.5px;color:#9a9284;line-height:1.75;font-variant-numeric:tabular-nums}
+  .cr-li.cr-myth{color:#c9a227} .cr-li.cr-legend{color:#b08ad0}
+  .cr-li.cr-break{color:var(--paper)} .cr-li.cr-kill{color:#9a9284}
+  .cr-ft{font-size:9.5px;color:#5d574c;margin-top:5px}
+  .cr-sect{margin-top:14px;padding-top:10px;border-top:1px solid #ffffff1a}
+  .cr-sect-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:5px}
+  .cr-si{font-size:10px;color:#7e7768;line-height:1.8}
+  .arc-hd{font-size:11px;color:var(--gold);letter-spacing:3px;margin:10px 0 4px}
+  .arc-hd em{font-style:normal;font-size:10px;color:var(--dim2);letter-spacing:.5px;margin-left:4px}
+  .lg{font-size:11px;padding:4px 0;border-bottom:1px solid var(--line2);color:var(--dim)}
+  .lg.break{color:#f0d080} .lg.warn{color:var(--gold)} .lg.bad{color:var(--red)} .lg.ok{color:var(--green)}
+  .arc-empty{font-size:10px;color:#5d574c;padding:6px 0}
+
+  /* ================= 改后样式（叙事层） ================= */
+  /* —— 归山见闻 —— */
+  .hw-lead{font-size:11px;color:var(--dim);letter-spacing:1px;line-height:1.85;margin:0 0 12px}
+  .hw-lead b{color:var(--gold);font-weight:400}
+  .hw-safe{border:1px solid #ffffff14;border-left:2px solid var(--green);border-radius:2px;
+    padding:8px 10px;margin-bottom:14px;background:#ffffff05}
+  .hw-safe .r{font-size:10.5px;color:#9a9284;line-height:1.9}
+  .hw-safe .r b{color:var(--paper);font-weight:400}
+  .hw-act{margin:0 0 13px}
+  .hw-act .wt{font-size:10.5px;color:var(--cinnabar);letter-spacing:2px;margin-bottom:3px}
+  .hw-act .wt i{font-style:normal;color:var(--dim2);letter-spacing:.5px;margin-left:6px}
+  .hw-act .wd{font-size:12px;color:var(--txt);line-height:1.95;text-indent:2em}
+  .hw-act .wd b{color:var(--gold);font-weight:400}
+  .hw-regret{font-size:11px;color:#c08070;line-height:1.9;padding:7px 10px;
+    border:1px dashed #c0807040;border-radius:2px;margin-bottom:14px}
+  .hw-regret span{color:var(--dim2);letter-spacing:1px;font-size:10px}
+  .hw-sum{font-size:10px;color:#5d574c;letter-spacing:1px;padding-top:10px;
+    border-top:1px solid #ffffff1a;line-height:1.9}
+  .hw-sum b{color:var(--gold);font-weight:400}
+  .hw-cta{display:flex;gap:8px;margin-top:12px}
+  .hw-cta button{flex:1;font:11px "WenKai",serif;padding:8px 0;cursor:pointer;
+    background:#c9a22714;border:1px solid var(--gold);color:var(--gold);border-radius:3px;letter-spacing:1px}
+  .hw-cta button.ghost{background:transparent;border-color:#ffffff22;color:#8c8574}
+
+  /* —— 史册卡片 —— */
+  .gc{border:1px solid #ffffff12;border-left:2px solid var(--dim2);border-radius:2px;
+    padding:8px 10px;margin-bottom:7px;background:#ffffff04;cursor:pointer}
+  .gc:hover{border-color:#ffffff2e;background:#ffffff09}
+  .gc.now{border-left-color:var(--green)}
+  .gc.die{border-left-color:var(--red)}
+  .gc.done{border-left-color:var(--dim2)}
+  .gc .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .gc .h b{font-size:11.5px;color:var(--paper);font-weight:400;letter-spacing:1px}
+  .gc .h .t{font-size:10px;color:var(--gold);letter-spacing:1px}
+  .gc .m{font-size:9.5px;color:var(--dim2);line-height:1.8;margin-top:2px}
+  .gc .q{font-size:10.5px;color:#9a9284;line-height:1.8;margin-top:4px}
+
+  /* —— 生平卷 —— */
+  .vol-top{text-align:center;padding:6px 0 14px;border-bottom:1px solid #ffffff14}
+  .vol-top .g{font-size:10.5px;color:var(--dim2);letter-spacing:6px}
+  .vol-top .n{font-size:26px;color:var(--bright);letter-spacing:10px;margin:5px 0 6px;
+    font-family:"WenKaiM","WenKai",serif}
+  .vol-top .t{font-size:11px;color:var(--gold);letter-spacing:5px}
+  .vol-top .t:before,.vol-top .t:after{content:"「";opacity:.45}
+  .vol-top .t:after{content:"」"}
+  .vol-top .s{font-size:10px;color:var(--dim2);letter-spacing:1px;margin-top:8px}
+  .vol-top .s em{font-style:normal;color:#9a9284}
+  .vol-sec{margin-top:16px}
+  .vol-sec .st{font-size:10.5px;color:var(--dim);letter-spacing:4px;
+    display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .vol-sec .st:after{content:"";flex:1;height:1px;background:#ffffff14}
+  .vol-sec .sb{font-size:12px;color:var(--txt);line-height:2;text-indent:2em}
+  .vol-sec .sb b{color:var(--gold);font-weight:400}
+  .vol-sec .sb .rd{color:var(--red)}
+  .vol-sec .sb .gr{color:var(--green)}
+  .vol-items{font-size:11px;color:#b08ad0;line-height:2}
+  .vol-items i{font-style:normal;color:var(--dim2)}
+  .vol-epi{text-align:center;font-size:12px;color:var(--paper);letter-spacing:1px;
+    line-height:2;padding:16px 0 4px}
+  .vol-epi:before{content:"";display:block;width:34px;height:1px;background:var(--cinnabar);
+    margin:0 auto 12px;opacity:.7}
+  .rawbox{margin-top:16px;border-top:1px solid #ffffff14;padding-top:8px}
+  .rawbox .rt{font-size:10px;color:var(--dim2);letter-spacing:2px;cursor:pointer}
+  .rawbox .rb{display:none;margin-top:6px}
+  .rawbox.on .rb{display:block}
+
+  /* tag */
+  .tag{display:inline-block;font-size:9.5px;padding:0 5px;border-radius:2px;
+    border:1px solid #ffffff22;color:#9a9284;margin-right:4px;letter-spacing:1px}
+  .tag.gold{border-color:#c9a22755;color:var(--gold)}
+  .tag.green{border-color:#6fd3ab55;color:var(--green)}
+  .tag.red{border-color:#e0785f55;color:var(--red)}
+
+  /* ================= 右：说明卡 ================= */
+  .note{flex:1;min-width:0;max-width:560px}
+  .card{border:1px solid #ffffff14;border-radius:4px;background:#ffffff05;padding:14px 16px;margin-bottom:14px}
+  .card h2{font-size:12.5px;color:var(--gold);font-weight:400;letter-spacing:2px;margin:0 0 9px}
+  .card h3{font-size:11px;color:var(--paper);font-weight:400;letter-spacing:1px;margin:12px 0 5px}
+  .card p,.card li{font-size:11.5px;color:#a49c8c;line-height:1.95;margin:0 0 6px}
+  .card ul{margin:0 0 6px;padding-left:16px}
+  .card b{color:var(--paper);font-weight:400}
+  .card code{color:var(--gold);font-family:inherit;font-size:11px}
+  .card .warn{color:#c08070}
+  .kv{font-size:11px;color:#a49c8c;line-height:2}
+  .kv i{font-style:normal;color:var(--dim2);display:inline-block;min-width:82px}
+  .kv b{color:var(--paper);font-weight:400}
+  .flow{font-size:11px;color:#8c8574;line-height:1.9;background:#00000040;
+    border-radius:3px;padding:8px 10px;letter-spacing:.3px;overflow-x:auto;white-space:nowrap}
+  .flow em{font-style:normal;color:var(--gold)}
+  .q{font-size:11.5px;color:var(--txt);line-height:1.95}
+  .opt{border:1px solid #ffffff14;border-radius:3px;padding:9px 11px;margin:7px 0}
+  .opt .oh{font-size:11.5px;color:var(--gold);letter-spacing:1px;margin-bottom:4px}
+  .opt .ob{font-size:11px;color:#a49c8c;line-height:1.85}
+  .opt.rec{border-color:#c9a22766;background:#c9a2270d}
+  .note-sub{font-size:11px;color:var(--gold);letter-spacing:1px;margin:12px 0 2px;
+    padding-top:9px;border-top:1px solid #ffffff14}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <h1>叙事层 · 纸面原型<em>不改游戏代码</em></h1>
+  <p>
+    验证两件事：<b>① 生平卷</b>（每代一份"他是谁"的小传）· <b>② 归山见闻</b>（挂机回来时"你不在的时候发生了什么"要能看进去）。<br>
+    右上角切 <code>改前 / 改后</code> 对照；三个页签是同一代弟子在同一件事上的三个视角。<br>
+    全部内容 <b>都能从现有数据生成</b>（<code>SECT.chronicle</code> / <code>SECT.history</code> / <code>EVENTS</code>），只需给史册存档多写 <b>2 个字段</b>。
+  </p>
+</div>
+
+<div class="row">
+  <!-- ============ 左：舞台 ============ -->
+  <div class="stage">
+    <div class="bar">
+      <span class="lbl">屏</span>
+      <button id="s1" class="on" onclick="scene(1)">① 归山见闻</button>
+      <button id="s2" onclick="scene(2)">② 史册 · 历代</button>
+      <button id="s3" onclick="scene(3)">③ 生平卷</button>
+      <span class="sep"></span>
+      <span class="tg">
+        <button id="t0" class="on" onclick="mode(0)">改前</button>
+        <button id="t1" onclick="mode(1)">改后</button>
+      </span>
+    </div>
+
+    <div class="phone">
+      <!-- ===================== 屏1：归山见闻 ===================== -->
+      <div class="scr on" id="sc1">
+        <!-- 改前 -->
+        <div class="fac-in" id="sc1a" style="padding:22px 18px">
+          <div class="rp-hd"><span>你离开的时候</span><i>×</i></div>
+          <div class="cr-ch">
+            <div class="cr-hd">
+              <b>第 6 代 · 玄微</b>
+              <span class="cr-grow">攻击 120 → 340（×2.8）</span>
+            </div>
+            <div class="cr-li cr-break">14:22　破入【筑基期】· 攻击 340（+60）</div>
+            <div class="cr-li cr-myth">14:51　得【神话·主手】</div>
+            <div class="cr-li cr-kill">15:06　斩【赤瞳妖王】</div>
+            <div class="cr-li">16:40　取回先辈传承 3 件</div>
+            <div class="cr-li cr-bad">17:33　渡劫失败（冲【化神期】未成）</div>
+            <div class="cr-li cr-legend">18:22　得【传奇·戒指】</div>
+            <div class="cr-ft">共历 3 局 · 善终</div>
+          </div>
+          <div class="cr-sect">
+            <div class="cr-sect-hd">宗门账</div>
+            <div class="cr-si">16:12　第 6 代 · 招徒 2 人</div>
+          </div>
+        </div>
+        <!-- 改后 -->
+        <div class="fac-in" id="sc1b" style="padding:20px 18px;display:none">
+          <div class="rp-hd"><span>☾ 归山见闻</span><i>×</i></div>
+          <p class="hw-lead">你离开的 <b>3 小时 20 分</b>。宗门平安，走了一位，来了两位。</p>
+
+          <div class="hw-safe">
+            <div class="r">你走时，<b>第六代 · 玄微</b>正当壮年 · 筑基期</div>
+            <div class="r">你回来时，他已入土。宗门阶位 <b>中等宗门</b>（未变）· 荣誉 <b>+12</b></div>
+            <div class="r">眼下前线是 <b>第八代 · 霜离</b>，已接过传承、正在历练</div>
+          </div>
+
+          <div class="hw-act">
+            <div class="wt">午时<i>青木林</i></div>
+            <div class="wd">玄微在林子里破了筑基。断剑没入丹田那一息，他自己愣住了——抬头看了看天，又低下去了。</div>
+          </div>
+          <div class="hw-act">
+            <div class="wt">申时<i>金煞谷</i></div>
+            <div class="wd">他去挑了赤瞳妖王。那是你走之前，他念叨了两天没敢去的地方。</div>
+          </div>
+          <div class="hw-act">
+            <div class="wt">酉时<i>玄水渊</i></div>
+            <div class="wd">取回先辈遗落的三件传承。铜灯亮到后半夜，他一件件擦干净，摆在你常坐的那把椅子前。</div>
+          </div>
+          <div class="hw-act">
+            <div class="wt">戌时<i>石室</i></div>
+            <div class="wd">他试了一次化神雷劫。<span class="rd">没成。</span>道伤留到了最后，再没退过。</div>
+          </div>
+          <div class="hw-act">
+            <div class="wt">掌灯<i>宗门</i></div>
+            <div class="wd">寿元到了。他是坐着走的，手还攥着那柄断剑。</div>
+          </div>
+
+          <div class="hw-regret"><span>遗憾</span>　他到最后也没下玄水渊第四层。那里的东西，现在还搁着。</div>
+
+          <div class="hw-sum">共历 <b>3 局</b> · 享寿 <b>93 载</b> · 遗物 <b>1 件</b>（神话·主手）</div>
+          <div class="hw-cta">
+            <button onclick="scene(3)">翻他的生平卷 ▸</button>
+            <button class="ghost" onclick="document.getElementById('n2').classList.toggle('on')">宗门账 ▾</button>
+          </div>
+          <div class="rawbox" id="n2">
+            <div class="rb">
+              <div class="cr-sect" style="border-top:none;margin-top:8px;padding-top:0">
+                <div class="cr-si">16:12　第 6 代 · 招徒 2 人</div>
+                <div class="cr-si cr-rule">09:40　第 5 代 · 立门规〈修行·稳〉</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== 屏2：史册·历代 ===================== -->
+      <div class="scr" id="sc2">
+        <div class="ghead">
+          <div class="gen">第 <b>8</b> 代 · <b>炼气期</b></div>
+          <div class="seal"><span>秘境</span></div>
+        </div>
+        <div class="fac-hd"><span class="back">返回宗门 ▸</span><span class="ttl">宗门大殿</span></div>
+        <div class="fac-in">
+          <!-- 改前 -->
+          <div id="sc2a">
+            <div class="arc-hd">宗门史册　<em>历代 8 代 · 已录 6 代</em></div>
+            <div class="arc-empty">编年 / 历代弟子传 / 大事记 / 突破录</div>
+            <div class="arc-hd">第 8 代 <em>正在历练</em></div>
+            <div class="lg">修至<b>炼气期</b></div>
+            <div class="arc-hd">第 7 代 <em>战死秘境 · 峰值 4 档 · 2 局 · 遗落 2 件</em></div>
+            <div class="lg">修至<b>金丹期</b></div>
+            <div class="arc-hd">第 6 代 <em>善终 · 峰值 2 档 · 3 局 · 带回 1 件</em></div>
+            <div class="lg">修至<b>筑基期</b></div>
+            <div class="arc-hd">第 5 代 <em>善终 · 峰值 5 档 · 6 局 · 带回 3 件</em></div>
+            <div class="lg">修至<b>化神期</b></div>
+            <div class="arc-empty">…（更早的 2 代已滚出史册，只留最近 20 代）</div>
+          </div>
+          <!-- 改后 -->
+          <div id="sc2b" style="display:none">
+            <div class="arc-hd">历代弟子　<em>8 代 · 在门 1 人</em></div>
+
+            <div class="gc now">
+              <div class="h"><b>第八代 · 霜离</b><span class="t">在门</span></div>
+              <div class="m">炼气期 · 天赋 平庸 · 金木双灵根 · 寿元剩 71 载</div>
+              <div class="q">刚接过第六代留下的断剑，还没打出一场像样的仗。</div>
+            </div>
+
+            <div class="gc die">
+              <div class="h"><b>第七代 · 云寂</b><span class="t">「孤行客」</span></div>
+              <div class="m">战死秘境 · 享寿 84 载 · 修至金丹期 · 2 局</div>
+              <div class="q">他从来没等过援兵。这次也没等到。</div>
+              <div class="m">遗落 2 件（其中 1 件是神话·头）</div>
+            </div>
+
+            <div class="gc done">
+              <div class="h"><b>第六代 · 玄微</b><span class="t">「断剑客」</span></div>
+              <div class="m">善终 · 享寿 93 载 · 修至筑基期 · 3 局</div>
+              <div class="q">他没成大器。但他把你给的东西，一件没丢。</div>
+              <div class="m">带回 1 件（神话·主手）</div>
+            </div>
+
+            <div class="gc done">
+              <div class="h"><b>第五代 · 白朴</b><span class="t">「拾遗者」</span></div>
+              <div class="m">善终 · 享寿 148 载 · 修至化神期 · 6 局</div>
+              <div class="q">一辈子在替前几代收尸、捡东西。宗门那把椅子是他修的。</div>
+              <div class="m">带回 3 件</div>
+            </div>
+
+            <div class="arc-empty">点任意一代 ▸ 展开他的一生</div>
+          </div>
+        </div>
+        <div class="nav"><div>境</div><div class="on">宗</div></div>
+      </div>
+
+      <!-- ===================== 屏3：生平卷 ===================== -->
+      <div class="scr" id="sc3">
+        <div class="ghead">
+          <div class="gen">第 <b>8</b> 代 · <b>炼气期</b></div>
+          <div class="seal"><span>秘境</span></div>
+        </div>
+        <div class="fac-hd"><span class="back" onclick="scene(2)">返回历代 ▸</span><span class="ttl">生平卷</span></div>
+        <div class="fac-in">
+          <!-- 改前 -->
+          <div id="sc3a">
+            <div class="arc-hd">第 6 代 <em>善终 · 峰值 2 档 · 3 局 · 带回 1 件</em></div>
+            <div class="lg break">✦ 突破！炼气期 → 筑基期　寿元 +8 年</div>
+            <div class="lg ok">✦ 得【神话·主手】</div>
+            <div class="lg">✦ 斩【赤瞳妖王】</div>
+            <div class="lg ok">✦ 搜寻完毕 · 取回全部遗落传承（3 件）</div>
+            <div class="lg bad">⚡ 渡劫失败，修为倒退（灵气 −140）</div>
+            <div class="lg warn">✦ 得【传奇·戒指】</div>
+            <div class="lg">✦ 第 6 代 · 玄微 善终，传承已归宗门</div>
+            <div class="arc-empty">（这一代共 41 条记录，此处显示最近 14 条 / 全部 80 条）</div>
+          </div>
+          <!-- 改后 -->
+          <div id="sc3b" style="display:none">
+            <div class="vol-top">
+              <div class="g">第 六 代</div>
+              <div class="n">玄 微</div>
+              <div class="t">断 剑 客</div>
+              <div class="s">
+                <span class="tag">金灵根</span><span class="tag">天赋 凡骨</span><br>
+                享寿 <em>93 载</em> · 修至 <em>筑基期</em> · 在门 3 局 · 善终于宗门
+              </div>
+            </div>
+
+            <div class="vol-sec">
+              <div class="st">入 道</div>
+              <div class="sb">他是这一门里资质最差的一个。<b>凡骨</b>，寿元比同辈短一成半。前两年没人记得他的名字，只记得他总在别人打完仗之后，蹲在雪地里捡没被人捡走的碎铁。</div>
+            </div>
+
+            <div class="vol-sec">
+              <div class="st">风 光</div>
+              <div class="sb">筑基那天他在<b>青木林</b>，一个人。断剑没入丹田的一息，天上没有雷，也没有人给他记功。<br>
+                三天后他去了<b>金煞谷</b>——赤瞳妖王盘踞的地方，他念叨了两天没敢去。<span class="gr">他赢了。</span><br>
+                真正让宗门记住他的，是<b>玄水渊</b>那一趟：他取回了先辈遗落的三件传承，一件件擦干净，摆在你常坐的那把椅子前。</div>
+            </div>
+
+            <div class="vol-sec">
+              <div class="st">收 场</div>
+              <div class="sb">他试过一次<b>化神雷劫</b>。<span class="rd">没成。</span>道伤留到死，再没退过一分。<br>
+                后来他就不出秘境了。<b>寿元到的那天</b>，他是坐着走的，手还攥着那柄断剑。</div>
+            </div>
+
+            <div class="vol-sec">
+              <div class="st">遗 物</div>
+              <div class="vol-items">神话 · 主手　<i>一柄</i><br><i>他一生只留了这一件。</i></div>
+            </div>
+
+            <div class="vol-epi">他没成大器。但他把你给的东西，一件没丢。</div>
+
+            <div class="rawbox" id="rawbox">
+              <div class="rt" onclick="document.getElementById('rawbox').classList.toggle('on')">原始记录 41 条 ▾</div>
+              <div class="rb">
+                <div class="lg break">✦ 突破！炼气期 → 筑基期　寿元 +8 年</div>
+                <div class="lg ok">✦ 得【神话·主手】</div>
+                <div class="lg">✦ 斩【赤瞳妖王】</div>
+                <div class="lg bad">⚡ 渡劫失败，修为倒退（灵气 −140）</div>
+                <div class="lg">✦ 第 6 代 · 玄微 善终，传承已归宗门</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="nav"><div>境</div><div class="on">宗</div></div>
+      </div>
+
+    </div><!-- /phone -->
+  </div>
+
+  <!-- ============ 右：说明 ============ -->
+  <aside class="note" id="note"></aside>
+</div>
+
+<script>
+/* ---------------- 屏 & 改前改后 切换 ---------------- */
+var SC = 1, MD = 0;
+function scene(n){
+  SC = n;
+  for (var i = 1; i <= 3; i++) {
+    document.getElementById('sc' + i).classList.toggle('on', i === n);
+    document.getElementById('s' + i).classList.toggle('on', i === n);
+  }
+  paint();
+}
+function mode(m){
+  MD = m;
+  for (var i = 1; i <= 3; i++) {
+    document.getElementById('sc' + i + 'a').style.display = (m === 0 ? '' : 'none');
+    document.getElementById('sc' + i + 'b').style.display = (m === 1 ? '' : 'none');
+  }
+  document.getElementById('t0').classList.toggle('on', m === 0);
+  document.getElementById('t1').classList.toggle('on', m === 1);
+  paint();
+}
+
+/* ---------------- 说明卡内容 ---------------- */
+var TITLE = { 1: '① 归山见闻 · 挂机回来的那一眼', 2: '② 史册 · 历代弟子', 3: '③ 生平卷 · 一个人的一生' };
+var SUB   = {
+  1: '现在：reportPanel 是一份<b>流水账</b>（时刻 + 事件名 + 强度跃升），读起来像服务器日志。改后：把它写成一段<b>有主角、有时间幕、有遗憾</b>的说书稿。',
+  2: '现在：每代一行「第 N 代 · 修至 X 期」。改后：每代一张<b>卡片</b>——称号、结局、一句这个人干什么的、遗物。目标是「扫一眼就能认出哪一代是哪一个」。',
+  3: '现在：这一代的所有日志按时间倒序堆在一起（突破/掉宝/死亡混排）。改后：按下成卷——<b>入道 / 风光 / 收场 / 遗物 / 墓志</b>，原始记录降级成可折叠的附录。'
+};
+
+var NOTES = {
+  /* ---------- 屏1 ---------- */
+  '1-0': [
+    ['这一屏现在有什么问题', [
+      '<b>没有主角。</b>每一行只有事件名（「破入【筑基期】」），名字只在标题出现一次。人不在句子里，就不会被记住。',
+      '<b>时间不是时间。</b><code>14:22</code> 是钟表读书，不是「午时」。挂机叙事要的是"过了多久、什么时候"，不是精确到分。',
+      '<b>宗门账污染正文。</b>招徒、门规、晋阶是<b>事务</b>，和"这个人怎么了"是两种内容。现在它们滚在同一个流里，情感被稀释。',
+      '<b>没有"他没做到的"。</b>报告只列成就（突破/得宝/斩王）。可是让人记住一个人的，往往是<b>他没能做成的那件事</b>。'
+    ]],
+    ['它什么时候弹（现状）', [
+      '<div class="flow">imp ≥ 4 且 距上次查看 &gt; 30s 且 距上次弹窗 &gt; 60s　→ 全屏覆盖</div>',
+      '门槛本身没问题；问题是弹出来之后，<b>回来第一眼看到的是"日志"而不是"我的宗门还在不在"</b>。摸鱼场景里，先要一眼安全感，再谈读故事。'
+    ]]
+  ],
+  '1-1': [
+    ['这一屏改了什么', [
+      '<b>先给安全感。</b>开头三行：你走时他是谁 / 现在宗门怎样 / 现在前线是谁。→ 回答"有没有出事"。',
+      '<b>按幕说书。</b>把这段时间切成 4~5 幕（午/申/酉/戌/掌灯），每幕=一个时刻+一个地点+一句话。<b>每句话里都有他的名字。</b>',
+      '<b>加一条遗憾。</b>显式给一条"他没做到的事"，和成就并排。',
+      '<b>宗门账降级。</b>不删，收进「宗门账 ▾」，点开才看。',
+      '<b>末端给一个钩子。</b>「翻他的生平卷 ▸」——把这一眼接到屏③。'
+    ]],
+    ['吃什么数据（全部已存在）', [
+      '<div class="kv">' +
+      '<div><i>时间分幕</i><b>EVENTS[].t</b> 按小时切成 4~5 段</div>' +
+      '<div><i>每幕主角</i><b>SECT.history[gen].name</b> / <b>SECT.chronicle[gen][].msg</b></div>' +
+      '<div><i>每幕地点</i><b>ZONE_BIAS</b> 的秘境名（金煞谷 / 青木林 / 玄水渊 / 赤炎窟 / 厚土塬 / 五行交汇）</div>' +
+      '<div><i>场景动词</i>用 <b>event.type</b> 映射：break→破境 · elite_king→斩 · legacy_get→取回 · dujie_fail→渡劫未成 · death_*→结局</div>' +
+      '<div><i>遗憾</i><b>history.lost</b>&gt;0 或 <b>dujie_fail</b> 或 峰值 tier 卡在某档</div>' +
+      '<div><i>享寿</i><b>lifeMaxYears()</b>（已定换算：3 小时 = 100 年）</div>' +
+      '</div>'
+    ]],
+    ['代价 / 风险', [
+      '不动任何数值、不动模拟、不动存档结构（除了下面 2 个字段）。',
+      '<span class="warn">主要风险是文案会重复。</span>如果模板太糙，第 6 代和第 9 代的句子会长得一样——那"牵挂"就白做了。这是<b>需要你亲自审一遍文案库</b>的地方，也是这一版原型最该被挑战的点。'
+    ]]
+  ],
+  /* ---------- 屏2 ---------- */
+  '2-0': [
+    ['这一屏现在有什么问题', [
+      '<b>只有身份没有内容。</b>「第 6 代 · 修至筑基期」——这是档案条目，不是一个人。',
+      '<b>扫一眼认不出谁是谁。</b>8 代排下来全是"第 N 代 + 境界"，大脑没有抓手。',
+      '读屏②的意义就在于：<b>这是你的弟子列表，你该能在 2 秒内挑出"我想看那一代"。</b>'
+    ]]
+  ],
+  '2-1': [
+    ['这一屏改了什么', [
+      '<b>每代给一个称号</b>（「断剑客」「孤行客」「拾遗者」），这是记忆的抓手。',
+      '<b>左边一根状态色条：</b>绿=在门 · 红=战死 · 灰=善终。眼睛不用读字就能扫。',
+      '<b>一句"他干了什么"</b>（不是数值），这是从 <code>SECT.chronicle</code> 里挑最有代表性的一条压成一句话。',
+      '<b>遗物单独一行</b>——"他留下了什么"是传承游戏的核心情绪。'
+    ]],
+    ['吃什么数据', [
+      '<div class="kv">' +
+      '<div><i>称号</i>该代 <b>imp 最高事件的类型</b>映射（得神话→拾遗者 · 渡劫失败→折道之人 · 斩精英王→屠王者 · 战死→孤行客 …）</div>' +
+      '<div><i>生卒</i><b>history.cause</b> + <b>lifeYears</b> + <b>realmAtDeath</b>（← 需新增的 2 个字段）</div>' +
+      '<div><i>一句小传</i><b>SECT.chronicle[gen]</b> 里权重最高的一条，压成一句</div>' +
+      '<div><i>遗物</i><b>history.carried / lost</b> + <b>drop_myth / drop_legend</b> 的 slot</div>' +
+      '</div>'
+    ]],
+    ['代价 / 风险', [
+      '不动逻辑。<b>唯一新增</b>：<code>SECT.history.push({...})</code> 时多写两个字段（死亡瞬间快照）。',
+      '<span class="warn">注意口径：</span>享寿必须<b>死亡时就快照</b>。事后用 <code>lifeMaxYears()</code> 反推会错——它随天赋/宗门加成变化，「去年死的人」的寿元会被「今年升的加成」改写。'
+    ]]
+  ],
+  /* ---------- 屏3 ---------- */
+  '3-0': [
+    ['这一屏现在有什么问题', [
+      '<b>它是流水，不是传记。</b>突破、掉宝、斩王、死亡按时间倒序混排，读者要自己拼出"这个人这辈子"。',
+      '<b>它是倒序的。</b>先看到死亡，再看到出生。人的一生没有这么读的。',
+      '<b>它没有"幕"。</b>一生没有起承转合，只有一个清单。',
+      '<b>数量感压过叙事感。</b>41 条记录里最重要的 3 条被埋了。'
+    ]],
+    ['和用户诉求的对应', [
+      '工作记忆里记着用户原话：「角色生平肯定是看他<b>经历了什么</b>，获得了什么好东西」。<br>经历 = 顺序 + 场面（现在缺）；好东西 = 遗物（现在有，但埋在流水里）。'
+    ]]
+  ],
+  '3-1': [
+    ['这一屏改了什么', [
+      '<b>卷首立传。</b>第几代 / 名字 / 称号 / 灵根 / 天赋 / 享寿 / 修至何境 / 结局。<b>7 项，一眼看完这个人是谁。</b>',
+      '<b>按下成卷。</b>入道 → 风光 → 收场 → 遗物 → 墓志。这是"人话顺序"，不是"日志顺序"。',
+      '<b>正序叙述。</b>从资质平平写到坐着离世。',
+      '<b>原始记录不删</b>，折叠在底部「原始记录 41 条 ▾」——想较真的人能查，不想看的人不被打扰。',
+      '<b>墓志一句</b>由结局派生（善终/战死/交接 → 三种不同的落点）。'
+    ]],
+    ['吃什么数据', [
+      '<div class="kv">' +
+      '<div><i>入道</i><b>天赋(TALENTS)</b> + <b>灵根(LG)</b> + <b>chronicle 前 1/3</b></div>' +
+      '<div><i>风光</i><b>chronicle 中 1/3</b> 的最高权重条目（drop_myth / elite_king / dujie_ok / legacy_get）</div>' +
+      '<div><i>收场</i><b>chronicle 后 1/3</b> + <b>history.cause</b></div>' +
+      '<div><i>遗物</i><b>history.carried / lost</b></div>' +
+      '<div><i>墓志</i>由 <b>cause</b> 派生，1 结局 1 句（善终 / 战死 / 主动交接）</div>' +
+      '</div>',
+      '三幕是<b>按 chronicle 条数三等分</b>切的，不是按时间——因为挂机时段密度不均，按时间切会有一段全空。'
+    ]],
+    ['代价 / 风险', [
+      '<span class="warn">最容易做歪的地方：</span>把"入道/风光/收场"写成三段统计摘要（"共突破 3 次、击杀 1200"）。那就退回流水账了。<b>这三段必须是句子，不是数字。</b>',
+      '数字可以留，但只能留在<b>卷首那一行</b>（享寿 93 载）和折叠的原始记录里。'
+    ]]
+  ]
+};
+
+/* ---------- 全局必读：那道待你拍板的题 ---------- */
+var ASK = [
+  ['④ 需你拍板的一件事：性格从哪来', [
+    '<b>称号</b>、<b>三幕</b>、<b>墓志</b>、<b>享寿</b>、<b>遗物</b> 全部能从现有数据派生，0 新增字段。<br>唯独「<b>性格/脾气</b>」需要单独定。<br><b class="warn">2026-10-15 修正：</b>纯行为统计之所以会雷同，不是方法不对，是<b>缺参照系</b>——统计出来的是「成绩」（活得久/死得早），不是「性格」。参照系 = <b>议事堂给的路数</b>。',
+    '<div class="note-sub">→ 结论：不是四选一，是<b>分两步</b></div>',
+    '<div class="opt rec"><div class="oh">第一步（现在做）· 生成弟子时抽一个性格标签</div><div class="ob">' +
+      '<b>做什么：</b>在 <code>newDisciple()</code> 里加 1 个随机标签（寡言 / 好胜 / 惜物 / 怕死 / 讲义气 / 认死理… 约 8~12 种），存进弟子对象，死亡时随史册一起存。' +
+      '它决定「入道」段怎么写，也决定三幕**优先挑哪条记录**来写。<br>' +
+      '<b>为什么现在做、不等议事堂：</b>生平卷这一层不该被议事堂卡住。没有性格标签，三幕就没有"选哪条来写"的依据，只能按时间切 ⇒ 又退回流水账。<br>' +
+      '<b>代价：</b>1 个字段 + 一张 8~12 行标签表 + 每标签 1~2 句文案。零机制改动、零数值影响。' +
+      '</div></div>',
+    '<div class="opt rec"><div class="oh">第二步（议事堂上线时）· 把性格接进服从率</div><div class="ob">' +
+      '<b>做什么：</b><code>遵守概率 = 基准 × 性格乘子</code>。议事堂给的路数<b>大概率</b>被遵守，不是 100%——「怕死」的拿到「杀伐」路数就会往浅层躲，躲一次两次是行为，躲一辈子就是性格。<br>' +
+      '<b>和其他做法的实质差别：</b>到这里性格从「抽来的装饰」变成「有作用的变量」，传记才写得出最有戏的那种句子：' +
+      '<b>「你让他走杀伐路，他一次深层都没下过。」</b><br>' +
+      '<b>依赖：</b>议事堂（<code>hall</code>）目前是 R180 待做项。<b>这一步只能等它上线后接。</b>' +
+      '</div></div>',
+    '<div class="note-sub">→ 以下三个是「第二步」做不到时的备选，供对比</div>',
+    '<div class="opt"><div class="oh">备选甲 · 只做第一步，不接服从率</div><div class="ob">' +
+      '<b>做什么：</b>只抽标签、只影响文案，不碰任何行为。<br>' +
+      '<b>和其他方案的实质差别：</b>最安全，但性格是个"空标签"——弟子该去哪还去哪，你只是给他安了个形容词。传记能读，但读不出"这个人跟我不合"。' +
+      '</div></div>',
+    '<div class="opt"><div class="oh">备选乙 · 纯行为统计派生，0 新增字段</div><div class="ob">' +
+      '<b>做什么：</b>不给弟子抽标签，按已发生的事反推（战死→"不要命"、局数多且没渡劫失败→"稳"）。<br>' +
+      '<b>和其他方案的实质差别：</b>省事，但<b>没有议事堂路数当参照系时，大部分弟子活得平淡，反推出来都是一个「稳」字</b>。建议只在议事堂确定不做时才选。' +
+      '</div></div>',
+    '<div class="opt"><div class="oh">备选丙 · 性格绑在事件上，不绑人</div><div class="ob">' +
+      '<b>做什么：</b>给"事件"配性格描述——「取回先辈传承」一律写成「惜物」，「斩精英王」一律写成「好胜」。<br>' +
+      '<b>和其他方案的实质差别：</b>0 新字段、文案量最小、最快能跑。但性格成了<b>事件的属性</b>而不是<b>人的属性</b>，同一个弟子会在这段惜物、那段好胜——<b>前后不一致，沉浸感漏气</b>。' +
+      '</div></div>'
+  ]],
+  ['这个原型证明了什么 / 没证明什么', [
+    '<b>已证明：</b>两屏内容全部可从 <code>SECT.chronicle</code> + <code>SECT.history</code> + <code>EVENTS</code> 生成；唯一的数据缺口是史册存档里补 <code>lifeYears</code> / <code>realmAtDeath</code> 两个字段；寿元换算直接复用已定案口径（<code>3 小时 = 100 年</code>），不造新规则。',
+    '<b>未证明：</b>这些文案读起来会不会腻。这不是纸面能验的——要真跑起来看第 20 代你会不会跳过。<b>建议先接一屏（生平卷）进游戏，看两天真机再说归山见闻。</b>'
+  ]]
+];
+
+function paint(){
+  var key = SC + '-' + MD;
+  var h = '<div class="card"><h2>' + TITLE[SC] + '</h2><p>' + SUB[SC] + '</p></div>';
+  var arr = NOTES[key] || [];
+  for (var i = 0; i < arr.length; i++) {
+    h += '<div class="card"><h3>' + arr[i][0] + '</h3>';
+    for (var j = 0; j < arr[i][1].length; j++) h += '<p>' + arr[i][1][j] + '</p>';
+    h += '</div>';
+  }
+  if (SC === 3 && MD === 1) {
+    for (var k = 0; k < ASK.length; k++) {
+      h += '<div class="card"><h3>' + ASK[k][0] + '</h3>';
+      for (var m = 0; m < ASK[k][1].length; m++) h += ASK[k][1][m];
+      h += '</div>';
+    }
+  }
+  document.getElementById('note').innerHTML = h;
+}
+
+/* 可用 URL 参数直达某一屏：?s=1|2|3 & m=0|1  （例：?s=3&m=1 = 生平卷·改后） */
+(function init(){
+  try {
+    var q = (location.search || '').replace(/^\?/, '').split('&'), o = {};
+    for (var i = 0; i < q.length; i++) { var p = q[i].split('='); if (p[0]) o[p[0]] = p[1]; }
+    var s = parseInt(o.s, 10), m = parseInt(o.m, 10);
+    scene(s >= 1 && s <= 3 ? s : 1);
+    mode(m === 1 ? 1 : 0);
+  } catch (e) { scene(1); mode(0); }
+})();
+</script>
+</body>
+</html>

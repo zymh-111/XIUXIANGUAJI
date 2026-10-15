@@ -2668,9 +2668,18 @@ chk("出现率合计 = 1.0", (function () {
   const s = A.LINGGEN.reduce((a, g) => a + g.rate, 0);
   return Math.abs(s - 1.0) < 1e-9;
 })(), A.LINGGEN.reduce((a, g) => a + g.rate, 0).toFixed(2));
-chk("★ 单灵根最稀有（5%）· 四灵根最常见（32%）", (function () {
-  const dan = A.LINGGEN.find(g => g.id === "dan"), si = A.LINGGEN.find(g => g.id === "si");
-  return dan.rate === 0.05 && si.rate === 0.32;
+chk("★ 出现率【严格单调】—— 灵根越少越难出（Round 50）", (function () {
+  const order = ["dan", "shuang", "san", "si", "wu"];
+  const rs = order.map(id => A.LINGGEN.find(g => g.id === id).rate);
+  for (let i = 1; i < rs.length; i++) if (rs[i] <= rs[i - 1]) return false;
+  return true;
+})(), (function () {
+  return ["dan", "shuang", "san", "si", "wu"]
+    .map(id => A.LINGGEN.find(g => g.id === id).rate).join(" < ");
+})());
+chk("★ 单灵根最稀有（2%）· 五灵根最常见（30%）", (function () {
+  const dan = A.LINGGEN.find(g => g.id === "dan"), wu = A.LINGGEN.find(g => g.id === "wu");
+  return dan.rate === 0.02 && wu.rate === 0.30;
 })(), A.LINGGEN.map(g => g.name + (g.rate * 100) + "%").join(" "));
 chk("五行数 = 1/2/3/4/5 且伪灵根为 0（杂）", (function () {
   const m = { dan: 1, shuang: 2, san: 3, si: 4, wu: 5, wei: 0 };
@@ -2686,7 +2695,7 @@ chk("★ 修炼速度随五行数【单调递减】（单灵根最快）", (func
 })(), (function () {
   return ["dan", "shuang", "san", "si", "wu"].map(id => A.LINGGEN.find(g => g.id === id).qi).join(" > ");
 })());
-chk("★ 单灵根修炼 ×1.30（最快）", A.LINGGEN.find(g => g.id === "dan").qi === 1.30);
+chk("★ 单灵根修炼 ×1.40（最快）", A.LINGGEN.find(g => g.id === "dan").qi === 1.40);
 chk("★ 五灵根修炼 ×0.80（最慢）", A.LINGGEN.find(g => g.id === "wu").qi === 0.80);
 
 // ---- 同调门槛：越多越低 ----
@@ -2703,6 +2712,19 @@ chk("★ 两种收益【方向相反】（快 ⇔ 同调厚）", (function () {
   const dan = A.LINGGEN.find(g => g.id === "dan"), wu = A.LINGGEN.find(g => g.id === "wu");
   return dan.qi > wu.qi && dan.thresh > wu.thresh;
 })(), "单灵根快但门槛严 · 五灵根慢但门槛松");
+chk("★ 单灵根【综合收益最高】（Round 50：用户要求单灵根收益大于多灵根）", (function () {
+  const dan = A.LINGGEN.find(g => g.id === "dan");
+  // 方向 ①：速度优势必须明确拉开（对每一档都 ≥5%）
+  const others = A.LINGGEN.filter(g => g.id !== "dan" && g.id !== "wei");
+  const speedLead = others.every(g => dan.qi / g.qi >= 1.05);
+  // 方向 ②：门槛不再是全场最严（旧表 ×1.00 是最严的）
+  const threshOk = dan.thresh <= 0.95;
+  // 方向 ③：速度轴是主收益轴 —— 单灵根必须吸满
+  return speedLead && threshOk && dan.qi >= 1.40;
+})(), (function () {
+  const dan = A.LINGGEN.find(g => g.id === "dan");
+  return "单灵根 qi×" + dan.qi + " / 门槛×" + dan.thresh;
+})());
 
 // ---- 随机抽取 + 指定 ----
 A.lgSet(null);
@@ -2710,9 +2732,9 @@ const seen38 = {};
 for (let i = 0; i < 6000; i++) { const g = A.lgResetLinggen(); seen38[g.id] = (seen38[g.id] || 0) + 1; }
 console.log("     6000 次抽样: " + Object.keys(seen38).map(k => k + ":" + (seen38[k] / 60).toFixed(1) + "%").join(" "));
 chk("★ 六种灵根都能抽到", Object.keys(seen38).length === 6, Object.keys(seen38).length + " 种");
-chk("★ 单灵根确实稀有（3%~7%）", (function () {
+chk("★ 单灵根确实稀有（1%~3.5%）", (function () {
   const r = (seen38["dan"] || 0) / 6000;
-  return r > 0.03 && r < 0.07;
+  return r > 0.01 && r < 0.035;
 })(), ((seen38["dan"] || 0) / 6000 * 100).toFixed(1) + "%");
 chk("★ 灵根随机抽五行（不是固定顺序）", (function () {
   A.lgSet(null); const sets = new Set();
@@ -4026,18 +4048,18 @@ chk('★ 底部导航只有 境/宗', (_H.match(/data-go="[a-z]+"/g) || []).leng
 chk('★ 已经没有 data-go="zhuang"/"lu"',
   !/data-go="(zhuang|lu)"/.test(_H));
 chk('★ 史册馆在宗页的【宗门大殿】容器里', (function () {
-  // ⚠️ Round 45 修订：Round 44 我把史册塞进了【藏经阁】(script) —— 顺序搞错了。
-  //   正确：宗门大殿(hall) = 门规 + 史册馆；藏经阁(script) = 功法研究
+  // ⚠️ Round 50 修订：Round 45 说"宗门大殿(hall)"—— 但 hall 其实是【议事堂】（后楼右塔）
+  //   ⇒ 结果点议事堂进了史册馆（用户报）。现在 arch = 宗门大殿，史册挂在 arch 里。
   const zs = _H.indexOf('data-v="zong"');
   const a = _H.indexOf('id="archiveBox"');
-  const hall = _H.indexOf('<div data-fac="hall"');
-  const next = _H.indexOf('<div data-fac="', hall + 10);
-  return zs >= 0 && a > zs && hall > 0 && a > hall && (next < 0 || a < next);
+  const arch = _H.indexOf('<div data-fac="arch"');
+  const next = _H.indexOf('<div data-fac="', arch + 10);
+  return zs >= 0 && a > zs && arch > 0 && a > arch && (next < 0 || a < next);
 })(), (function () {
   const a = _H.indexOf('id="archiveBox"');
-  const s = _H.indexOf('<div data-fac="script"');
   const hh = _H.indexOf('<div data-fac="hall"');
-  return a > hh ? '在 hall' : (a > s ? '在 script(错)' : '?');
+  const ar = _H.indexOf('<div data-fac="arch"');
+  return a > ar ? '在 arch（宗门大殿）' : (a > hh ? '在 hall（议事堂 · 错）' : '?');
 })());
 chk('★ 生平流水也并入宗页', /id="logBox"/.test(_H));
 chk('★ 装页的经络图搬进背包抽屉', (function () {
@@ -4213,6 +4235,72 @@ chk('★ 前线引用重连（是 list 里的同一对象）',
   ' n=' + A.ROSTER.list.length + ' ids=' + A.ROSTER.list.map(x=>x.id).join(',') +
   ' alive=' + A.ROSTER.list.map(x=>x.alive?1:0).join(''));
 chk('★ 分派规则恢复', A.ROSTER.rule && A.ROSTER.rule.kind, JSON.stringify(A.ROSTER.rule));
+// ============================================================================
+hdr('测试 54：Round 50 —— 地图加大 + 设施归位 + 灵根重排');
+//   三个用户诉求：
+//     ① 宗门全景占比变大 + 顶排建筑名看得见
+//     ② 宗门大殿 = 宗门史册（点它不再进藏经阁）；议事堂不再是史册
+//     ③ 灵根越少越难出，且单灵根综合收益最高
+const _H50 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
+const _J50 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8');
+
+// ---- ① 地图 ----
+chk('★ 地图加高（230px，按高度铺满）', /\.sect-map\{[^}]*height:230px/.test(_H50));
+chk('★ 地图有 .map-in 包裹层（热点按图片定位 ⇒ 横向裁剪不错位）',
+  /class="map-in"/.test(_H50) && /\.sect-map \.map-in\{/.test(_H50));
+chk('★ 图片按高度铺满（height:100% + width:auto）',
+  /\.sect-map \.mimg\{[^}]*height:100%/.test(_H50) && /\.sect-map \.mimg\{[^}]*width:auto/.test(_H50));
+chk('★ 顶排建筑标签改放下方（.spot.tag-b）',
+  /\.spot\.tag-b \.tag\{/.test(_H50) && /b\.y < 14 \? ' tag-b'/.test(_J50));
+chk('★ #sectSpots 相对包裹层定位', /#sectSpots\{position:absolute;inset:0\}/.test(_H50));
+
+// ---- ② 设施归位 ----
+chk('★ arch 是正式设施（宗门大殿 · slots 0）', (function () {
+  const f = A.FACILITIES.find(x => x.id === 'arch');
+  return !!f && f.name === '宗门大殿' && f.slots === 0;
+})(), (function () {
+  const f = A.FACILITIES.find(x => x.id === 'arch');
+  return f ? (f.name + ' slots=' + f.slots) : '(缺 arch)';
+})());
+chk('★ hall 是【议事堂】', (A.FACILITIES.find(x => x.id === 'hall') || {}).name === '议事堂');
+chk('★ FAC_TITLE：arch=宗门大殿 · hall=议事堂', (function () {
+  const m = _J50.match(/const FAC_TITLE = \{[\s\S]*?\};/);
+  return !!m && /arch:\s*'宗门大殿'/.test(m[0]) && /hall:\s*'议事堂'/.test(m[0]);
+})());
+chk('★ 热点 arch 不再是 special', !/fac: 'arch',[^}]*special/.test(_J50));
+chk('★ 删掉 openFacility("script") 硬编码（点宗门大殿进藏经阁那个 bug）',
+  !/openFacility\("script"\)/.test(_J50));
+chk('★ 点建筑一律 openFacility(data-b)',
+  /openFacility\(s\.getAttribute\("data-b"\)\)/.test(_J50));
+chk('★ openFacility 里史册馆走 arch', /if \(fid === 'arch'\)/.test(_J50));
+chk('★ renderSectPanel 的档案面板判 arch', /if \(b\.fac === 'arch'\)/.test(_J50));
+chk('★ 后勤岗位总数不因新增 arch 变化', (function () {
+  const n = A.FACILITIES.reduce((a, f) => a + (f.slots || 0), 0);
+  return n === 26;
+})(), '岗位合计 ' + A.FACILITIES.reduce((a, f) => a + (f.slots || 0), 0));
+chk('★ 设施壳与内容块数量一致（含 arch）', (function () {
+  const shells = (_H50.match(/class="fac" data-fac="\w+"/g) || []).length;
+  const content = (_H50.match(/<div data-fac="\w+"[^>]*>/g) || []).length;
+  return shells === content && shells >= 9;
+})(), (function () {
+  const shells = (_H50.match(/class="fac" data-fac="\w+"/g) || []).length;
+  const content = (_H50.match(/<div data-fac="\w+"[^>]*>/g) || []).length;
+  return '壳=' + shells + ' 内容=' + content;
+})());
+
+// ---- ③ 灵根 ----
+chk('★ 出现率严格单调（灵根越少越难出）', (function () {
+  const order = ['dan', 'shuang', 'san', 'si', 'wu'];
+  const rs = order.map(id => A.LINGGEN.find(g => g.id === id).rate);
+  for (let i = 1; i < rs.length; i++) if (rs[i] <= rs[i - 1]) return false;
+  return true;
+})(), ['dan', 'shuang', 'san', 'si', 'wu']
+  .map(id => A.LINGGEN.find(g => g.id === id).rate).join(' < '));
+chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
+  const d = A.LINGGEN.find(g => g.id === 'dan');
+  return d.qi === 1.40 && d.thresh === 0.95;
+})());
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));

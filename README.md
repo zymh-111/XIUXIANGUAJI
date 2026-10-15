@@ -50,7 +50,7 @@
 │   ├── 游戏/
 │   │   ├── index.html          ← 界面（单页，两页签：境 / 宗）
 │   │   ├── _game.js            ← 全部游戏逻辑（约 8,400 行）
-│   │   ├── _smoke.js           ← 冒烟测试（747 项断言，52 个测试组）
+│   │   ├── _smoke.js           ← 冒烟测试（766 项断言，53 个测试组）
 │   │   └── _init_test.js       ← 初始化自检
 │   ├── 发布/                    ← 打包产物（zip）
 │   └── _build_release.js       ← 打包脚本
@@ -80,7 +80,7 @@
 
 ```bash
 cd 原型/游戏
-node _smoke.js        # 747 项断言
+node _smoke.js        # 766 项断言
 node _init_test.js    # 初始化自检（exit 0 = 通过）
 ```
 

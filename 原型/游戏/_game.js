@@ -370,6 +370,21 @@ const SHAPES = {
 };
 const SLOT_MAIN = { '主手':'攻击', '副手':'攻击', '头':'防御', '肩':'防御', '胸':'防御',
   '腰':'防御', '手':'速度', '腿':'防御', '足':'速度', '项链':'生命', '戒指':'生命' };
+// ★ 部位 → 装备器型（文案里不能拿槽位名当装备名："足"槽里的东西是"靴"，不是"足"）
+const SLOT_NOUN = {
+  '主手':'武器', '副手':'武器', '头':'冠', '项链':'项链', '肩':'肩甲',
+  '胸':'战甲', '腰':'腰带', '手':'护手', '戒指':'戒指', '腿':'护腿', '足':'靴',
+};
+// ★ 部位 → 量词（"一双靴 / 一枚戒 / 一把剑"；武器再按实际类型细分）
+const SLOT_MEASURE = {
+  '头':'顶', '项链':'串', '肩':'副', '胸':'件', '腰':'条',
+  '手':'副', '戒指':'枚', '腿':'副', '足':'双',
+};
+const WEAPON_MEASURE = { sword:'把', blade:'把', spear:'杆', bow:'张', staff:'根' };
+function itemMeasure(slot, weaponId) {
+  if (slot === '主手' || slot === '副手') return '一' + (WEAPON_MEASURE[weaponId] || '把');
+  return '一' + (SLOT_MEASURE[slot] || '件');
+}
 
 // ★ 武器类型（用户提案：不同武器的【攻击范围】与【AOE 数量】互为取舍）
 //
@@ -596,26 +611,26 @@ function idleReportData(sinceMs) {
         if (seenBreak[e.realm]) continue;          // 同一境界只记一次
         seenBreak[e.realm] = 1;
         const gain = (e.atkAfter && ch.peakAtk) ? (e.atkAfter - ch.peakAtk) : 0;
-        ch.lines.push({ t: e.t, k: 'break',
+        ch.lines.push({ t: e.t, k: 'break', e: e,
           txt: '破入【' + e.realm + '】' + (e.atkAfter ? ' · 攻击 ' + e.atkAfter : '') +
             (gain > 0 ? '（+' + gain + '）' : '') });
       }
-      else if (e.type === 'drop_myth') ch.lines.push({ t: e.t, k: 'myth', txt: '得【神话·' + (e.slot || '') + '】' });
-      else if (e.type === 'drop_legend') ch.lines.push({ t: e.t, k: 'legend', txt: '获【传奇·' + (e.slot || '') + '】' });
-      else if (e.type === 'elite_king') ch.lines.push({ t: e.t, k: 'kill', txt: '斩【' + (e.name || '精英') + '】' });
-      else if (e.type === 'boss_kill') ch.lines.push({ t: e.t, k: 'kill', txt: '讨伐 Boss【' + (e.name || '') + '】' });
-      else if (e.type === 'legacy_get') ch.lines.push({ t: e.t, k: 'legacy', txt: '取回先辈传承 ' + (e.n || 0) + ' 件' });
-      else if (e.type === 'dujie_ok') ch.lines.push({ t: e.t, k: 'dujie', txt: '渡劫成功' + (e.realm ? ' → 【' + e.realm + '】' : '') });
-      else if (e.type === 'dujie_fail') ch.lines.push({ t: e.t, k: 'bad', txt: '渡劫失败' + (e.realm ? '（冲【' + e.realm + '】未成）' : '（留道伤）') });
+      else if (e.type === 'drop_myth') ch.lines.push({ t: e.t, k: 'myth', e: e, txt: '得【神话·' + (e.nm || SLOT_NOUN[e.slot] || e.slot || '') + '】' });
+      else if (e.type === 'drop_legend') ch.lines.push({ t: e.t, k: 'legend', e: e, txt: '获【传奇·' + (SLOT_NOUN[e.slot] || e.slot || '') + '】' });
+      else if (e.type === 'elite_king') ch.lines.push({ t: e.t, k: 'kill', e: e, txt: '斩【' + (e.name || '精英') + '】' });
+      else if (e.type === 'boss_kill') ch.lines.push({ t: e.t, k: 'kill', e: e, txt: '讨伐 Boss【' + (e.name || '') + '】' });
+      else if (e.type === 'legacy_get') ch.lines.push({ t: e.t, k: 'legacy', e: e, txt: '取回先辈传承 ' + (e.n || 0) + ' 件' });
+      else if (e.type === 'dujie_ok') ch.lines.push({ t: e.t, k: 'dujie', e: e, txt: '渡劫成功' + (e.realm ? ' → 【' + e.realm + '】' : '') });
+      else if (e.type === 'dujie_fail') ch.lines.push({ t: e.t, k: 'bad', e: e, txt: '渡劫失败' + (e.realm ? '（冲【' + e.realm + '】未成）' : '（留道伤）') });
       else if (e.type === 'death_old') ch.cause = '善终';
       else if (e.type === 'death_handover') ch.cause = '主动交接';
       else if (e.type === 'death_battle') ch.cause = '战死秘境';
-      else if (e.type === 'ascend') ch.lines.push({ t: e.t, k: 'ascend', txt: '★ 羽化飞仙' });
+      else if (e.type === 'ascend') ch.lines.push({ t: e.t, k: 'ascend', e: e, txt: '★ 羽化飞仙' });
       // ---- 宗门账（下区）----
-      else if (e.type === 'sect_rank') ch.sect.push({ t: e.t, k: 'rank', txt: '宗门晋为【' + (e.rank || '') + '】' });
-      else if (e.type === 'rule_add') ch.sect.push({ t: e.t, k: 'rule', txt: '立门规〈' + (e.axis || '') + '·' + (e.value || '') + '〉' });
-      else if (e.type === 'rule_neg') ch.sect.push({ t: e.t, k: 'neg', txt: '积弊成形〈避' + (e.zone || '') + '〉' });
-      else if (e.type === 'recruit') ch.sect.push({ t: e.t, k: 'recruit', txt: '招徒 ' + (e.n || 0) + ' 人' });
+      else if (e.type === 'sect_rank') ch.sect.push({ t: e.t, k: 'rank', e: e, txt: '宗门晋为【' + (e.rank || '') + '】' });
+      else if (e.type === 'rule_add') ch.sect.push({ t: e.t, k: 'rule', e: e, txt: '立门规〈' + (e.axis || '') + '·' + (e.value || '') + '〉' });
+      else if (e.type === 'rule_neg') ch.sect.push({ t: e.t, k: 'neg', e: e, txt: '积弊成形〈避' + (e.zone || '') + '〉' });
+      else if (e.type === 'recruit') ch.sect.push({ t: e.t, k: 'recruit', e: e, txt: '招徒 ' + (e.n || 0) + ' 人' });
     }
     const h = SECT.history.find(function (x) { return x.gen === g; });
     ch.runs = h ? h.runs : 0;
@@ -653,7 +668,15 @@ function fmtClock(ms) {
 // ★ 渲染编年史（双区）
 function renderIdleReport(sinceMs) {
   const d = idleReportData(sinceMs);
+  const since = sinceMs || G._seenAt || 0;
+  const periodEvents = EVENTS.filter(function (_e) { return _e.t > since && _e.imp >= 4; });
+  const master = currentMaster();
   let h = '';
+  // ---- 宗主报信（归山见闻的"脸"）----
+  h += '<div class="rp-master">宗主' + (master ? master.name : '?') +
+    '禀：你不在的时候，宗门如下——</div>';
+  // ---- 各部长老轶事（活气）----
+  h += renderElderAnecdotes(periodEvents);
   // ---- 上区：弟子生平（带时刻 + 强度跃升）----
   if (!d.disciple.length) {
     h += '<p class="cr-empty">宗门平静，弟子在秘境中默默打磨。</p>';
@@ -673,7 +696,9 @@ function renderIdleReport(sinceMs) {
       if (ch.lines.length) {
         h += '<div class="cr-body">';
         for (const l of ch.lines) {
-          h += '<div class="cr-li cr-' + l.k + '">' + fmtClock(l.t) + '　' + l.txt + '</div>';
+          let txt = l.txt;
+          if (l.e) { const p = eventPhrase(l.e.type, l.e, ch.gen, ch.name); if (p) txt = p; }
+          h += '<div class="cr-li cr-' + l.k + '">' + fmtClock(l.t) + '　' + txt + '</div>';
         }
         h += '</div>';
       } else {
@@ -685,10 +710,21 @@ function renderIdleReport(sinceMs) {
       h += '</div></div>';
     }
   }
-  // ---- 下区：宗门账 ----
+  // ---- 下区：宗门账 + 换代轶事 ----
   const sectLines = [];
   for (const ch of d.disciple) {
-    for (const s of ch.sect) sectLines.push({ t: s.t, txt: '第 ' + ch.gen + ' 代 · ' + s.txt, k: s.k });
+    for (const s of ch.sect) {
+      let txt = s.txt;
+      if (s.e) { const p = eventPhrase(s.e.type, s.e, ch.gen, ''); if (p) txt = p; }
+      sectLines.push({ t: s.t, txt: '第 ' + ch.gen + ' 代 · ' + txt, k: s.k });
+    }
+  }
+  // 换代轶事（长老/宗主交班）：归山见闻里"送别"那一下
+  for (const _e of periodEvents) {
+    if (_e.type === 'elder_change') {
+      sectLines.push({ t: _e.t, txt: '宗主' + (master ? master.name : '') + '禀：' +
+        (_e.fac || '宗门') + '换人了，' + (_e.old || '') + ' 卸任，' + (_e.neu || '') + ' 接手。', k: 'handover' });
+    }
   }
   if (sectLines.length) {
     sectLines.sort(function (a, b) { return a.t - b.t; });
@@ -698,6 +734,281 @@ function renderIdleReport(sinceMs) {
     }
     h += '</div>';
   }
+  return h;
+}
+
+// ---------------- 叙事层（Round 51）：长老 / 宗主 / 归山见闻活气 ----------------
+//
+// 设计依据：叙事层文案库_待审.md（§六 ③ 事件池 / §十一 长老轶事 / §十二 宗主）
+//   目标：归山见闻从"冷事件列表"变成"宗主向你禀报 + 各部长老带着本设施弟子做事"。
+//   零数值改动：所有内容只把现有 EVENTS / SECT / ROSTER 翻译成人话。
+
+// 共享事件描述池（归山见闻 + 生平卷共用；相邻代按 gen%长度 轮换，不撞词）
+// 键 = 实际 ev() 事件类型；文档里尚未触发的类型（drop_myth/boss_kill/...）留作扩展钩子
+const EVENT_POOL = {
+  break: [
+    '他在秘境最深处破了{realm}。那道关他卡了很久。',
+    '他是在秘境破了{realm}。旁边没人。',
+    '突破{realm}那天，铜牌自己亮的。他没告诉任何人。',
+  ],
+  dujie_ok: [
+    '他过了雷劫。那道劫劈了他三次，他站起来三次。',
+    '雷劫落尽，他睁着眼。{realm}成了。',
+    '护道阵亮了一夜。天亮时，他站在灰里，{realm}成了。',
+  ],
+  dujie_fail: [
+    '他试了一次{realm}雷劫。没成。道伤留到了最后。',
+    '那次雷劫之后，他再没提过{realm}两个字。',
+    '第三次冲{realm}，还是同一个时辰、同一个法子。还是没成。',
+  ],
+  tourney: [
+    '他在擂台站到了第{rank}。台下没人再敢上台。',
+    '擂台连胜{rank}场。最后一场他只用了三息。',
+    '台上的人换了一茬又一茬。他一直站着，没人记得他第几场开始的。',
+  ],
+  death_old: [
+    '寿元到了。他是坐着走的，手还攥着那柄断剑。',
+    '寿元尽。他死在自己的床上，灯是最后灭的。',
+    '同辈一个个进了土。他坐在那儿，比谁都久。',
+  ],
+  death_battle: [
+    '他没回来。宗门去取遗物时，剑还在他手里。',
+    '他死在秘境深处。旁边是那头他最后挑的怪。',
+    '他不是打不过，是不肯退。最后一刻剑还往前递。',
+  ],
+  legacy_get: [
+    '他去秘境取回了先辈遗落的{n}件。铜灯亮到后半夜，他一件件擦干净。',
+    '先辈的东西散在秘境各处。他这一趟，找回了{n}件。',
+    '第三代遗落的三件，他认得出每一件的来历。他说得出第三代的灵根。',
+  ],
+  sect_rank: [
+    '宗门升到了{阶名}。山门那块匾，换成了新的。',
+    '这一代，宗门从{旧阶}挤进了{新阶}。账上第一次有了结余。',
+    '三阶到四阶卡了很久。这代弟子打回来的东西，把这道坎填平了。',
+  ],
+  sect_up: [
+    '{name}又升了一级。炉火没断过。',
+    '宗门把{name}扩了一层。能同时带的人，多了一倍。',
+  ],
+  // —— 扩展钩子（当前版本尚未触发的事件类型，预留文案，触发即共享）——
+  drop_myth: [
+    '他在秘境的乱石缝里摸到{量}{宝名}——神话品，上面还沾着上一任主人的血。',
+    '小怪身上竟然有{量}{宝名}——神话品。弟子一把夺了过来。',
+    '他带回{量}{宝名}，神话品。宝库里没人认得上面的纹，他也不说从哪来。',
+  ],
+  elite_king: [
+    '他去挑了{mob}——你走前念叨了两天没敢去的那头。',
+    '他把{mob}的角拔了下来，搁在宗门门口。那角比人还高。',
+    '{mob}盘踞秘境三年，没人敢惹。他进去时没跟任何人说。',
+  ],
+  boss_kill: [
+    '他讨了秘境的{mob}，回来时半身是血，怀里抱着那颗首级。',
+    '{mob}的鳞甲他剥了一半带走，剩下一半还晾在秘境深处。',
+    '他一个人去的{mob}。宗门听说时，那颗首级已经挂在山门上了。',
+  ],
+  ascend: [
+    '他破空而去。宗门史册上这一页只有八个字。',
+    '他踏破了那层天。再没人见过他。',
+  ],
+  rule_change: [
+    '门规改了一条。原来的"不恋战"划掉，换成"见强则避，见弱则清"。',
+    '山门那面墙，每年重抄一次。今年多了半行，是关于收尸的。',
+  ],
+  fac_build: [
+    '新锻部落成了。炉火第一天就没熄。',
+    '藏经阁加了一进。新架子上还空着，等后人来填。',
+  ],
+  fac_upgrade: [
+    '传功阁扩了一层。能同时带的人，多了一倍。',
+    '宝库加了锁。你以前随手塞的东西，现在有了固定位置。',
+  ],
+  heritage_gain: [
+    '{量}{宝名}进了宝库，神话品。它原本躺在秘境深处，现在摆在最里头。',
+    '先辈的传承残卷凑齐了。宗门底蕴那一栏，第一次满。',
+  ],
+  pvp_win: [
+    '邻宗来犯，被打退了。他们留在山门口的那面旗，现在当柴烧。',
+    '这一战，宗门名号第一次传到了境外。',
+  ],
+  pvp_lose: [
+    '邻宗踩过了我们的线。这一代，山门后头那片林子没了。',
+    '输了一场。荣誉栏减了，但人都在。',
+  ],
+  lineage_break: [
+    '这一代，没人接传承。宗门的功法，空了一阵。',
+    '断层了。下一代入门时，得从头教。',
+  ],
+};
+
+// 占位符兜底填充（避免渲染出 undefined）
+function fillPhrase(s, e, name) {
+  e = e || {};
+  const prevRank = SECT_RANKS[Math.max(0, (SECT.rank | 0) - 1)];
+  const fb = {
+    name: name || '',
+    zone: e.zone || '秘境',
+    mob: e.name || '那头妖',
+    slot: SLOT_NOUN[e.slot] || e.slot || '件',
+    宝名: e.nm || SLOT_NOUN[e.slot] || e.slot || '装备',
+    量: itemMeasure(e.slot, e.wp),
+    realm: e.realm || '',
+    n: (e.n != null) ? e.n : ((e.lost != null) ? e.lost : ''),
+    rank: (e.rank != null) ? e.rank : '',
+    tier: (e.tier != null) ? e.tier : '',
+    old: e.old || '', neu: e.neu || '', fac: e.fac || '',
+    阶名: e.rank || '', 新阶: e.rank || '', 旧阶: prevRank ? prevRank.n : '微末',
+    底蕴: (SECT.legacyPool.length + SECT.lostLegacy.length),
+  };
+  return String(s).replace(/\{([^{}]+)\}/g, function (_, k) { return (fb[k] != null) ? fb[k] : ''; });
+}
+function eventPhrase(type, e, gen, name) {
+  const arr = EVENT_POOL[type];
+  if (!arr || !arr.length) return null;
+  const idx = (((gen | 0) % arr.length) + arr.length) % arr.length;
+  return fillPhrase(arr[idx], e, name);
+}
+
+// 长老任期基准：前线最高修为寿元（锚定"前线最高修为寿元"）
+function frontlineTopLifeYears() {
+  const rl = Math.min(11, Math.ceil((SECT.topTier || 0) / 2));
+  let y = P.LIFESPAN_YEARS;
+  for (let i = 1; i <= rl; i++) y += LIFE_PER_REALM[i];
+  return Math.min(LIFE_CAP_YEARS, y);
+}
+// 任期（代）：以"年"计再除 100（1 代≈100 年）；宗主倍率更大
+function elderTenureGens(isMaster) {
+  const base = frontlineTopLifeYears();
+  const mul = isMaster ? (10 + 2 * (SECT.rank | 0)) : (5 + (SECT.rank | 0));
+  return Math.max(3, Math.round(base * mul / P.LIFESPAN_YEARS));
+}
+function currentMaster() {
+  if (!SECT.elders || !SECT.sectMaster) return null;
+  return SECT.elders[SECT.sectMaster] || null;
+}
+function masterName() { const m = currentMaster(); return m ? m.name : ''; }
+
+// 保证长老班底存在（建宗 / 读档 / 旧档缺失都走这）
+function ensureElders() {
+  if (!SECT.elders || typeof SECT.elders !== 'object') SECT.elders = {};
+  const allThere = FACILITIES.every(function (f) {
+    return SECT.elders[f.id] && SECT.elders[f.id].name;
+  });
+  if (allThere && SECT.sectMaster) return;
+  for (const f of FACILITIES) {
+    if (!SECT.elders[f.id] || !SECT.elders[f.id].name) {
+      SECT.elders[f.id] = {
+        name: makeDiscipleName(),
+        sinceGen: SECT.generation,
+        dieGen: SECT.generation + elderTenureGens(false),
+        facility: f.id,
+      };
+    }
+  }
+  if (!SECT.sectMaster) SECT.sectMaster = 'gate';
+}
+
+// 每代检查长老/宗主任期，到则交班（写进 EVENTS，归山见闻会呈现）
+function rotateElders() {
+  if (!SECT.elders) { ensureElders(); return; }
+  const changed = [];
+  for (const f of FACILITIES) {
+    const el = SECT.elders[f.id];
+    if (!el || !el.name) continue;
+    if ((SECT.generation | 0) >= (el.dieGen | 0)) {
+      const old = el.name;
+      const neu = pickNewElderName(f.id, old);
+      SECT.elders[f.id] = {
+        name: neu, sinceGen: SECT.generation,
+        dieGen: SECT.generation + elderTenureGens(false), facility: f.id,
+      };
+      changed.push({ fac: f.name, old: old, neu: neu });
+    }
+  }
+  // 宗主
+  if (SECT.sectMaster && SECT.elders[SECT.sectMaster]) {
+    const m = SECT.elders[SECT.sectMaster];
+    if ((SECT.generation | 0) >= (m.dieGen | 0)) {
+      const old = m.name;
+      const cand = FACILITIES.filter(function (x) { return x.id !== SECT.sectMaster; })
+        .map(function (x) { return SECT.elders[x.id]; }).filter(function (e) { return e && e.name; });
+      const neu = cand.length ? cand[0].name : makeDiscipleName();
+      const newKey = cand.length ? cand[0].facility : 'gate';
+      SECT.sectMaster = newKey;
+      changed.push({ fac: '宗门', old: old, neu: neu, master: true });
+    }
+  }
+  for (const c of changed) {
+    log('✦ 长老交班：' + c.fac + '，' + c.old + ' 卸任，' + c.neu + ' 接手', 'sys');
+    ev('elder_change', 6, { fac: c.fac, old: c.old, neu: c.neu, reason: c.master ? 'master' : 'retire' });
+  }
+}
+function pickNewElderName(fac, oldName) {
+  const used = {};
+  for (const k in SECT.elders) if (SECT.elders[k] && SECT.elders[k].name) used[SECT.elders[k].name] = 1;
+  const backs = (ROSTER.list || []).filter(function (d) {
+    return d.alive && d.role === 'back' && d.name !== oldName && !used[d.name];
+  }).sort(function (a, b) { return (b.tier || 0) - (a.tier || 0); });
+  if (backs.length) {
+    const pick = backs[0];
+    if (pick.post !== fac) pick.post = fac;
+    return pick.name;
+  }
+  for (let i = 0; i < 12; i++) {
+    const nm = makeDiscipleName();
+    if (!used[nm]) return nm;
+  }
+  return makeDiscipleName();
+}
+
+// 长老带本设施弟子（活气来源）
+const ELDER_DEFAULT = {
+  forge: '{name}带着{d}守在炉边敲了半日，火星子没断过。',
+  train: '{name}把新来的娃们拢在廊下，{d}跟着一遍遍拆那式起手。',
+  script: '{name}就着窗光抄谱，{d}在旁研墨，指节都黑了。',
+  vault: '{name}把里间的锁挨个拨了一遍，{d}在后面数着数目。',
+  legacy: '{name}守着那几样旧物，{d}替他拂灰，半点不让落。',
+  life: '{name}守着丹炉，{d}闻味就知道火候差半分。',
+  gate: '{name}倚着门框，{d}跟着他打量每一个入门的新弟子。',
+  arch: '{name}在殿里添了半页，{d}在旁研墨，墨还没干。',
+  hall: '议事堂还空着，{name}的活儿暂由宗主自己扛。',
+};
+// 设施 → 触发覆盖的事件类型（与 §十一 ③ 同）
+const ELDER_COVER = {
+  forge: { type: 'sect_up', tmpl: '{name}带着{d}把新锻台摸了又摸——这回打得动更沉的家伙了。' },
+  train: { type: 'dujie_ok', tmpl: '{name}听见后山雷响，{d}也跟着望，知是有人破境，捋须笑了。' },
+  script: { type: 'legacy_get', tmpl: '{name}把一卷没人认得的残谱供上了架，{d}在旁问"师父这写的啥"，他说"迟早有人懂"。' },
+  gate: { type: 'rule', tmpl: '{name}把新门规念了一遍，{d}在后面跟着念，末了补一句"都记着"。' },
+  life: { type: 'life_gain', tmpl: '{name}给炉里续了一截火，{d}闻着丹香飘出半座山。' },
+};
+// 本设施当前轮值的几名弟子名（取不到则降级：用任意在册弟子凑，保证有活气）
+function elderDisciples(fac, n) {
+  let arr = (ROSTER.list || []).filter(function (d) { return d.alive && d.post === fac; })
+    .map(function (d) { return d.name; });
+  if (arr.length < n) {
+    const extra = (ROSTER.list || []).filter(function (d) {
+      return d.alive && d.name && arr.indexOf(d.name) < 0;
+    }).map(function (d) { return d.name; });
+    for (let i = 0; i < extra.length && arr.length < n; i++) arr.push(extra[i]);
+  }
+  return arr.slice(0, n);
+}
+function renderElderAnecdotes(periodEvents) {
+  if (!SECT.elders) return '';
+  let h = '<div class="rp-elders"><div class="rp-elders-hd">各部长老</div>';
+  for (const f of FACILITIES) {
+    const el = SECT.elders[f.id];
+    if (!el || !el.name) continue;
+    const ds = elderDisciples(f.id, 3);
+    const dStr = ds.length ? ds.join('、') : '';
+    let tmpl = ELDER_DEFAULT[f.id] || ('{name}在' + f.name + '值守。');
+    const cov = ELDER_COVER[f.id];
+    if (cov && periodEvents && periodEvents.some(function (e) { return e.type === cov.type; })) {
+      tmpl = cov.tmpl;
+    }
+    const line = tmpl.replace(/\{name\}/g, el.name).replace(/\{d\}/g, dStr);
+    h += '<div class="rp-el"><b>' + f.name + '·' + el.name + '</b>：' + line + '</div>';
+  }
+  h += '</div>';
   return h;
 }
 
@@ -1681,6 +1992,12 @@ const FACILITIES = [
     desc: '为驻宗弟子续命', rate: 1.5 },
   // ★ Round 46：山门 —— 门规 / 训话（宗门法纪）
   { id: 'gate', name: '山门', slots: 2, out: 'none', desc: '宗门法纪（门规 · 训话）' },
+  // ★★ Round 50：宗门大殿 —— 宗门史册（编年 / 历代弟子传 / 大事记 / 突破录）
+  //   ⚠️ 它原来只是地图上的一个 special 热点，内容却寄存在 hall 里
+  //      ⇒ 点后楼右塔（议事堂）看到的是宗门史册（用户报："议事堂里面怎么是宗门史册"）
+  //   ⇒ 现在正式独立成设施；slots: 0 ⇒ 不占后勤岗位名额（totalSlots() 不变）
+  { id: 'arch', name: '宗门大殿', slots: 0, out: 'none',
+    desc: '宗门编年 · 历代弟子传 / 大事记 / 突破录' },
   { id: 'hall', name: '议事堂', slots: 2, out: 'info',
     desc: '秘境情报（提高倾向命中）', rate: 0.01 },
 ];
@@ -2041,7 +2358,7 @@ function reforge(it) {
   const before = old.reduce((s, id) => s + affixScoreOf(id), 0);
   const after = it.affixes.reduce((s, id) => s + affixScoreOf(id), 0);
   const verdict = after > before ? '变好' : (after < before ? '变差' : '持平');
-  log('✦ 重铸 ' + it.slot + '（耗素材 ' + cost + '）· ' + old.length + ' → ' +
+  log('✦ 重铸 ' + itemName(it) + '（耗素材 ' + cost + '）· ' + old.length + ' → ' +
     it.affixes.length + ' 条 · ' + verdict, after < before ? 'warn' : 'ok');
   ev('reforge', 6, { slot: it.slot, cost, verdict });
   SECT_RES.reforged++;
@@ -2126,27 +2443,34 @@ function targetPool() {
 //
 //   | 灵根   | 五行数 | 修炼速度 | 同调加成   | 出现率 |
 //   |--------|--------|----------|------------|--------|
-//   | 单灵根 | 1      | ×1.30    | 门槛 ×1.00 |  5%    |
-//   | 双灵根 | 2      | ×1.15    | 门槛 ×0.92 | 15%    |
-//   | 三灵根 | 3      | ×1.05    | 门槛 ×0.85 | 25%    |
-//   | 四灵根 | 4      | ×0.95    | 门槛 ×0.78 | 32%    |
-//   | 五灵根 | 5      | ×0.80    | 门槛 ×0.70 |  3%    |
+//   | 单灵根 | 1      | ×1.40    | 门槛 ×0.95 |  2%    |
+//   | 双灵根 | 2      | ×1.15    | 门槛 ×0.92 |  6%    |
+//   | 三灵根 | 3      | ×1.05    | 门槛 ×0.85 | 14%    |
+//   | 四灵根 | 4      | ×0.95    | 门槛 ×0.78 | 28%    |
+//   | 五灵根 | 5      | ×0.80    | 门槛 ×0.70 | 30%    |
 //   | 伪灵根 | 0（杂）| ×0.70    | 门槛 ×1.00 | 20%    |
+//
+//   ★★ Round 50（用户要求）：出现率改为【严格单调 —— 灵根越少越难出】
+//     旧表的问题：四灵根最多（32%），而五灵根只有 3% —— **比单灵根（5%）还稀有**
+//     ⇒ 与"越少越难出"完全相反。用户："灵根越少越难出"
+//     新表：2 / 6 / 14 / 28 / 30（+ 伪灵根 20），随五行数单调上升
+//
+//   ★★ Round 50：单灵根收益拉到【总体最高】
+//     旧的单灵根 qi ×1.30 / 门槛 ×1.00 —— 修炼最快，但同调门槛【最严】，
+//     而四/五灵根门槛低得多 ⇒ 综合下来未必是单灵根最强
+//     ⇒ ① qi 1.30 → **1.40**（速度优势拉大）
+//        ② 门槛 1.00 → **0.95**（不再是"最严"，仍严于双灵根之下各档的对照关系见断言）
+//     多灵根保留"同调门槛更低"的特色，但**不再能靠它反超单灵根的总收益**
 //
 //   ⇒ 单灵根 = 修炼快（但也只能吃一种相性，面对克制自己的秘境吃亏）
 //   ⇒ 四/五灵根 = 修炼慢（但同调门槛低 ⇒ 同调等级更容易上去）
 //   ⇒ 伪灵根 = 五行皆通但皆不精（小说里最常见的"废柴"开局）
-//
-//   设计意图：**给"随机弟子"一个真实的方向差异**，而不是纯数值高低。
-//   挂机游戏不该要求玩家反复刷灵根，所以：
-//     · 每一代都随机（用户要求）
-//     · 六种灵根没有"绝对最优"（单灵根快但脆，四灵根慢但厚）
 const LINGGEN = [
-  { id: 'dan',  name: '单灵根', n: 1, rate: 0.05, qi: 1.30, thresh: 1.00, desc: '天灵根，万中无一 · 修炼极快' },
-  { id: 'shuang', name: '双灵根', n: 2, rate: 0.15, qi: 1.15, thresh: 0.92, desc: '上等资质 · 修炼快' },
-  { id: 'san',  name: '三灵根', n: 3, rate: 0.25, qi: 1.05, thresh: 0.85, desc: '中等资质' },
-  { id: 'si',   name: '四灵根', n: 4, rate: 0.32, qi: 0.95, thresh: 0.78, desc: '下等资质 · 同调易成' },
-  { id: 'wu',   name: '五灵根', n: 5, rate: 0.03, qi: 0.80, thresh: 0.70, desc: '五行俱全 · 修炼最慢但同调最盛' },
+  { id: 'dan',  name: '单灵根', n: 1, rate: 0.02, qi: 1.40, thresh: 0.95, desc: '天灵根，万中无一 · 修炼极快' },
+  { id: 'shuang', name: '双灵根', n: 2, rate: 0.06, qi: 1.15, thresh: 0.92, desc: '上等资质 · 修炼快' },
+  { id: 'san',  name: '三灵根', n: 3, rate: 0.14, qi: 1.05, thresh: 0.85, desc: '中等资质' },
+  { id: 'si',   name: '四灵根', n: 4, rate: 0.28, qi: 0.95, thresh: 0.78, desc: '下等资质 · 同调易成' },
+  { id: 'wu',   name: '五灵根', n: 5, rate: 0.30, qi: 0.80, thresh: 0.70, desc: '五行俱全 · 修炼最慢但同调最盛' },
   { id: 'wei',  name: '伪灵根', n: 0, rate: 0.20, qi: 0.70, thresh: 1.00, desc: '五行皆通皆不精 · 俗称废灵根' },
 ];
 const WX_ALL = ['金', '木', '水', '火', '土'];
@@ -2643,7 +2967,8 @@ const SECT_MAP = [
   //   原来 arch 在 x:39（偏左），和左塔 x:34 重叠
   //   ⇒ 改成：两塔之间【有间隙】，中间的后楼独立框出来
   //     左塔 ≈ 38%   中楼 ≈ 47.5%   右塔 ≈ 64%
-  { fac: 'arch',   name: '中路后楼', x: 44.0, y:  2.0, w:  9.0, h: 15.5, special: 'arch' },
+  // ★★ Round 50：宗门大殿 = 正式设施（arch），不再是 special 热点
+  { fac: 'arch',   name: '中路后楼', x: 44.0, y:  2.0, w:  9.0, h: 15.5 },
   // fac（= FACILITIES 的 id）  显示位置           热点（x%, y%, w%, h%）
   { fac: 'legacy', name: '后楼左塔', x: 34.5, y:  2.0, w:  7.5, h: 19.5 },  // 传承殿
   { fac: 'hall',   name: '后楼右塔', x: 58.5, y:  2.0, w:  7.5, h: 19.5 },  // 议事堂
@@ -2671,14 +2996,14 @@ let SECT_MAP_TIER = 0;
 // ★ 史册馆（Round 37）
 //   中路后楼 = 史册馆入口：在它的建筑面板上多一个按钮，点了跳到「录」页。
 //   史册的具体内容由「录」页的 #archiveBody 承载（渲染逻辑在别处实现）。
-const ARCHIVE_FAC = 'arch';     // ★ Round 45：史册馆在【宗门大殿】(arch)，不是藏经阁(script)
-                                //   ⚠️ Round 44 我把它设成 script，导致"翻阅宗门史册"按钮
-                                //      出现在藏经阁上，而用户在藏经阁看到的就是史册馆 —— 错位
+const ARCHIVE_FAC = 'arch';     // ★ Round 45/50：史册馆在【宗门大殿】(arch)
+                                //   ⚠️ Round 44 曾设成 script（藏经阁）⇒「翻阅宗门史册」
+                                //      按钮出现在藏经阁上（错位，Round 45 已修）
+                                //   ★ Round 50：arch 正式成为设施，点它直接进史册页
 // ★ Round 40：中路后楼 = 录（宗门史册）的【常驻热点】。
 //   用户要求："放在宗门全景那个中间后楼的里面，像其他宗门设施一样，然后定个名字表明作用"
-//   名字取「录」—— 和页签名一致，作用写清楚在面板里。
-// ★ Round 42/43：arch 热点 = 宗门大殿（放门训+门规）
-//   史册馆搬去了【藏经阁】(script) ⇒ 这个名字只用于宗门大殿的热点标签
+// ★ Round 42/43：arch 热点 = 宗门大殿
+//   ★ Round 50：hall（后楼右塔）本来就是【议事堂】，不再与史册混用
 const ARCHIVE_NAME = '宗门大殿';
 const ARCHIVE_DESC = '宗门编年 · 历代弟子传 / 大事记 / 突破录';
 const ARCHIVE_TOPIC = 'arch';     // SECT_MAP 里的特殊 fac 值
@@ -2711,7 +3036,7 @@ function openArchive(on) {
 //      渲染代码一行没改。
 const FAC_TITLE = {
   forge: '锻造部', train: '传功阁', script: '藏经阁', vault: '宝库',
-  legacy: '传承殿', life: '延寿丹房', hall: '宗门大殿', gate: '山门',
+  legacy: '传承殿', life: '延寿丹房', arch: '宗门大殿', hall: '议事堂', gate: '山门',
 };
 let FAC_OPEN = false;
 let FAC_SEL = null;      // 当前打开的设施（供 render 刷新升级区）
@@ -2785,8 +3110,9 @@ function openFacility(fid) {
     s.style.display = (s === shell) ? 'block' : 'none';
   });
 
-  // ③ 宗门大殿 = 门规 + 史册馆：默认展示史册那一卷
-  if (fid === 'hall') {
+  // ③ 宗门大殿（arch）= 史册馆：默认展示史册那一卷
+  //   ★ Round 50：原来判的是 hall —— 而 hall 是【议事堂】⇒ 点议事堂进了史册馆
+  if (fid === 'arch') {
     try { renderArchiveBody(); } catch (e) { }
     const _ab = document.getElementById('archiveBox');
     const _lb = document.getElementById('logBox');
@@ -2870,7 +3196,7 @@ function renderArchiveBody() {
       const seen = {};
       for (const e of evs) {
         if (e.type === 'break' && !seen[e.realm]) { seen[e.realm] = 1; hi.push('破入<b>' + e.realm + '</b>'); }
-        else if (e.type === 'drop_myth') hi.push('得神话<b>' + (e.slot || '') + '</b>');
+        else if (e.type === 'drop_myth') hi.push('得神话<b>' + (e.nm || SLOT_NOUN[e.slot] || e.slot || '') + '</b>');
         else if (e.type === 'dujie_ok' && e.realm) hi.push('渡劫<b>' + e.realm + '</b>');
         else if (e.type === 'ascend') hi.push('<b>羽化飞仙</b>');
         if (hi.length >= 3) break;
@@ -2929,9 +3255,9 @@ function renderSectPanel() {
   const box = document.getElementById('sectPanel');
   if (!box) return;
   const b = SECT_MAP.find(v => v.fac === SECT_SEL) || SECT_MAP[0];
-  // ★ Round 40：中路后楼 =「录」（宗门史册）—— 它不是 FACILITIES 里的设施，
-  //   所以单独给一个说明面板 + "翻阅"按钮（点热点本身也会直接进史册）
-  if (b.special === 'arch') {
+  // ★ Round 50：宗门大殿（arch）—— 面板显示"作用 / 收录 / 翻阅"，
+  //   不再走 special 判定（它已经是正式设施，但样式上仍是档案性质）
+  if (b.fac === 'arch') {
     box.innerHTML =
       '<div class="bldg-panel">' +
         '<div class="bh"><div><b>' + ARCHIVE_NAME + '</b><em>' + b.name + '</em></div></div>' +
@@ -3029,6 +3355,12 @@ const SECT = {
   //   "神话可以传承，比如放到宗门宝库，让玩家可以选，让不让后人穿出去之类的"
   legacyBan: {},          // { [itemId]: true } ⇒ 该件不进直传（只留宝库）
   legacyBanQ: 4,          // 默认只对神话（q4）开放徽记
+  // ★★ 叙事层（Round 51）：长老 / 宗主 / 宗门成长线
+  //   长老 = 9 设施各 1 名稳定后勤弟子（不进秘境，按任期流转，终会换）
+  //   宗主 = 长老之一被老祖擢（默认 gate 山门长老），是归山见闻的报信人
+  elders: null,           // { [facId]: { name, sinceGen, dieGen, facility } }
+  sectMaster: null,       // 被擢为宗主的长老 facId（如 'gate'）
+  topTier: 0,             // 宗门见过的最高修为档（算长老任期基准）
 };
 
 // ---- 荣誉点的获取（弟子的一生成就）----
@@ -3150,8 +3482,12 @@ function newDisciple(carried, opts) {
     SECT.lostLegacy.length = 0;
     SECT.history.length = 0;
     SECT.ascended = false;
+    SECT.elders = null;        // ★ 叙事层：重新开始 ⇒ 长老班底重抽
+    SECT.sectMaster = null;
   }
   SECT.generation++;
+  ensureElders();              // ★ 叙事层：保证长老班底存在（建宗 / 读档都走这）
+  rotateElders();             // ★ 叙事层：每代检查长老/宗主任期，到则交班
   talReset();        // ★ 天赋：每代随机（必须在寿元初值之前 → 决定 lifeMax）
   DISCIPLE.lifespanLeft = (P.LIFESPAN_YEARS * talLifeMul() + sectBonus().lifeYear) / P.LIFESPAN_YEARS * (P.LIFESPAN_HOURS * 3600);   // ★ 延寿丹（年）丹房 × 天赋
   // ★ Round 34：给这一代弟子起名（门规署名、编年史都要用）
@@ -3357,6 +3693,8 @@ function endDisciple(cause) {
   }
   // ★ 宗门：按弟子一生的成就发放荣誉点
   addHonor(honorForDisciple(), '第 ' + gen + ' 代弟子的一生');
+  // ★ 叙事层：记录宗门见过的最高修为（长老任期基准）
+  if (DISCIPLE.peakTier > (SECT.topTier || 0)) SECT.topTier = DISCIPLE.peakTier;
   // ★★ Round 43：把这一代的生平快照存档（G.log 会滚动淘汰，且不进存档）
   try { snapshotChronicle(gen); } catch (e) { }
   SECT.history.push({
@@ -3447,7 +3785,7 @@ function serItem(it) {
   if (it.kind2) return { k2: it.kind2, key: it.gfId || it.fbId, q: it.q };
   return { s: it.slot, i: Math.round(it.ilvl * 10) / 10, q: it.q,
     w: it.weapon || 0, m: it.mainVal, k: it.kind, h: it.home,
-    af: it.affixes || null };
+    af: it.affixes || null, n: it.name || null };
 }
 function deserItem(o) {
   // ★ 非装备条目
@@ -3462,6 +3800,7 @@ function deserItem(o) {
   it.weapon = o.w || null;
   it.affixes = o.af || [];
   it.mainVal = o.m; it.main = o.m;
+  it.name = o.n || null;
   return it;
 }
 // 分区场景 → 紧凑结构
@@ -3538,6 +3877,7 @@ function saveGame() {
       rule: LEGACY_RULE.key,
       sect: { g: SECT.generation, ascended: SECT.ascended, chronicle: SECT.chronicle, history: SECT.history,
         honor: SECT.honor, rank: SECT.rank, up: SECT.up,
+        elders: SECT.elders, sectMaster: SECT.sectMaster, topTier: SECT.topTier,
       sectMat: SECT_RES.materials, sectForged: SECT_RES.forged, sectSpent: SECT_RES.spent,
       trainLevel: TRAIN.level,
       talent: TAL.id, lifeGain: DISCIPLE.lifeGain, lifeMax: DISCIPLE.lifeMax,
@@ -3592,6 +3932,11 @@ function loadGame() {
     }
     SECT.honor = (d.sect && d.sect.honor) | 0;
     SECT.up = (d.sect && d.sect.up) || {};
+    // ★ 叙事层：读回长老/宗主（旧档无则 null，ensureElders 补建）
+    SECT.elders = (d.sect && d.sect.elders) || null;
+    SECT.sectMaster = (d.sect && d.sect.sectMaster) || null;
+    SECT.topTier = (d.sect && d.sect.topTier) || 0;
+    ensureElders();
     SECT_RES.materials = (d.sect && d.sect.sectMat) | 0;
     SECT_RES.forged = (d.sect && d.sect.sectForged) | 0;
     SECT_RES.spent = (d.sect && d.sect.sectSpent) | 0;
@@ -4598,6 +4943,35 @@ const SIGN_THRESH_ADD = 1;      // 承压阈值 +1（S5）
 function rollSignature() {
   return SIGNATURES[Math.floor(Math.random() * SIGNATURES.length)].id;
 }
+
+// ---------------- 神话装备命名池（q=4 专属威名 · 2026-10-15）----------------
+//   设计依据：叙事层文案库_待审.md §十三。
+//   9 个防具/首饰部位 + 5 类武器各一个池；武器按【实际武器类型】取名。
+const MYTH_SLOT_NAMES = {
+  '头':   ['紫金冠', '步云冠', '凌霄冠', '澄心笠', '镇魂冠', '鎏金冠'],
+  '项链': ['定魂珠', '避水珠', '九窍珠', '龙涎链', '月华珠', '锁灵珠'],
+  '肩':   ['披云肩', '铁骨肩', '镇岳肩', '星河披', '寒山肩', '玄魄肩'],
+  '胸':   ['玄龟甲', '天蚕衣', '紫霞衣', '锁子甲', '不动甲', '云鹤袍'],
+  '腰':   ['盘龙带', '束灵带', '玄武束', '伏魔带', '吞云带', '锁元带'],
+  '手':   ['擒龙手', '裂石手', '玄冰腕', '摘星手', '缚虎腕', '碎岩手'],
+  '戒指': ['定颜戒', '乾坤戒', '须弥戒', '轮回环', '无相戒', '太虚戒'],
+  '腿':   ['追风护腿', '踏雪护腿', '斩棘护腿', '疾风护腿', '陷阵护腿', '逐日护腿'],
+  '足':   ['踏云靴', '焚天靴', '玄龟履', '凌波履', '追日靴', '九霄靴'],
+};
+const MYTH_WEAPON_NAMES = {
+  sword: ['承影', '含光', '龙渊', '太阿', '湛卢', '纯钧'],
+  blade: ['断岳', '偃月', '昆吾', '龙雀', '斩风', '血饮'],
+  spear: ['沥泉', '破军', '蟠龙', '点星', '断魂', '飞云'],
+  bow:   ['射日', '落雁', '惊弦', '天狼', '穿云', '裂空'],
+  staff: ['玄机', '定海', '盘龙', '枯荣', '引魂', '问天'],
+};
+// 抽一个神话威名（武器按实际武器类型取池，避免"剑用刀名"）
+function rollMythName(slot, weaponId) {
+  const arr = (slot === '主手' || slot === '副手')
+    ? MYTH_WEAPON_NAMES[weaponId] : MYTH_SLOT_NAMES[slot];
+  if (!arr || !arr.length) return null;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 // 当前装备里的签名单（0 或 1 件，因为只有 1 件神话时才可能有；
 // 多件神话时取【与主属性同源】的那件为有效签名）
 function equippedSignatures(mainEl) {
@@ -5161,6 +5535,7 @@ function makeItem(ilvl, forcedQ) {
     weapon: weapon ? weapon.id : null,
     affixes: rollAffixes(q, ilvl),   // ★ 词缀（按稀有度决定条数）
     sig: (q === 4) ? rollSignature() : null,   // ★ 神话签名（1 件恰好 1 条）
+    name: (q === 4) ? rollMythName(slot, weapon ? weapon.id : null) : null,  // ★ 神话威名
     _new: true,        // 新掉落标记（用于高亮）
   };
 }
@@ -5258,11 +5633,24 @@ function makeSlotItem(slot, ilvl, q, weaponId) {
   // ★ 装备自身的五行（掉落时随机）——主手由武器决定，不重复给
   it.affixes = it.affixes || rollAffixes(q, ilvl);   // ★ 词缀
   if (!it.sig) it.sig = (q === 4) ? rollSignature() : null;   // ★ 神话签名
+  it.name = (q === 4) ? rollMythName(slot, it.weapon) : null;   // ★ 神话威名（按修正后的部位/武器重抽）
   // ★ 武器类型与属性解耦（Round 16 · 用户要求："每种武器都有 5 种属性用来匹配同调"）
   //   武器类型（WEAPON_BY_ID[].wuxing 字段名保留但只作历史兜底）不再决定 wx；
   //   主手/副手与其它 9 槽一样，都 rollWuxing() ⇒ 武器也能吃同源/相生。
   if (!it.wx) it.wx = rollWuxing();
   return it;
+}
+// ★ 装备显示名：神话优先用专属威名，其余用"部位·武器类型"
+function itemName(it) {
+  if (!it) return '装备';
+  if (it.name) return it.name;
+  return (it.slot || '装备') + (it.weapon ? '·' + WEAPON_BY_ID[it.weapon].name : '');
+}
+// ★ 带品质前缀（"神话·踏云靴" / "传奇·靴"）
+function itemNameQ(it) {
+  if (!it) return '';
+  return (QUALITIES[it.q] || '') +
+    (it.name ? '·' + it.name : (it.slot || '') + (it.weapon ? '·' + WEAPON_BY_ID[it.weapon].name : ''));
 }
 // ★ 校验一件装备是否"合法"（部位/形状/主属性一致）
 function isLegalItem(it) {
@@ -6203,9 +6591,9 @@ function rollDrop(dead) {
   //       传奇（q3）        ⇒ 不记（高档时满地都是）
   //       史诗/精良/普通    ⇒ 不记
   //   ⇒ 事件系统（EVENTS / 挂机报告）仍记录 q3，只是不占日志
-  if (it.q >= 3) ev(it.q >= 4 ? 'drop_myth' : 'drop_legend', it.q >= 4 ? 9 : 6, { slot: it.slot, q: it.q });
+  if (it.q >= 3) ev(it.q >= 4 ? 'drop_myth' : 'drop_legend', it.q >= 4 ? 9 : 6, { slot: it.slot, q: it.q, nm: it.name, wp: it.weapon });
   if (it.q >= 4 && it.sig && SIGNATURE_BY_ID[it.sig]) {
-    log('✦ 得【神话·' + it.slot + '】' + SIGNATURE_BY_ID[it.sig].name +
+    log('✦ 得【神话·' + (it.name || SLOT_NOUN[it.slot] || it.slot) + '】' + SIGNATURE_BY_ID[it.sig].name +
       '（' + it.kind + '+' + it.mainVal + '）', 'break');
   }
   // 背包上限保护
@@ -6494,7 +6882,7 @@ function unequipAt(zone, gx, gy) {
   const it = removeFromZone(zone, gx, gy);
   if (!it) return null;
   G.bag.push(Object.assign({}, it, { _anchor: undefined, _part: undefined, _gain: null, _new: false }));
-  log("卸下 " + (QUALITIES[it.q] || "") + it.slot, "sys");
+  log("卸下 " + itemNameQ(it), "sys");
   render();
   return it;
 }
@@ -7079,7 +7467,7 @@ function render() {
     d.style.borderLeftColor = QCOLOR[it.q];
     d.title = '点击：自动找最优位置穿上\n右键：分解为素材';
     d.innerHTML = `<span class="q" style="color:${QCOLOR[it.q]}">${QUALITIES[it.q]}</span>
-      <span class="nm"><b>${it.slot}${it.weapon ? '·' + WEAPON_BY_ID[it.weapon].name : ''}</b> <span class="dim">${it.kind}+${it.mainVal}</span></span>
+      <span class="nm"><b>${itemName(it)}</b> <span class="dim">${it.kind}+${it.mainVal}</span></span>
       <span class="wx" style="color:${WX_COLOR[it.wx]||'#888'}">${it.wx||''}</span>
       <span class="af dim" title="${affixTitle(it)}">${affixLabel(it)}</span>
       <span class="sg" title="${sigTitle(it)}">${sigLabel(it)}</span>
@@ -7625,7 +8013,7 @@ function render() {
             pl.innerHTML = SECT.legacyPool.slice(0, 12).map(function (it, i) {
               const cost = legacyPullCost(it);
               const can = SECT.honor >= cost;
-              const nm = (it.slot || '装备') + (it.weapon ? '·' + WEAPON_BY_ID[it.weapon].name : '');
+              const nm = itemName(it);
               // ★ Round 25：神话可加【徽记】（禁止后人穿出去）
               const banned = SECT.legacyBan && SECT.legacyBan[it.id];
               const sealBtn = (it.q >= SECT.legacyBanQ)
@@ -7786,28 +8174,30 @@ function render() {
           // 热点（只在建筑数变化时重建；位置固定）
           if (spotsEl.childElementCount !== SECT_MAP.length) {
             spotsEl.innerHTML = SECT_MAP.map(function (b) {
-              // ★ 特殊热点（中路后楼 = 录）：没有对应 FACILITIES 项，
-              //   标签用 ARCHIVE_NAME，点击直接开史册而不是显示设施面板
-              const label = b.special === 'arch'
-                ? ARCHIVE_NAME : FAC_BY_ID[b.fac].name;
-              const cls = 'spot' + (b.special === 'arch' ? ' arch' : '');
+              // ★ Round 50：宗门大殿已是正式设施（arch）⇒ 标签统一取 FACILITIES 的名字
+              const f = FAC_BY_ID[b.fac];
+              const label = f ? f.name : ARCHIVE_NAME;
+              // 朱色描边留给【宗门大殿】（档案性质，不是可升级设施）
+              // tag-b：y 很小的热点（顶上那排）标签改放下方，否则被 overflow 裁掉
+              const cls = 'spot' + (b.fac === ARCHIVE_FAC ? ' arch' : '') +
+                          (b.y < 14 ? ' tag-b' : '');
               return '<div class="' + cls + '" data-b="' + b.fac + '" style="left:' +
                 b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%">' +
                 '<span class="ring"></span>' +
                 '<span class="tag">' + label + '</span></div>';
             }).join('');
             spotsEl.querySelectorAll(".spot").forEach(function (s) {
-              const isArch = s.classList.contains("arch");
               s.addEventListener("mouseenter", function () {
                 SECT_SEL = s.getAttribute("data-b"); renderSectPanel();
               });
               s.addEventListener("click", function () {
                 SECT_SEL = s.getAttribute("data-b");
-                // ★ Round 42：点建筑 ⇒ 整页替换成该设施页
-                if (isArch) { openFacility("script"); return; }   // 中路后楼 → 藏经阁（史册馆）
-                openFacility(s.getAttribute("data-b")); return;
-                /* eslint-disable no-unreachable */
-                renderSectPanel();
+                // ★ Round 42/50：点建筑 ⇒ 整页替换成该设施页
+                //   ⚠️ 原来这里写死 isArch ⇒ 固定打开【藏经阁】（Round 44 的遗留，
+                //      当时史册馆挂在藏经阁）。Round 45 把 ARCHIVE_FAC 改成 arch 之后
+                //      没跟着改 ⇒ 点【宗门大殿】进的却是藏经阁，显示"功法研究"
+                //      （用户报："宗门大殿里面怎么是功法研究"）
+                openFacility(s.getAttribute("data-b"));
               });
             });
           }
@@ -7977,7 +8367,7 @@ function renderCompare() {
     ['承压阈值', ev.delta.thresh, 0],
   ];
   let html = `<div class="cmp-hd">
-      <b style="color:${QCOLOR[it.q]}">${QUALITIES[it.q]}${it.slot}</b>
+      <b style="color:${QCOLOR[it.q]}">${QUALITIES[it.q]}${it.name ? '·' + it.name : it.slot}</b>
       <span class="dim">${it.kind}+${it.mainVal} · ${it.shape[0]}×${it.shape[1]}</span>
     </div>`;
   html += '<table class="cmp-t">';
@@ -8029,7 +8419,7 @@ function bestEquip(idx) {
   for (const r of removed) G.bag.push(Object.assign({}, r, { _gain: null, _new: false }));
   G.bag.splice(G.bag.indexOf(it), 1);
   const dz = mine._placedZone;
-  log('穿上 ' + QUALITIES[it.q] + it.slot + ' → ' + dz +
+  log('穿上 ' + itemNameQ(it) + ' → ' + dz +
     (dz !== it.home ? '（错位）' : '') +
     (ev.gain > 0.005 ? ' 综合 ▲' + (ev.gain * 100).toFixed(0) + '%'
       : ev.gain < -0.005 ? ' 综合 ▼' + (-ev.gain * 100).toFixed(0) + '%' : ''),
@@ -8045,7 +8435,7 @@ function scrapAt(idx) {
   const v = disenchantValue(it);
   G.bag.splice(idx, 1);
   SECT_RES.materials += v; G.disenchanted++;
-  log('分解 ' + QUALITIES[it.q] + it.slot + ' → 素材 +' + v, 'sys');
+  log('分解 ' + itemNameQ(it) + ' → 素材 +' + v, 'sys');
   render();
 }
 
@@ -8060,7 +8450,7 @@ function autoEquip(idx) {
       if (canPlace(it, z, x, y)) {
         place(it, z, x, y);
         G.bag.splice(idx, 1);
-        log('装备 ' + QUALITIES[it.q] + it.slot + ' → ' + z + (z === it.home ? '（本位区）' : '（错位）'),
+        log('装备 ' + itemNameQ(it) + ' → ' + z + (z === it.home ? '（本位区）' : '（错位）'),
             z === it.home ? 'ok' : 'warn');
         render(); return;
       }

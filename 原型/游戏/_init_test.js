@@ -76,6 +76,11 @@ global.document = {
     return null;
   },
   createElement(tag) { return makeEl(tag); },
+  // ★ Round 49 起的存量代码用了 document.addEventListener('click', …) 做事件委托，
+  //   桩必须提供这两个方法，否则顶层 eval 直接抛错、整个 game 不 boot（__G 永远 undefined）。
+  addEventListener() {},
+  removeEventListener() {},
+  hidden: false,
 };
 // 便于测试读取静态元素
 const byId = new Proxy({}, { get: (_, k) => global.document.getElementById(k) });
