@@ -7751,32 +7751,83 @@ function render() {
         const sb = sectBonus();
         const rk = SECT_RANKS[SECT.rank];
         const nxt = SECT_RANKS[SECT.rank + 1];
-        let html2 = "<div class=\"sc-head\"><span class=\"rank\">" + rk.n +
-          "</span><span class=\"honor\">荣誉 " + SECT.honor +
-          (nxt ? "（距 " + nxt.n + " 还差 " + Math.max(0, nxt.need - SECT.honor) + "）" : "（已至顶阶）") +
-          "</span></div>";
-        html2 += "<div class=\"sc-pool\">历代弟子 " + SECT.history.length +
-          " · 传承池 " + SECT.legacyPool.length + " 件 · 遗落 " + SECT.lostLegacy.length + " 件 · 直传 " + legacySlots() + " 件</div>";
+        // ★★ Round 48：这一段改成【当前宗门 buff】
+        //   用户："如果有其他入口就把这里的删了，然后这里主要显示当前宗门buff（比如余韵什么的）"
+        //   理由：4 个有建筑的升级项（传功阁/传承殿/宝库/延寿丹房）已经在各自建筑页里能升
+        //         ⇒ 这里删掉，改成显示"现在到底有哪些加成在生效"
+        //   ⚠️ 保留一个例外：入门礼（fac:null，没有自己的建筑）—— 删了就没地方升
+        //      但要放到后面，且标注清楚
+        let html2 = '<div class="sc-head"><span class="rank">' + rk.n +
+          '</span><span class="honor">荣誉 ' + SECT.honor +
+          (nxt ? '（距 ' + nxt.n + ' 还差 ' + Math.max(0, nxt.need - SECT.honor) + '）' : '（已至顶阶）') +
+          '</span></div>';
+
+        // ---------- ① 传承给赠（含余韵倒计时）----------
+        let _gs = [];
+        try { _gs = giftStatus() || []; } catch (e) { _gs = []; }
+        if (_gs.length) {
+          for (const g of _gs) {
+            const ph = g.phase === 1 ? '满效' : '折扣';
+            const left = (g.left < 0) ? '常驻' : (Math.round(g.left) + ' 息');
+            html2 += '<div class="sc-buff"><b>' + g.name + '</b>' +
+              '<span class="v">×' + (Math.round(g.power * 100) / 100) + ' · ' + ph + '</span>' +
+              '<span class="t">余韵 ' + left + '</span></div>';
+          }
+        }
+
+        // ---------- ② 后勤驻宗产出（来自岗位上的弟子）----------
+        try {
+          const _bl = backlineBonus();
+          const _rows2 = [];
+          if (_bl.qi > 1.001) _rows2.push(['修炼', '×' + (Math.round(_bl.qi * 100) / 100)]);
+          if (_bl.mats > 0) _rows2.push(['素材', '+' + Math.round(_bl.mats) + '/届']);
+          if (_bl.gf > 1.001) _rows2.push(['功法掉落', '×' + (Math.round(_bl.gf * 100) / 100)]);
+          if (_bl.drop > 1.001) _rows2.push(['装备掉落', '×' + (Math.round(_bl.drop * 100) / 100)]);
+          if (_bl.ilvl > 0.01) _rows2.push(['传承品级', '+' + (Math.round(_bl.ilvl * 10) / 10)]);
+          if (_bl.info > 1.001) _rows2.push(['秘境情报', '×' + (Math.round(_bl.info * 100) / 100)]);
+          if (_rows2.length) {
+            html2 += '<div class="sc-sec">后勤驻宗</div>';
+            for (const [k2, v2] of _rows2) html2 += '<div class="sc-buff"><b>' + k2 + '</b><span class="v">' + v2 + '</span></div>';
+          }
+        } catch (e) { }
+
+        // ---------- ③ 宗门加成（已买等级的汇总）----------
+        const _ups = SECT_UPGRADES.filter(function (u) { return (SECT.up[u.id] || 0) > 0; });
+        if (_ups.length) {
+          html2 += '<div class="sc-sec">宗门加成</div>';
+          for (const u of _ups) {
+            const lv = SECT.up[u.id] || 0;
+            html2 += '<div class="sc-buff"><b>' + u.name + '</b>' +
+              '<span class="lv">Lv' + lv + '/' + u.max + '</span>' +
+              '<span class="v">' + u.desc(lv) + '</span></div>';
+          }
+        } else if (!_gs.length) {
+          html2 += '<div class="sc-buff none">尚无宗门加成 —— 点地图上的建筑可以花荣誉升级</div>';
+        }
+
+        // ---------- ④ 提前交接留下的灵气启动金 ----------
+        if (PENDING_QI > 0) {
+          html2 += '<div class="sc-buff"><b>灵气启动金</b><span class="v">+' +
+            Math.round(PENDING_QI) + '（下一代起手）</span></div>';
+        }
+
+        // ---------- ⑤ 入门礼（唯一没有建筑的升级项 —— 只能在这里升）----------
         for (const u of SECT_UPGRADES) {
-          // ★ 有对应建筑的升级项已挪到【宗门地图】的建筑面板里（点建筑看）
-          //   这里只保留"不是建筑"的项（入门礼）
-          if (SECT_UP_BY_FAC[u.id] === u) continue;
+          // ⚠️ 必须用 u.fac 查（SECT_UP_BY_FAC 的【键是设施 id】）
+          //   原来写 SECT_UP_BY_FAC[u.id] —— u.id 是升级项 id
+          //   （'slot'/'free' 的设施是 'legacy'/'vault'），两者只有部分重合
+          //   ⇒ 传承殿/宝库 漏过滤，在"宗门加成"汇总和"可升级项"里各出现一次
+          if (u.fac && SECT_UP_BY_FAC[u.fac] === u) continue;   // 有建筑的已在各自建筑页
           const lv = SECT.up[u.id] || 0;
           const cost = sectUpCost(u.id);
           const locked = SECT.rank < u.rank;
           const can = !locked && lv < u.max && SECT.honor >= cost;
-          const btn = (lv >= u.max) ? "满" : (locked ? SECT_RANKS[u.rank].n : String(cost));
-          // ★ 设施图标（AI 生成）。没有图标的项自动跳过，只显示文字。
-          const ico = FAC_ICON[u.id];
-          const icoHtml = ico
-            ? '<img class="sc-icon" src="assets/宗门/设施_' + ico + '.webp" ' +
-              'srcset="assets/宗门/设施_' + ico + '@2x.webp 2x" alt="" draggable="false">'
-            : '';
-          html2 += "<div class=\"sc-up\">" + icoHtml +
-            "<span class=\"nm\">" + u.name + "</span>" +
-            "<span class=\"lv\">Lv" + lv + "/" + u.max + "</span>" +
-            "<span class=\"dsc\">" + (lv ? u.desc(lv) : u.desc(1)) + "</span>" +
-            "<button data-sc=\"" + u.id + "\"" + (can ? "" : " disabled") + ">" + btn + "</button></div>";
+          const btn = (lv >= u.max) ? '满' : (locked ? SECT_RANKS[u.rank].n : (cost + ' 荣誉'));
+          html2 += '<div class="sc-up">' +
+            '<span class="nm">' + u.name + '</span>' +
+            '<span class="lv">Lv' + lv + '/' + u.max + '</span>' +
+            '<span class="dsc">' + (lv ? u.desc(lv) : u.desc(1)) + '</span>' +
+            '<button data-sc="' + u.id + '"' + (can ? '' : ' disabled') + '>' + btn + '</button></div>';
         }
         scb.innerHTML = html2;
         scb.querySelectorAll("button[data-sc]").forEach(function (btn) {

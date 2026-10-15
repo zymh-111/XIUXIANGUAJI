@@ -3900,6 +3900,40 @@ chk('★ 读档后门规的轴/值/署名都对',
 // ============================================================
 // ============================================================
 // ============================================================
+// ============================================================
+hdr('测试 54：宗门现状 = 当前宗门 buff（Round 48）');
+//
+//   用户："如果有其他入口就把这里的删了，然后这里主要显示当前宗门buff（比如余韵什么的）"
+//   ⇒ 有建筑的 4 项升级已在各自建筑页能升 ⇒ 这里只留汇总 + 入门礼
+const _H4 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
+const _J4 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8');
+
+chk('★ 区块标题改为「当前宗门 buff」', /当前宗门 buff/.test(_H4));
+chk('★ 有 .sc-buff 样式', /\.sc-buff\{/.test(_H4));
+chk('★ 有 .sc-sec 样式', /\.sc-sec\{/.test(_H4));
+chk('★ 渲染里含余韵（giftStatus）', /giftStatus\(\)/.test(_J4) && /余韵/.test(_J4));
+chk('★ 渲染里含后勤驻宗', /后勤驻宗/.test(_J4));
+chk('★ 渲染里含灵气启动金（PENDING_QI）', /灵气启动金/.test(_J4));
+chk('★ 过滤条件用 u.fac 而不是 u.id', (function () {
+  // ⚠️ SECT_UP_BY_FAC 的键是【设施 id】；用 u.id 会漏（'slot'→'legacy','free'→'vault'）
+  return /SECT_UP_BY_FAC\[u\.fac\] === u/.test(_J4) &&
+         !/SECT_UP_BY_FAC\[u\.id\] === u/.test(_J4);
+})());
+
+// ---- 运行时：每项只出现一次、按钮只有入门礼 ----
+chk('★ 汇总里各项只出现 1 次，按钮只有入门礼', (function () {
+  A.SECT.up = {}; A.SECT_RES.materials = 0; A.doctrineReset();
+  A.ROSTER.list.length = 0; A.ROSTER.front = null; A.ROSTER.nextId = 1;
+  A.newDisciple([A.makeSlotItem('主手', 6, 1, 'sword')]);
+  A.SECT.honor = 355; A.SECT.rank = 2;
+  A.SECT.up = { train: 2, slot: 1, free: 2, life: 1 };
+  A.render();
+  const el = global.document.getElementById('sectBox');
+  const html = (el && (el.innerHTML || el._html)) || '';
+  const c = (s) => (html.match(new RegExp(s, 'g')) || []).length;
+  return c('传承殿') === 1 && c('宝库') === 1 && c('延寿丹房') === 1 &&
+         c('入门礼') === 1 && (html.match(/<button/g) || []).length === 1;
+})(), '每项 1 次 · 1 个按钮');
 hdr('测试 53：设施页 + 按代生平 + 横幅（Round 42/43）');
 //
 //   Round 42：点地图建筑 ⇒ 整页替换成设施页
