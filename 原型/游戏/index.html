@@ -181,11 +181,17 @@
   @keyframes heroBreath{0%,100%{transform:scale(1) translateY(0)}
     50%{transform:scale(1.025) translateY(-1.6px)}}
   /* 动作钩子：加 class 即触发（攻击/受击/闪避） */
-  #hero.attacking img{animation:heroAttack .34s ease-out}
+  /* ★ R63：.34s 太长 —— 出手间隔真实只有 ~180ms，动画永远播不完就被下一次覆盖。
+     缩到 .3s 并做成"前冲+回位"，配合加长到 320ms 的弧光一起看。 */
+  #hero.attacking img{animation:heroAttack .3s cubic-bezier(.2,.9,.3,1)}
   #hero.hurt img{animation:heroHurt .22s ease-out}
   #hero.dodge img{animation:heroDodge .3s ease-out}
-  @keyframes heroAttack{0%{transform:scale(1)}
-    34%{transform:scale(1.05) translateY(-3px) rotate(-2.4deg)}100%{transform:scale(1)}}
+  @keyframes heroAttack{
+    0%  {transform:scale(1)}
+    22% {transform:scale(1.09) translateY(-5px) rotate(-3.4deg)}
+    52% {transform:scale(1.02) translateY(-1px) rotate(-1deg)}
+    100%{transform:scale(1)}
+  }
   @keyframes heroHurt{0%,100%{transform:translateX(0)}
     28%{transform:translateX(-3.5px) rotate(1.6deg)}
     62%{transform:translateX(3.5px) rotate(-1.2deg)}}
@@ -248,42 +254,47 @@
      做法：conic-gradient 切出角度范围 + radial-gradient 遮罩只留一圈 ⇒ 细月牙 */
   .vfx-arc{width:var(--sz,26%);aspect-ratio:1;margin:-0.5px 0 0 -0.5px;
     transform-origin:0 50%;
-    background:conic-gradient(from -30deg,
-      rgba(255,255,255,0) 0deg, rgba(255,255,255,.35) 14deg,
-      rgba(226,242,255,.92) 30deg, rgba(255,255,255,.30) 46deg,
-      rgba(255,255,255,0) 62deg);
+    background:conic-gradient(from -34deg,
+      rgba(255,255,255,0) 0deg, rgba(255,255,255,.45) 14deg,
+      rgba(226,242,255,1) 30deg, rgba(255,255,255,.40) 48deg,
+      rgba(255,255,255,0) 68deg);
     /* ⚠️ 内半径太小 ⇒ 变成实心楔子（像手电筒）；太大 ⇒ 细到看不见。
        实测 54→82% 这档：能看清是"一道月牙"、又不至于糊。 */
     -webkit-mask:radial-gradient(circle at 0 50%,
       transparent 0 52%, #000 66%, #000 80%, transparent 88%);
     mask:radial-gradient(circle at 0 50%,
       transparent 0 52%, #000 66%, #000 80%, transparent 88%);
-    filter:blur(0.5px);
-    animation:vfxArc .2s ease-out forwards}
+    filter:blur(0.4px) drop-shadow(0 0 3px #cfe6ffaa);
+    /* ★ R63：.2s → .32s（真实时间）。原来元素 86ms 就被删了，动画只播到 43% */
+    animation:vfxArc .32s cubic-bezier(.16,.9,.3,1) forwards}
   @keyframes vfxArc{
-    0%  {opacity:0;  transform:rotate(var(--ang)) scale(.55)}
-    22% {opacity:1}
-    100%{opacity:0;  transform:rotate(var(--ang)) scale(1.18)}
+    0%  {opacity:0;  transform:rotate(var(--ang)) scale(.42)}
+    16% {opacity:1;  transform:rotate(var(--ang)) scale(.84)}
+    55% {opacity:.95}
+    100%{opacity:0;  transform:rotate(var(--ang)) scale(1.34)}
   }
 
   /* 远程弹道：箭 = 细长光刺；法球 = 发光圆点拖尾 */
   .vfx-proj{margin:0;transform-origin:50% 50%;z-index:7}
-  .vfx-arrow{width:16px;height:2px;margin:-1px 0 0 -8px;border-radius:1px;
+  .vfx-arrow{width:22px;height:3px;margin:-1.5px 0 0 -11px;border-radius:2px;
     transform-origin:50% 50%;
-    background:linear-gradient(90deg,rgba(255,240,200,0),#fff6d8 62%,#ffffff);
-    box-shadow:0 0 5px #ffe9a8cc}
-  .vfx-orb{width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;
+    background:linear-gradient(90deg,rgba(255,240,200,0),#fff6d8 55%,#ffffff);
+    box-shadow:0 0 6px #ffe9a8dd,0 0 12px #ffe9a866}
+  .vfx-orb{width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
     background:radial-gradient(circle at 40% 35%,#ffffff,#9fd8ff 45%,#3f86d8);
-    box-shadow:0 0 8px #7ec4ffcc,0 0 16px #3f86d855}
+    box-shadow:0 0 10px #7ec4ffdd,0 0 20px #3f86d866}
 
   /* 死亡消散：怪不再"凭空消失"，而是被打碎、淡出、缩下去 */
-  .mob.dying{animation:mobDie .26s ease-out forwards;z-index:2}
+  /* ★ R63：.26s → .42s（真实时间）。原来 112ms 就被删了，碎裂完全没播出来 */
+  .mob.dying{animation:mobDie .42s ease-out forwards;z-index:2}
   @keyframes mobDie{
     0%  {opacity:1;filter:brightness(2.6)}
-    28% {opacity:1;transform:translate(-50%,-50%) scale(1.16);
-         filter:brightness(3) saturate(.5)}
-    100%{opacity:0;transform:translate(-50%,-50%) scale(.5) rotate(10deg);
-         filter:brightness(1.5) saturate(.2)}
+    20% {opacity:1;transform:translate(-50%,-50%) scale(1.22);
+         filter:brightness(3.2) saturate(.5)}
+    55% {opacity:.85;transform:translate(-50%,-50%) scale(.92) rotate(4deg);
+         filter:brightness(2.2) saturate(.35)}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(.44) rotate(12deg);
+         filter:brightness(1.4) saturate(.15)}
   }
 
   /* ============ 法宝 / 功法 / 突破 特效（Round 62）============
@@ -302,13 +313,14 @@
     width:130px;height:130px;margin:-65px 0 0 -65px;border-radius:50%;
     border:2px solid var(--wx,#c9a227);
     box-shadow:0 0 12px var(--wx,#c9a227),inset 0 0 14px var(--wx,#c9a227);
-    animation:vfxRing .6s ease-out forwards}
+    animation:vfxRing .9s cubic-bezier(.12,.85,.25,1) forwards}
   .vfx-flash::before{width:280px;height:280px;margin:-140px 0 0 -140px;border-width:3px;
-    animation:vfxRing .62s ease-out forwards}
+    animation:vfxRing .9s cubic-bezier(.12,.85,.25,1) forwards}
   @keyframes vfxRing{
-    0%  {opacity:0;transform:scale(.16)}
-    18% {opacity:.95}
-    100%{opacity:0;transform:scale(1.5)}
+    0%  {opacity:0;transform:scale(.14)}
+    14% {opacity:1}
+    62% {opacity:.8}
+    100%{opacity:0;transform:scale(1.7)}
   }
 
   /* 放射光线：用重复锥形渐变做一圈射线，向外扫 */
@@ -319,11 +331,12 @@
       var(--wx,#c9a227) 0deg 3deg, transparent 3deg 22deg);
     -webkit-mask:radial-gradient(circle,transparent 0 16%,#000 42%,transparent 78%);
     mask:radial-gradient(circle,transparent 0 16%,#000 42%,transparent 78%);
-    animation:vfxRays .58s ease-out forwards}
+    animation:vfxRays .9s cubic-bezier(.12,.85,.25,1) forwards}
   @keyframes vfxRays{
-    0%  {opacity:0;transform:scale(.35) rotate(-14deg)}
-    20% {opacity:.9}
-    100%{opacity:0;transform:scale(1.35) rotate(16deg)}
+    0%  {opacity:0;transform:scale(.3) rotate(-16deg)}
+    18% {opacity:1}
+    60% {opacity:.75}
+    100%{opacity:0;transform:scale(1.5) rotate(18deg)}
   }
 
   /* 全屏闪：底牌级才用（一局没几次，敢给大的） */
@@ -331,20 +344,22 @@
     content:'';position:fixed;left:0;right:0;top:0;bottom:0;
     background:radial-gradient(circle at 50% 45%,var(--wx,#ffe9a8) 0%,
       transparent 62%);
-    animation:vfxFlash .5s ease-out forwards;pointer-events:none}
-  @keyframes vfxFlash{0%{opacity:0}12%{opacity:.5}100%{opacity:0}}
+    animation:vfxFlash .9s ease-out forwards;pointer-events:none}
+  @keyframes vfxFlash{0%{opacity:0}10%{opacity:.55}45%{opacity:.28}100%{opacity:0}}
 
   /* 名字横幅：让玩家知道"刚才是哪个法宝/功法"（挂在特效容器里，跟着它一起消失） */
   .vfx-name{position:absolute;left:0;top:-46px;transform:translateX(-50%);
     white-space:nowrap;font-size:12px;letter-spacing:2px;
     color:var(--wx,#c9a227);text-shadow:0 0 8px #000,0 1px 2px #000;
     padding:1px 7px;border:1px solid var(--wx,#c9a227);border-radius:2px;
-    background:#0c0d0ecc;animation:vfxName .62s ease-out forwards}
+    background:#0c0d0ecc;animation:vfxName 1.15s cubic-bezier(.15,.9,.3,1) forwards}
   .vfx-skill.big .vfx-name{font-size:14px;top:-56px}
   @keyframes vfxName{
-    0%  {opacity:0;transform:translateX(-50%) translateY(8px) scale(.9)}
-    18% {opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
-    100%{opacity:0;transform:translateX(-50%) translateY(-14px) scale(1)}
+    0%  {opacity:0;transform:translateX(-50%) translateY(10px) scale(.88)}
+    14% {opacity:1;transform:translateX(-50%) translateY(0) scale(1.04)}
+    26% {transform:translateX(-50%) translateY(0) scale(1)}
+    78% {opacity:1}
+    100%{opacity:0;transform:translateX(-50%) translateY(-16px) scale(1)}
   }
 
   /* 顿帧：只暂停【关键帧动画】，不动过渡、不冻数值。

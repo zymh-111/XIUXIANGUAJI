@@ -287,7 +287,13 @@ const P = {
   //     · 功法主动技 `cd:'swing'`（10/10/12/15/20）· 法宝「木灵回春」每 25 次出手
   //       ⇒ 统一改用【加权出手数】`GF.swingW`（每次出手 +CADENCE），阈值一个字都不用改
   //     · 功法「凌波微步」闪避后 N 次出手提速 ⇒ 同样按加权单位递减
-  CADENCE: 2,
+  //
+  //   ★ R63：2 → 3。为什么还要再拉一档（用户："又短又快，平a有点看不清"）：
+  //     注意【游戏时钟是真实时间的 2.33×】—— CADENCE=2 时出手间隔 429 游戏秒
+  //     只有 **真实 184ms**（5.5 刀/秒），弧光会一直叠着 ⇒ 平A 看不清。
+  //     =3 ⇒ 645 游戏秒 = **真实 277ms**，每刀是一个可分辨的节拍。
+  //     每刀伤害同时 ×3（在 baseDmg 处）⇒ **DPS 与一局收益不变**（有探针复核）。
+  CADENCE: 3,
   THRESHOLD_R: 10, SURVIVE_SECONDS: 25, OVERLOAD_ASSUMED: 10,
 
   // ★ 距离 / 威胁圈（用户提案 + 二次修正）
@@ -2404,12 +2410,18 @@ const SFX_CORE = ['ui', 'ui_tab', 'swing', 'hit', 'kill_std'];   // 开机预热
 //   远程  起手 → 放出弹丸 → **飞行 ~210ms** → 命中（此时才跳伤害数字/命中音）→ 碎裂
 //   ⚠️ 远程的"命中时刻"靠 delay 实现，所以伤害飘字与命中音都必须可延迟（pushDmgFx / sfxDelay）
 // ============================================================
+// ★★ 重要：这里所有时长都是【真实毫秒】，不是游戏秒。
+//   为什么（R63 修的根因）：游戏时钟是真实时间的 **2.33×**（tick 每帧推进 0.5 游戏秒），
+//   而 CSS 动画走的是真实时间。之前把时长写成"游戏秒"⇒ 元素存活期比动画短 2.33 倍
+//   ⇒ **每个特效的动画都被截断在 43% 就被删掉**（弧光只闪 86ms、淡出都没开始）。
+//   现在统一到真实时间，表现层和 CSS 终于同一个钟。
 const VFX = {
-  PROJ_SPEED: 1.1,     // 弹道速度（归一化坐标/秒）。弓 reach 0.23 ⇒ 约 210ms 飞完
-  STAGGER: 0.055,      // 同一次出手多目标时，飘字逐个错开的间隔（秒）
-  ARC_DUR: 0.20,       // 近战弧光持续
-  DIE_DUR: 0.26,       // 死亡消散持续（怪物从场上消失后，DOM 还留这么久做碎裂）
-  SKILL_DUR: 0.62,     // 法宝/功法特效持续
+  PROJ_MS_PER_UNIT: 1250,  // 弹道飞行 ms / 单位距离。弓 reach 0.23 ⇒ 约 290ms（看得见飞）
+  STAGGER_MS: 85,          // 同一次出手多目标时，飘字逐个错开的间隔
+  ARC_MS: 320,             // 近战弧光 —— ≥250ms 才看得清一次打击；320ms 能看出起手→收势
+  DIE_MS: 420,             // 死亡消散 —— 比弧光更长才有"余韵"（怪是被打碎的，不是消失的）
+  SKILL_MS: 900,           // 法宝/功法特效 —— 一局几十次，是"最小仪式感"，又不到打断挂机
+  NAME_MS: 1150,           // 名字横幅 —— 比特效更长，够玩家读完是哪个法宝
   // ---- 顿帧（hitstop）----
   //   ⚠️ 只冻【表现层】，绝不冻数值：冻游戏时钟会改 DPS 与一局时长 ⇒ 破坏配平。
   //   实现：G.freezeUntil 是一段【真实时间】，期间 render() 不写 mob 坐标（位置不跳变）、
@@ -2443,7 +2455,7 @@ function skillVfx(name, wx, arch, opts) {
   const a = SKILL_ARCH[arch] ? arch : 'ring';
   G.vfxq.push({
     k: 'skill', arch: a, name: name, wx: wx || null,
-    x0: G.heroX, y0: G.heroY, t0: G.t, delay: 0,
+    x0: G.heroX, y0: G.heroY, t0Real: Date.now(), delayMs: 0,
     big: !!(SKILL_ARCH[a].big || (opts && opts.big)),
   });
 }
@@ -2456,35 +2468,38 @@ function hitstop(ms) {
 
 const SFX_Q = [];
 /** 音效延后播（远程命中音用）。用游戏时钟 G.t 计时，与暂停/快进天然一致。 */
-function sfxDelay(key, volMul, delay) {
+function sfxDelay(key, volMul, delayMs) {
   if (!SFX.on) return;
-  if (!delay || delay <= 0) { sfx(key, volMul); return; }
-  SFX_Q.push({ at: G.t + delay, key: key, v: volMul });
+  if (!delayMs || delayMs <= 0) { sfx(key, volMul); return; }
+  SFX_Q.push({ at: Date.now() + delayMs, key: key, v: volMul });   // ★ R63：真实时钟
 }
 
 /** 伤害飘字（可延后）。远程要等弹道飞到才跳字 —— 数值早就算完了，这里只拖表现。 */
-function pushDmgFx(x, y, txt, cls, wx, delay) {
+function pushDmgFx(x, y, txt, cls, wx, delayMs) {
   const o = { x: x, y: y, txt: txt, cls: cls, wx: wx || null, life: 1 };
-  if (!delay || delay <= 0) { G.fx.push(o); return; }
-  G.dmgq.push({ at: G.t + delay, o: o });
+  if (!delayMs || delayMs <= 0) { G.fx.push(o); return; }
+  G.dmgq.push({ at: Date.now() + delayMs, o: o });                 // ★ R63：真实时钟
 }
 
 /** 每帧推进表现层：到点的飘字/音效放出来，过期的特效清掉。 */
 function vfxTick() {
+  // ★★ R63：这一层全部用【真实时钟】—— 与 CSS 动画同一个钟。
+  //   之前用 G.t（游戏秒）⇒ 元素存活期只有动画时长的 43%，特效被截断。
+  const now = Date.now();
   // ① 延后的伤害飘字（远程要等弹道飞到）
   for (let i = G.dmgq.length - 1; i >= 0; i--) {
-    if (G.t >= G.dmgq[i].at) { G.fx.push(G.dmgq[i].o); G.dmgq.splice(i, 1); }
+    if (now >= G.dmgq[i].at) { G.fx.push(G.dmgq[i].o); G.dmgq.splice(i, 1); }
   }
   // ② 延后的命中音（同上）
   for (let i = SFX_Q.length - 1; i >= 0; i--) {
-    if (G.t >= SFX_Q[i].at) { sfx(SFX_Q[i].key, SFX_Q[i].v); SFX_Q.splice(i, 1); }
+    if (now >= SFX_Q[i].at) { sfx(SFX_Q[i].key, SFX_Q[i].v); SFX_Q.splice(i, 1); }
   }
-  // ③ 特效事件按各自寿命回收（弧光 ARC_DUR；弹道 = 飞行时间 + 命中闪光 0.25s）
+  // ③ 特效事件按各自寿命回收（寿命 = CSS 动画时长，这样动画能播完整）
   for (let i = G.vfxq.length - 1; i >= 0; i--) {
     const v = G.vfxq[i];
-    const life = v.k === 'arc' ? VFX.ARC_DUR
-      : (v.k === 'skill' ? VFX.SKILL_DUR : v.delay + 0.25);
-    if (G.t - v.t0 > life + 0.05) G.vfxq.splice(i, 1);
+    const life = v.k === 'arc' ? VFX.ARC_MS
+      : (v.k === 'skill' ? VFX.NAME_MS : v.delayMs + VFX.ARC_MS);
+    if (now - v.t0Real > life) G.vfxq.splice(i, 1);
   }
 }
 
@@ -2531,7 +2546,7 @@ function vfxRender(arena) {
       const reach = Math.min(0.28, Math.hypot(v.x1 - v.x0, v.y1 - v.y0) + 0.11);
       el.style.setProperty('--sz', (reach * 100) + '%');
     } else {
-      el.style.setProperty('--fly', v.delay + 's');
+      el.style.setProperty('--fly', v.delayMs + 'ms');
       el.style.transform = 'rotate(' + ang + 'rad)';
     }
     arena.appendChild(el);
@@ -2539,7 +2554,7 @@ function vfxRender(arena) {
     if (v.k === 'proj') {
       // ⚠️ 必须强制一次回流，否则"起点→终点"在同一帧内设置 ⇒ 无过渡、瞬移
       void el.offsetWidth;
-      el.style.transition = 'left ' + v.delay + 's linear, top ' + v.delay + 's linear';
+      el.style.transition = 'left ' + v.delayMs + 'ms linear, top ' + v.delayMs + 'ms linear';
       el.style.left = (v.x1 * 100) + '%';
       el.style.top = (v.y1 * 100) + '%';
     }
@@ -7383,31 +7398,33 @@ function step(st, dt) {
     //            玩家的因果链变成「拉弓 → 箭飞 → 怪中箭」，可读性最高
     //   武器 → 手感映射（纯表现，不影响任何数值）：
     //     剑/刀/枪 → arc 弧光；弓 → arrow 箭矢；杖 → orb 法球
-    //   弹道飞行时长 = 距离 ÷ VFX.PROJ_SPEED（实测弓 reach 0.23 ⇒ 约 210ms，看得见但不拖）
+    //   弹道飞行时长 = 距离 × VFX.PROJ_MS_PER_UNIT（弓 reach 0.23 ⇒ 约 290ms，看得见飞）
     const _wid = st.weapon.id;
     const _proj = (_wid === 'bow') ? 'arrow' : (_wid === 'staff' ? 'orb' : null);
     const _hitN = Math.min(aoeN, cand.length);
+    // ★ R63：飞行时长按【真实毫秒】算（PROJ_MS_PER_UNIT × 距离）
+    const _flyMs = e2 => Math.hypot(e2.x - G.heroX, e2.y - G.heroY) * VFX.PROJ_MS_PER_UNIT;
     if (_proj) {
       for (let k = 0; k < _hitN; k++) {
         const e = cand[k].e;
         G.vfxq.push({
           k: 'proj', kind: _proj, x0: G.heroX, y0: G.heroY, x1: e.x, y1: e.y,
-          t0: G.t, delay: Math.hypot(e.x - G.heroX, e.y - G.heroY) / VFX.PROJ_SPEED,
+          t0Real: Date.now(), delayMs: _flyMs(e),
         });
       }
     } else if (_hitN > 0) {
       // 近战：一次弧光盖住本次所有目标（朝最优先的那个）
       G.vfxq.push({
         k: 'arc', x0: G.heroX, y0: G.heroY, x1: cand[0].e.x, y1: cand[0].e.y,
-        t0: G.t, delay: 0, n: _hitN,
+        t0Real: Date.now(), delayMs: 0, n: _hitN,
       });
     }
     for (let k = 0; k < aoeN && k < cand.length; k++) {
       const e = cand[k].e;
       if (Math.random() < st.missRate) {
         pushDmgFx(e.x, e.y, 'MISS', 'miss', null,
-          (_proj ? Math.hypot(e.x - G.heroX, e.y - G.heroY) / VFX.PROJ_SPEED : 0) + k * VFX.STAGGER);
-        sfxDelay('miss', 1, _proj ? 0.06 : 0);       // ★ R60/R61
+          (_proj ? _flyMs(e) : 0) + k * VFX.STAGGER_MS);
+        sfxDelay('miss', 1, _proj ? 60 : 0);         // ★ R60/R61/R63
         continue;
       }
       // ★ 属性同调乘区：基础攻击之后、随机浮动之前
@@ -7428,13 +7445,13 @@ function step(st, dt) {
         : isCrit ? 'crit' : (wxKe > 1 ? 'dmg ke' : 'dmg');
       // ★ R60：命中音。暴击单独一个更亮的音（相克再响一点）
       //   ⚠️ R61：远程的命中音也要等弹道飞到 —— 否则「咻」和「咚」同时响，听起来是没飞
-      const _fly = _proj ? (Math.hypot(e.x - G.heroX, e.y - G.heroY) / VFX.PROJ_SPEED) : 0;
+      const _fly = _proj ? _flyMs(e) : 0;
       sfxDelay(isCrit ? 'crit' : 'hit', wxKe > 1 ? 1.25 : 1, _fly);
       if (isCrit) hitstop(VFX.HIT_CRIT);   // ★ R62：暴击顿帧（远程要等弹道飞到才顿）
       // ★ R61：飘字错开 —— 同一次出手打多个目标时，逐个错开 STAGGER 出现，
       //   否则 5 个数字同帧糊在一起（实测单刀最多结算 5 个目标）
       pushDmgFx(e.x, e.y, Math.round(d) + (isCrit ? '!' : ''), cls,
-        wxKe > 1 ? myEl : null, _fly + k * VFX.STAGGER);
+        wxKe > 1 ? myEl : null, _fly + k * VFX.STAGGER_MS);
     }
     for (let k = G.field.length - 1; k >= 0; k--) {
       if (G.field[k].hp <= 0) {
@@ -8357,7 +8374,7 @@ function render() {
     if (bar) bar.style.width = Math.max(0, e.hp / e.maxHp * 100) + '%';
   }
   // 清理已死/离场的
-  // ★★ R61：不立即删 —— 先打 .dying 让怪【碎裂消散】，VFX.DIE_DUR 之后才真正移除。
+  // ★★ R61：不立即删 —— 先打 .dying 让怪【碎裂消散】，VFX.DIE_MS 之后才真正移除。
   //   这是"看不出砍死怪物"最关键的一处：原来怪是"凭空消失"的，玩家只看到数量少了。
   //   注意：行为层完全没改（怪在 field 里已经被删掉了，这里拖的只是 DOM 的存在时间）。
   for (const id of Object.keys(mobs)) {
@@ -8367,7 +8384,7 @@ function render() {
       el._dying = Date.now();
       if (el.classList && el.classList.add) el.classList.add('dying');
     }
-    if (Date.now() - el._dying >= VFX.DIE_DUR * 1000) {
+    if (Date.now() - el._dying >= VFX.DIE_MS) {          // ★ R63：真实毫秒
       el.remove ? el.remove() : arena.removeChild && arena.removeChild(el);
       delete mobs[id];
     }

@@ -1294,13 +1294,23 @@ chk("身法·追风步：6 层时出手 ×1.24（兜底已在 0 层基准里）"
 
 // ---- 周期型触发 ----
 A.GF.eq = {}; A.gfEquip("g_zhan"); A.GF.swings = 0;
+// ★ R63：cdN 的触发点依赖 CADENCE（swingW 每次 +CADENCE），所以期望值必须【算】出来，
+//   不能硬编码 —— 否则每次调节拍都要改 4 处断言，容易改成"迁就实现"的假断言。
+const simSwingW = (swings, cdN) => {
+  const out = []; let last = 0;
+  for (let i = 1; i <= swings; i++) {
+    const w = i * A.P.CADENCE;
+    if (w - last >= cdN) { out.push(w); last = w; }
+  }
+  return out;
+};
 // ★ R61：cdN 计的是【加权出手数】（每次出手 +P.CADENCE）⇒ 与出手节拍无关。
 //   30 次出手 = 加权 60 ⇒ 触发于加权 10/20/30/40/50/60 = 6 次（等效时长与旧版一致）。
 const _CAD = A.P.CADENCE;
 let bursts = 0;
 for (let i = 0; i < 30; i++) { if (A.gfOnSwing().burst) bursts++; }
-chk("攻伐·裂空斩：每 10【加权】次出手触发（30 次出手 = 加权 60 ⇒ 6 次）",
-  bursts === 30 * _CAD / 10, bursts + " 次");
+chk("攻伐·裂空斩：每 10【加权】次出手触发（与节拍无关）",
+  bursts === simSwingW(30, 10).length, bursts + " 次 / 期望 " + simSwingW(30, 10).length);
 A.GF.eq = {}; A.gfEquip("g_zhan"); A.gfEquip("g_lei");   // 同类互斥 ⇒ 只剩 g_lei
 A.GF.swings = 0;
 let nm = null;
@@ -1873,14 +1883,16 @@ const fireAt = [];
 for (let i = 1; i <= 30; i++) { const r = A.gfOnSwing(); if (r.fired) { fireAt.push(i); fireAtW.push(Math.round(A.GF.swingW)); } }
 console.log("     裂空斩(cdN=10 加权) 出手# " + fireAt.join(",") + " / 加权 " + fireAtW.join(","));
 // 30 次出手 = 加权 60 ⇒ cdN=10 在加权 10/20/30/40/50/60 各触发一次
-chk("★ 冷却按【加权出手数】驱动（30 次出手 ⇒ 加权 10,20,…,60）",
-  fireAtW.join(",") === "10,20,30,40,50,60", fireAtW.join(","));
+chk("★ 冷却按【加权出手数】驱动（cdN=10，与节拍无关）",
+  fireAtW.join(",") === simSwingW(30, 10).join(","),
+  fireAtW.join(",") + " / 期望 " + simSwingW(30, 10).join(","));
 gfSetup(["g_lei"]);
 const fireAtW2 = [];
 for (let i = 1; i <= 25; i++) { const r = A.gfOnSwing(); if (r.fired) fireAtW2.push(Math.round(A.GF.swingW)); }
 // 25 次出手 = 加权 50 ⇒ cdN=12 在 12/24/36/48
-chk("天雷引按自身 cdN=12 驱动（加权 12,24,36,48）",
-  fireAtW2.join(",") === "12,24,36,48", fireAtW2.join(","));
+chk("天雷引按自身 cdN=12 驱动（与节拍无关）",
+  fireAtW2.join(",") === simSwingW(25, 12).join(","),
+  fireAtW2.join(",") + " / 期望 " + simSwingW(25, 12).join(","));
 
 // ---- 同刻最多 1 个主动 ----
 gfSetup(["x_qingxin", "h_huichun", "m_juxian"]);
@@ -1921,8 +1933,9 @@ gfSetup(["g_zhan"]);
 G.cdr = 0.40;
 const fireAtW3 = [];
 for (let i = 1; i <= 30; i++) { const r = A.gfOnSwing(); if (r.fired) fireAtW3.push(Math.round(A.GF.swingW)); }
-chk("★ CDR 不影响 swing 节拍（按加权出手数 10,…,60）",
-  fireAtW3.join(",") === "10,20,30,40,50,60", fireAtW3.join(","));
+chk("★ CDR 不影响 swing 节拍（按加权出手数）",
+  fireAtW3.join(",") === simSwingW(30, 10).join(","),
+  fireAtW3.join(",") + " / 期望 " + simSwingW(30, 10).join(","));
 G.cdr = 0;
 
 // ---- 冷却不被"0 是假值"漏判（回归）----
@@ -1967,8 +1980,9 @@ chk("万剑归宗是纯主动（sec 节拍，长冷却）",
 gfSetup(["s_suodi"]);
 const suodiFire = [];
 for (let i = 1; i <= 25; i++) { const r = A.gfOnSwing(); if (r.fired) suodiFire.push(Math.round(A.GF.swingW)); }
-chk("缩地成寸按 cdN=10 驱动（加权 10,20,30,40,50）",
-  suodiFire.join(",") === "10,20,30,40,50", suodiFire.join(","));
+chk("缩地成寸按 cdN=10 驱动（与节拍无关）",
+  suodiFire.join(",") === simSwingW(25, 10).join(","),
+  suodiFire.join(",") + " / 期望 " + simSwingW(25, 10).join(","));
 gfSetup(["s_suodi"]);
 let sres = null;
 for (let i = 1; i <= 10; i++) { const r = A.gfOnSwing(); if (r.fired) sres = r; }
@@ -4526,7 +4540,7 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
 
   // ⑥ 死亡消散：怪不能再"凭空消失"（那是用户报的核心观感问题）
   chk('★ 表现·怪物死亡有消散（.dying + 延后移除）',
-    /classList\.add\('dying'\)/.test(J61) && /VFX\.DIE_DUR \* 1000/.test(J61) &&
+    /classList\.add\('dying'\)/.test(J61) && /VFX\.DIE_MS/.test(J61) &&
     /\.mob\.dying\{/.test(H61) && /@keyframes mobDie/.test(H61));
 
   // ⑦ CSS 特效三件套齐（少一个就是"写了 JS 但看不见"）
@@ -4603,6 +4617,57 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
   for (let i = 0; i < 30 && !nm; i++) { const r = A.gfOnSwing(); if (r.fired) nm = r.firedName; }
   chk('★ 特效·功法释放带名字（横幅用）', !!nm && nm !== 'g_zhan', 'firedName = ' + nm);
   A.GF.eq = {};
+})();
+
+// ============================================================================
+// ★ R63：表现层时序必须与 CSS 同一个钟
+//   本轮查出的大 bug 就是"两个钟不一致"：JS 用【游戏秒】回收元素，
+//   而游戏时钟是真实时间的 2.33× ⇒ 元素存活期只有 CSS 动画的 43%，
+//   **每个特效都被截断**（弧光只闪 86ms）。下方断言就是盯这件事，防止回归。
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J63 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const H63 = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+  const V = A.VFX;
+
+  // ① 时长必须都是【真实毫秒】量级（几百 ms），不再是 0.x 的"游戏秒"
+  const ks = ['PROJ_MS_PER_UNIT', 'STAGGER_MS', 'ARC_MS', 'DIE_MS', 'SKILL_MS', 'NAME_MS'];
+  chk('★ 时序·VFX 时长全部是真实毫秒（都 ≥ 40）',
+    ks.every(k => typeof V[k] === 'number' && V[k] >= 40),
+    ks.map(k => k + '=' + V[k]).join(' '));
+
+  // ② 时序层必须用真实时钟（Date.now），不许再用 G.t 计表现时长
+  chk('★ 时序·表现层计时用 Date.now（与 CSS 同一个钟）',
+    /if \(now >= G\.dmgq\[i\]\.at\)/.test(J63) &&
+    /if \(now >= SFX_Q\[i\]\.at\)/.test(J63) &&
+    /now - v\.t0Real > life/.test(J63) &&
+    !/G\.t >= G\.dmgq\[i\]\.at/.test(J63) && !/G\.t - v\.t0 >/.test(J63));
+
+  // ③ ★★ 核心不变量：JS 的元素存活期 ≥ CSS 动画时长
+  //    （反了就会"动画播到一半被删"—— 这正是本轮 bug 的形态）
+  const cssSec = re => { const m = H63.match(re); return m ? parseFloat(m[1]) * 1000 : null; };
+  const pairs = [
+    ['近战弧光',  cssSec(/\.vfx-arc\{[\s\S]*?animation:vfxArc (\d*\.?\d+)s/), V.ARC_MS],
+    ['死亡消散',  cssSec(/\.mob\.dying\{animation:mobDie (\d*\.?\d+)s/), V.DIE_MS],
+    ['法宝功法环', cssSec(/\.vfx-ring::before[\s\S]*?animation:vfxRing (\d*\.?\d+)s/), V.SKILL_MS],
+    ['放射光线',  cssSec(/\.vfx-rays::before[\s\S]*?animation:vfxRays (\d*\.?\d+)s/), V.SKILL_MS],
+    ['全屏闪',    cssSec(/\.vfx-flash::after[\s\S]*?animation:vfxFlash (\d*\.?\d+)s/), V.SKILL_MS],
+  ];
+  const bad = pairs.filter(p => p[1] === null || p[2] < p[1]);
+  chk('★ 时序·元素存活期 ≥ CSS 动画时长（不然动画被截断）',
+    bad.length === 0,
+    bad.length ? '被截断: ' + bad.map(p => p[0] + '(' + p[1] + 'ms动画 > ' + p[2] + 'ms寿命)').join(' ')
+      : pairs.map(p => p[0] + ' ' + p[1] + '/' + p[2]).join(' · '));
+  // 名字横幅单独：寿命取 NAME_MS
+  const nm = cssSec(/\.vfx-name\{[\s\S]*?animation:vfxName (\d*\.?\d+)s/);
+  chk('★ 时序·名字横幅存活期 ≥ 动画时长', nm !== null && V.NAME_MS >= nm,
+    '动画 ' + nm + 'ms / 寿命 ' + V.NAME_MS + 'ms');
+
+  // ④ 时长要"看得清"：弧光 ≥250ms 是硬阈值；技能特效要够长才有仪式感
+  chk('★ 时序·弧光 ≥250ms（人眼看清一次打击的下限）', V.ARC_MS >= 250, V.ARC_MS + 'ms');
+  chk('★ 时序·技能特效 ≥600ms（"看着爽"的下限）', V.SKILL_MS >= 600, V.SKILL_MS + 'ms');
 })();
 
 console.log('\n' + '='.repeat(84));

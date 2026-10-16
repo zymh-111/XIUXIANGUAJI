@@ -60,8 +60,14 @@ const st = A.playerStats();
 const pct = (a, p) => { const b = a.slice().sort((x, y) => x - y); return b[Math.floor(b.length * p)] || 0; };
 const gaps = killTs.slice(1).map((t, i) => t - killTs[i]);
 
-console.log('=== 战斗节奏（' + G.t.toFixed(0) + ' 秒 · 炼气期起手 · CADENCE=' + P.CADENCE + '）===');
-console.log('  出手频率      ', st.actFreq.toFixed(2), '/秒  ⇒ 出手间隔', (1000 / st.actFreq).toFixed(0), 'ms');
+// ★ R63：游戏时钟是真实时间的 CLOCK_RATIO 倍（tick 每帧推进 0.5 游戏秒）。
+//   手感要看【真实毫秒】，配平要看【游戏秒】—— 两个口径都要报，别再混。
+const CLOCK_RATIO = 2.33;
+console.log('=== 战斗节奏（' + G.t.toFixed(0) + ' 游戏秒 ≈ ' + (G.t / CLOCK_RATIO).toFixed(0) +
+  ' 真实秒 · 炼气期起手 · CADENCE=' + P.CADENCE + '）===');
+console.log('  时钟          ', '游戏秒 = 真实 ×' + CLOCK_RATIO, '（所有"游戏秒"数值都要除它才是玩家体感）');
+console.log('  出手频率      ', st.actFreq.toFixed(2), '/游戏秒  ⇒ 间隔',
+  (1000 / st.actFreq).toFixed(0), '游戏ms =', (1000 / st.actFreq / CLOCK_RATIO).toFixed(0), '真实ms');
 console.log('  AOE           ', st.aoe, '（一次出手最多结算几个目标）');
 console.log('  总击杀        ', G.kills, ' ⇒', (G.kills / G.t).toFixed(2), '杀/秒');
 console.log('  峰值每秒击杀  ', Math.max(...perSec));
@@ -69,5 +75,10 @@ console.log('  飘字          ', dmgTxt, '⇒', (dmgTxt / G.t).toFixed(1), '条
 console.log('  单刀最多结算  ', maxPerSwing, '个目标  ← ≥3 就开始糊');
 console.log('  击杀间隔中位数', pct(gaps, 0.5).toFixed(3), '秒');
 console.log();
-console.log('  判据：看清一次打击过程需 ≥250ms');
-console.log('        ' + (1000 / st.actFreq >= 250 ? '✅ 出手间隔达标' : '❌ 出手间隔仍不足'));
+const realGap = 1000 / st.actFreq / CLOCK_RATIO;
+console.log('  判据：看清一次打击过程需 ≥250ms【真实】');
+console.log('        出手间隔真实 ' + realGap.toFixed(0) + 'ms ⇒ ' +
+  (realGap >= 250 ? '✅ 达标' : '❌ 仍不足（弧光会一直叠着，平A看不清）'));
+console.log('        弧光', A.VFX.ARC_MS + 'ms / 死亡消散', A.VFX.DIE_MS + 'ms / 技能特效',
+  A.VFX.SKILL_MS + 'ms（都是真实毫秒）');
+console.log('        弧光/间隔 =', (A.VFX.ARC_MS / realGap).toFixed(2), '（≈1 最好：每刀一个可分辨节拍）');
