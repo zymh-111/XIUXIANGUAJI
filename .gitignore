@@ -50,6 +50,13 @@ node_modules/
 npm-debug.log*
 yarn-error.log*
 
+# ---- 玩家存档（本地启动器写的，是【数据】不是代码）----
+#   ⚠️ `*.bak` 规则盖不住 `存档.bak.json`（后缀是 .json）⇒ 单独列一条
+#   这两个文件每次玩都会变，进 git 只会造成无意义的 diff 噪音
+原型/游戏/存档.json
+原型/游戏/存档.bak.json
+原型/游戏/存档.json.tmp
+
 # ---- 临时文件（我排查时生成的）----
 _tmp_*
 *.tmp
