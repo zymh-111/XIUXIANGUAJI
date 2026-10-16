@@ -2421,6 +2421,13 @@ const VFX = {
   ARC_MS: 320,             // 近战弧光 —— ≥250ms 才看得清一次打击；320ms 能看出起手→收势
   DIE_MS: 420,             // 死亡消散 —— 比弧光更长才有"余韵"（怪是被打碎的，不是消失的）
   SKILL_MS: 900,           // 法宝/功法特效 —— 一局几十次，是"最小仪式感"，又不到打断挂机
+  // ★ R65：闪避（位移 + 残影）
+  //   实测现状：位移量其实够（0.13 单位 ≈ 竞技场直径 13%），
+  //   但 ① 动作只有 scale(.94)（缩 6%，看不出）② dodgeFlash 0.35【游戏秒】= 真实 150ms
+  //   ⇒ 所以"闪避看不见"不是位移小，是动作量和时长都不够。
+  DODGE_MS: 300,           // 闪避动作时长（真实）。≥250ms 才看得清"人往旁边闪了一下"
+  GHOST_MS: 340,           // 残影寿命（比闪避略长，形成拖影）
+  GHOST_N: 3,              // 残影个数（3 个足够形成"速度感"，再多就糊）
   NAME_MS: 1150,           // 名字横幅 —— 比特效更长，够玩家读完是哪个法宝
   // ---- 顿帧（hitstop）----
   //   ⚠️ 只冻【表现层】，绝不冻数值：冻游戏时钟会改 DPS 与一局时长 ⇒ 破坏配平。
@@ -2556,7 +2563,8 @@ function vfxTick() {
   for (let i = G.vfxq.length - 1; i >= 0; i--) {
     const v = G.vfxq[i];
     const life = v.k === 'arc' ? VFX.ARC_MS
-      : (v.k === 'skill' ? VFX.NAME_MS : v.delayMs + VFX.ARC_MS);
+      : (v.k === 'skill' ? VFX.NAME_MS
+        : (v.k === 'ghost' ? VFX.GHOST_MS + VFX.GHOST_N * 70 : v.delayMs + VFX.ARC_MS));
     if (now - v.t0Real > life) G.vfxq.splice(i, 1);
   }
 }
@@ -2576,6 +2584,29 @@ function vfxRender(arena) {
     if (el) continue;                         // 已建过 ⇒ 交给 CSS 自己跑
     el = document.createElement('div');
     const ang = Math.atan2(v.y1 - v.y0, v.x1 - v.x0);
+    // ★ R65：闪避残影 —— 同一张立绘沿突进方向依次拖出，形成"速度感"
+    if (v.k === 'ghost') {
+      el.className = 'vfx vfx-ghost';
+      el.style.setProperty('--dx', ((v.dx || 0) * -140).toFixed(1) + 'px');
+      el.style.setProperty('--dy', ((v.dy || 0) * -140).toFixed(1) + 'px');
+      const img = document.createElement('img');
+      // ⚠️ HERO_AV 是模块级【变量】不是函数（render 里赋值的当前立绘编号）
+      const av = 'assets/弟子/弟子_' + (HERO_AV || 2) + '.webp';
+      img.src = av;
+      img.alt = '';
+      el.appendChild(img);
+      for (let gi = 0; gi < VFX.GHOST_N; gi++) {
+        const g = el.cloneNode(true);
+        g.style.setProperty('--i', gi);
+        g.style.animationDelay = (gi * 26) + 'ms';
+        arena.appendChild(g);
+      }
+      el.style.setProperty('--i', 'last');   // 本体那份延迟最久，形成前后层次
+      el.style.animationDelay = '44ms';
+      arena.appendChild(el);
+      box[v._id] = el;
+      continue;
+    }
     // ★ R62：法宝 / 功法 / 突破的特效（三类原型 × 五行色）—— 带一个名字横幅
     if (v.k === 'skill') {
       const c = WX_COLOR[v.wx] || '#c9a227';
@@ -7624,8 +7655,20 @@ function step(st, dt) {
     // ★ 闪避的视觉反馈：累计"躲掉的血量"到一定量就闪一下 + 飘"DODGE"
     G.dodgeAcc = (G.dodgeAcc || 0) + dodged * dt;
     if (G.dodgeAcc > st.hp * 0.05) {
-      G.dodgeAcc = 0; G.dodgeFlash = 0.35;
+      G.dodgeAcc = 0;
+      // ★ R65：dodgeFlash 原来 0.35【游戏秒】= 真实 150ms，太短看不清
+      G.dodgeFlash = VFX.DODGE_MS / 1000 * 2.33;
       G.dashT = P.DASH_TIME;                 // ★ 触发突进
+      // ★ R65：残影 —— 朝突进方向拖出 3 个立绘残影（在 G.dashT 结算前先求出方向）
+      {
+        let ddx = 0, ddy = 0, nz = null, nd2 = 1e9;
+        for (const e of G.field) { const d = distToHero(e); if (d < nd2) { nd2 = d; nz = e; } }
+        if (nz) { const l = Math.hypot(G.heroX - nz.x, G.heroY - nz.y) || 1;
+          ddx = (G.heroX - nz.x) / l; ddy = (G.heroY - nz.y) / l; }
+        else { const a = Math.random() * Math.PI * 2; ddx = Math.cos(a); ddy = Math.sin(a); }
+        G.vfxq.push({ k: 'ghost', x0: G.heroX, y0: G.heroY, dx: ddx, dy: ddy,
+          t0Real: Date.now(), delayMs: 0 });
+      }
       if (gfOn('s_lingbo')) GF.lingboT = P.GF_LINGBO_WINDOW;   // ★ 凌波微步：闪避→提速
       G.dodgeCount++; G.lastDodgeT = G.t;    // ★ 身法钩子
       G.fx.push({ x: G.heroX, y: G.heroY - 0.05, txt: '闪避', cls: 'dodge', life: 1 });

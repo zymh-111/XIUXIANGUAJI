@@ -4752,6 +4752,38 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
     /conic-gradient\(from calc\(var\(--a/.test(H64));
 })();
 
+// ============================================================================
+// ★ R65：闪避 = 位移 + 残影
+//   实测现状：位移其实够（0.13 单位 ≈ 竞技场直径 13%），
+//   但动作只有 scale(.94)（缩 6%）+ dodgeFlash 0.35【游戏秒】= 真实 150ms
+//   ⇒ "看不见"不是位移小，是动作量与时长都不够。下面盯住这两点不许退回。
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J65 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const H65 = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+  const V = A.VFX;
+
+  chk('★ 闪避·时长 ≥250ms【真实】（才看得清"人往旁边闪了一下"）',
+    V.DODGE_MS >= 250, V.DODGE_MS + 'ms');
+  chk('★ 闪避·残影个数合理（2~4，再多就糊）',
+    V.GHOST_N >= 2 && V.GHOST_N <= 4, V.GHOST_N + ' 个');
+  chk('★ 闪避·触发时会入队残影（沿突进方向）',
+    /k: 'ghost'/.test(J65) && /dx: ddx, dy: ddy/.test(J65));
+  chk('★ 闪避·动作量不只缩放（含 rotate，否则还是"缩一下"）',
+    /@keyframes heroDodge\{[\s\S]{0,300}?rotate\(-/.test(H65));
+  chk('★ 闪避·位移过渡被拉长（默认 .18s 太短，看不清"滑出去"）',
+    /#hero\.dodge\{transition:left \.3s/.test(H65));
+  chk('★ 闪避·残影 CSS 齐 + 用真实立绘',
+    /\.vfx-ghost\{/.test(H65) && /@keyframes vfxGhost/.test(H65) &&
+    /assets\/弟子\/弟子_' \+ \(HERO_AV/.test(J65));
+  // ⚠️ dodgeFlash 必须按【真实时长】折算过（原来 0.35 游戏秒 = 真实 150ms）
+  chk('★ 闪避·dodgeFlash 已按真实时长折算（不再写死 0.35）',
+    /G\.dodgeFlash = VFX\.DODGE_MS \/ 1000 \* 2\.33/.test(J65) &&
+    !/G\.dodgeFlash = 0\.35/.test(J65));
+})();
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));

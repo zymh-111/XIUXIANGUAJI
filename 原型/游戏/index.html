@@ -185,7 +185,12 @@
      缩到 .3s 并做成"前冲+回位"，配合加长到 320ms 的弧光一起看。 */
   #hero.attacking img{animation:heroAttack .3s cubic-bezier(.2,.9,.3,1)}
   #hero.hurt img{animation:heroHurt .22s ease-out}
-  #hero.dodge img{animation:heroDodge .3s ease-out}
+  /* ★ R65：闪避原来只是 scale(1)→scale(.94)（缩 6%），基本看不出。
+     实测位移其实够（0.13 单位 ≈ 竞技场直径 13%），缺的是"动作量 + 时长"。
+     现在：深蹲蓄力 → 侧倾窜出 → 落地缓冲，真实 300ms（≥250ms 才看得清）。 */
+  #hero.dodge img{animation:heroDodge .3s cubic-bezier(.2,.85,.3,1)}
+  /* 闪避期间把位移过渡也拉长，让"滑出去"这段真的看得见（默认 .18s） */
+  #hero.dodge{transition:left .3s cubic-bezier(.2,.8,.3,1), top .3s cubic-bezier(.2,.8,.3,1)}
   @keyframes heroAttack{
     0%  {transform:scale(1)}
     22% {transform:scale(1.09) translateY(-5px) rotate(-3.4deg)}
@@ -195,8 +200,28 @@
   @keyframes heroHurt{0%,100%{transform:translateX(0)}
     28%{transform:translateX(-3.5px) rotate(1.6deg)}
     62%{transform:translateX(3.5px) rotate(-1.2deg)}}
-  @keyframes heroDodge{0%{transform:scale(1)}
-    40%{transform:scale(.94) translateY(2px)}100%{transform:scale(1)}}
+  @keyframes heroDodge{
+    0%  {transform:scale(1) rotate(0)}
+    18% {transform:scale(.88,.94) translateY(4px) rotate(-6deg)}      /* 深蹲蓄力 */
+    46% {transform:scale(1.06,.92) translateY(-7px) rotate(-15deg)}   /* 侧倾窜出去 */
+    74% {transform:scale(.95,1.03) translateY(1px) rotate(-5deg)}     /* 落地缓冲 */
+    100%{transform:scale(1) rotate(0)}
+  }
+
+  /* ★ R65：闪避残影 —— 同一张立绘沿突进方向拖出，透明度递减 + 饱和度压低。
+     --dx/--dy 由 JS 按突进方向注入（负向 = 拖在身后），--i 越大越靠后。 */
+  .vfx-ghost{width:72px;height:72px;margin:-36px 0 0 -36px;z-index:4;
+    animation:vfxGhost .34s cubic-bezier(.1,.8,.3,1) both;
+    animation-delay:calc(var(--i,0) * 26ms)}
+  .vfx-ghost img{width:100%;height:100%;display:block;
+    filter:brightness(1.5) saturate(.35) blur(.3px);
+    opacity:.5;
+    transform:scale(calc(1 - var(--i,0) * 0.07))}
+  @keyframes vfxGhost{
+    0%  {opacity:0;  transform:translate(0,0) scale(.9)}
+    30% {opacity:.55}
+    100%{opacity:0;  transform:translate(var(--dx,0), var(--dy,0)) scale(1.04)}
+  }
   #hero .halo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:88px;height:88px;border-radius:50%;border:1px solid #c9a2273d;
     animation:halo 2.4s ease-out infinite}
