@@ -2475,7 +2475,24 @@ const SFX_CORE = ['ui', 'ui_tab', 'swing', 'hit', 'kill_std'];   // 开机预热
 const CLOCK_RATIO = 2.5;
 
 const VFX = {
-  PROJ_MS_PER_UNIT: 1250,  // 弹道飞行 ms / 单位距离。弓 reach 0.23 ⇒ 约 290ms（看得见飞）
+  // ★★ R71：弹道 —— 修"看不见弹丸"的根因
+  //
+  //  原来只有【纯距离比例】：时长 = 距离 × 1250。
+  //  但怪的近战距离 `P.MOB_REACH` 只有 **0.055** —— 它们会一路贴到弟子脸上才停。
+  //  ⇒ 打最近的怪 = 0.055 × 1250 = **69ms**、横向只有 ~23px。
+  //  ⇒ 弹丸是在**一帧里瞬移过去的**。所以"看不见弹道"不是画得太小，
+  //     而是**根本不存在飞行过程**（R65/R209 一直没修对，就是没量这个数）。
+  //
+  //  现在改成【保底 + 比例】：贴脸也有 200ms 的飞行，远了再按距离加。
+  //  实测组合（横向像素按竞技场宽 420 估）：
+  //     0.055（普通怪贴脸）→ 200 +  39 = 239ms   ≈ 23px
+  //     0.110（精英）      → 200 +  77 = 277ms   ≈ 46px
+  //     0.230（弓的最大射程）→ 200 + 161 = 361ms ≈ 97px
+  //  ⚠️ 全程只是"让玩家看见过程"，**数值一个字不动**：伤害在出手瞬间就已结算。
+  PROJ_BASE_MS: 200,       // 弹道保底飞行时长（贴脸也要看得见飞）
+  PROJ_MS_PER_UNIT: 700,   // 每单位距离在保底之上再加的时长
+  STREAK_FADE_MS: 300,     // 拖尾在命中后继续亮一下再淡出（"余韵"，别到点就黑）
+  HIT_BURST_MS: 180,       // 弹丸命中目标那一下的炸开（"砰"的视觉）
   STAGGER_MS: 85,          // 同一次出手多目标时，飘字逐个错开的间隔
   ARC_MS: 320,             // 近战弧光 —— ≥250ms 才看得清一次打击；320ms 能看出起手→收势
   DIE_MS: 420,             // 死亡消散 —— 比弧光更长才有"余韵"（怪是被打碎的，不是消失的）
@@ -2645,6 +2662,75 @@ function hitstop(ms) {
   if (until > (G.freezeUntil || 0)) G.freezeUntil = until;
 }
 
+// ★ R71：延后顿帧（远程专用）。
+//   ⚠️ 修的是一个"注释和代码不一致"的旧错：R62 的注释写着"远程要等弹道飞到才顿"，
+//      但代码是**立刻** hitstop ⇒ 顿在【拉弓那一下】，不是命中的那一下。
+//      近战无所谓（出手即命中），远程差了一整个飞行时间 —— 手感完全不对。
+const HITSTOP_Q = [];
+function hitstopDelay(ms, delayMs) {
+  if (!ms) return;
+  if (!delayMs || delayMs <= 0) { hitstop(ms); return; }
+  HITSTOP_Q.push({ at: Date.now() + delayMs, ms: ms });   // ★ 真实时钟
+}
+
+/** 弹道飞行时长（真实毫秒）—— **唯一真相源**。
+ *
+ *  ⚠️ 表现层（弹丸位移 / 拖尾时长）、听觉（命中音延迟）、视觉（伤害飘字延迟）
+ *     必须全部走这一个函数。任何一处另算一遍，就会出现
+ *     「箭还没到，数字先跳了」或「音效比箭早」——这类漂移不会报错，只能靠断言盯。
+ */
+function projFlyMs(x0, y0, x1, y1) {
+  const d = Math.hypot(x1 - x0, y1 - y0);
+  return Math.round(VFX.PROJ_BASE_MS + d * VFX.PROJ_MS_PER_UNIT);
+}
+
+/** 竞技场的像素尺寸 —— 把 0~1 坐标换算成"看起来正确"的角度与长度。
+ *
+ *  ⚠️ 为什么必须有它：弹丸用 `left/top: x*100%` 定位，而百分比是
+ *     **按宽、高各自缩放**的。所以只要战场不是正方形，直接对 0~1 差值取
+ *     atan2 得到的角度就与画面对不上；而长度更是**必须**换算，否则拖尾够不到目标。
+ *  ⚠️ 实测口径（R71 量过）：战斗区 `#arena` 是 **382×380**（≈ 正方形）。
+ *     所以"角度歪"这件事**今天几乎看不出来**（382 与 380 差 0.5%）——
+ *     换算它属于**防回归**（换窄窗/改布局就会现形），长度换算才是硬需求。
+ *     别把这里当成"修好了一支歪箭"，那与实测不符。
+ *  ⚠️ 取不到尺寸时退化成 {1,1}（等价于旧行为），不能让渲染炸掉。
+ */
+function arenaPx(arena) {
+  const w = (arena && arena.clientWidth) || 0;
+  const h = (arena && arena.clientHeight) || 0;
+  return (w > 0 && h > 0) ? { w: w, h: h } : { w: 1, h: 1 };
+}
+
+// ★ R71：弹丸素材 —— 手绘内联 SVG。
+//
+//  为什么不用美术资源库里那套 game-icons 的箭 SVG（lorc__barbed-arrow 等）：
+//    ① 它们是**细线描边**风，在 20~26px 下会糊成一根铁丝；
+//       而本作的战场语言是「发光体」（弧光是光带、怪是柔和贴图、法宝是光晕）——会打架。
+//    ② 那套是 CC BY 3.0，用了就得在游戏里署名（多一笔授权债，见 assets/来源与授权.md）。
+//  为什么内联在 JS 里而不是放 assets/*.svg：
+//    ① 发布包是 file:// 双击打开的，**fetch 会被 CORS 拦**，读不到外部 SVG 文本；
+//    ② 走 <img src=...svg> 虽然能显示，但**没法用 CSS 染色** —— 而弹丸要按五行上色。
+//  ⇒ 内联 + 白色"炽热"本体 + 外层 div 的 drop-shadow 出五行色光晕。
+//
+//  ⚠️ 千万别往这里放 <defs>/渐变：同一份标记会内联很多次，渐变 id 是**文档全局**的，
+//     会互相撞车（第一个元素的渐变定义被所有元素共用），颜色整个串掉。
+//     需要渐变就放到外层 div 的 CSS background 上。
+//  ⚠️ 形状一律朝 **+x（右）**，由 CSS 的 rotate(--ang) 转到飞行方向。
+const PROJ_GLYPH = {
+  // 箭：尾羽 + 箭杆 + 镞
+  arrow: '<svg viewBox="0 0 26 12" xmlns="http://www.w3.org/2000/svg">' +
+    '<path d="M6.4 6 L0.7 2.4 L4.5 6 L0.7 9.6 Z" fill="#fff" opacity=".5"/>' +
+    '<rect x="4.6" y="5.1" width="13.6" height="1.8" rx=".9" fill="#fff" opacity=".9"/>' +
+    '<path d="M16 0.8 L25.6 6 L16 11.2 L19.5 6 Z" fill="#fff"/>' +
+    '</svg>',
+  // 法球：亮核 + 双环
+  orb: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">' +
+    '<circle cx="8" cy="8" r="6.9" fill="none" stroke="#fff" stroke-width=".9" opacity=".42"/>' +
+    '<circle cx="8" cy="8" r="4.6" fill="none" stroke="#fff" stroke-width="1.3" opacity=".72"/>' +
+    '<circle cx="8" cy="8" r="2.7" fill="#fff"/>' +
+    '</svg>',
+};
+
 const SFX_Q = [];
 /** 音效延后播（远程命中音用）。用游戏时钟 G.t 计时，与暂停/快进天然一致。 */
 function sfxDelay(key, volMul, delayMs) {
@@ -2709,6 +2795,26 @@ function vfxTick() {
   // ★★ R63：这一层全部用【真实时钟】—— 与 CSS 动画同一个钟。
   //   之前用 G.t（游戏秒）⇒ 元素存活期只有动画时长的 43%，特效被截断。
   const now = Date.now();
+  // ★★ R71：把【顿帧停掉的那段时间】从年龄里扣掉。
+  //
+  //   为什么要扣：顿帧是靠 `#battleWrap.freeze` 的 `animation-play-state:paused`
+  //   实现的 —— 它让 CSS **动画**停住，但这里的寿命是按 `Date.now()` 算的，
+  //   照跑不误 ⇒ 动画还没播完元素就被删了。这正是 R63 修过的那个不变量
+  //   （JS 元素存活期 ≥ CSS 动画时长），只是当年只盯了"两个钟不一致"，
+  //   没盯"动画被暂停"这一条路径。
+  //   本轮尤其要紧：顿帧刚刚被挪到**弹道落点**上（hitstopDelay），
+  //   而落点上正好是弹丸炸开（180ms）+ 拖尾淡出（300ms），一冻就被截断。
+  //
+  //   做法：累计"总共冻了多少毫秒"，每个特效在【第一次被看到时】记下当时的累计值，
+  //   算年龄时只扣【它出生之后】冻掉的那部分。
+  //   ⚠️ 不能直接扣总量：那样"绕过一次顿帧之后才出生的"特效年龄会被算小 ⇒ 反而赖着不走。
+  if (G.freezeUntil > now) {
+    if (!G.fxFreezeAt) G.fxFreezeAt = now;                 // 进入顿帧
+  } else if (G.fxFreezeAt) {
+    G.fxFreezeMs = (G.fxFreezeMs || 0) + Math.max(0, G.freezeUntil - G.fxFreezeAt);
+    G.fxFreezeAt = 0;                                      // 顿帧结束，结算成累计值
+  }
+  const frozenTotal = (G.fxFreezeMs || 0) + (G.fxFreezeAt ? Math.max(0, now - G.fxFreezeAt) : 0);
   // ① 延后的伤害飘字（远程要等弹道飞到）
   for (let i = G.dmgq.length - 1; i >= 0; i--) {
     if (now >= G.dmgq[i].at) { G.fx.push(G.dmgq[i].o); G.dmgq.splice(i, 1); }
@@ -2720,21 +2826,36 @@ function vfxTick() {
   // ③ 特效事件按各自寿命回收（寿命 = CSS 动画时长，这样动画能播完整）
   for (let i = G.vfxq.length - 1; i >= 0; i--) {
     const v = G.vfxq[i];
+    if (v.froze0 === undefined) v.froze0 = frozenTotal;    // 出生时的累计冻结量
     const life = v.k === 'arc' ? VFX.ARC_MS
       : (v.k === 'skill' ? VFX.NAME_MS
-        : (v.k === 'ghost' ? VFX.GHOST_MS + VFX.GHOST_N * 70 : v.delayMs + VFX.ARC_MS));
-    if (now - v.t0Real > life) G.vfxq.splice(i, 1);
+        : (v.k === 'ghost' ? VFX.GHOST_MS + VFX.GHOST_N * 70
+          // ★ R71：拖尾 = 飞行 + 淡出（淡出动画是第二段，别只算飞行）
+          : (v.k === 'streak' ? v.delayMs + VFX.STREAK_FADE_MS
+            // ★ R71：弹丸 = 飞行 + 命中炸开（原来是 +ARC_MS，那是弧光的长度，量错了）
+            : v.delayMs + VFX.HIT_BURST_MS)));
+    const age = now - v.t0Real - (frozenTotal - v.froze0);   // ★ 扣掉它出生后冻掉的时间
+    if (age > life) G.vfxq.splice(i, 1);
+  }
+  // ④ ★ R71：延后的顿帧（远程要等弹道飞到才顿）。与 ①②③ 同一个真实时钟。
+  for (let i = HITSTOP_Q.length - 1; i >= 0; i--) {
+    if (now >= HITSTOP_Q[i].at) { hitstop(HITSTOP_Q[i].ms); HITSTOP_Q.splice(i, 1); }
   }
 }
 
-/** 渲染战斗特效（近战弧光 / 远程弹道）。
+/** 渲染战斗特效（近战弧光 / 远程弹道 / 弹道拖尾）。
  *  坐标与怪物同一套（`x*100%`）⇒ 弹道落点天然对准怪。
- *  弹道用 left/top 的 CSS transition 飞（分辨率无关，不需要换算像素）。 */
+ *  弹丸用 left/top 的 CSS transition 飞（分辨率无关）；
+ *  ⚠️ 但**长度**必须换算到像素空间（拖尾够不到目标），角度也一并换算（防回归）。 */
 function vfxRender(arena) {
   if (!arena) return;
   if (!arena._vfx) arena._vfx = {};
   const box = arena._vfx;
   const live = new Set();
+  const PX = arenaPx(arena);          // ★ R71：像素尺寸（把 0~1 换算成"看着对"的角度/长度）
+  // 视觉角度 / 视觉长度：都按像素算，与 left/top 的百分比缩放一致
+  const visAng = q => Math.atan2((q.y1 - q.y0) * PX.h, (q.x1 - q.x0) * PX.w);
+  const visLen = q => Math.hypot((q.x1 - q.x0) * PX.w, (q.y1 - q.y0) * PX.h);
   for (const v of G.vfxq) {
     if (!v._id) v._id = 'v' + (UID++);
     live.add(v._id);
@@ -2784,6 +2905,24 @@ function vfxRender(arena) {
       box[v._id] = el;
       continue;
     }
+    // ★ R71：弹道拖尾（"看得见的弹道"）
+    //   做法：一条**在像素空间**里从出手点指向目标的细光带，用 scaleX(0→1) 长出来
+    //   ⇒ 头部跟着弹丸一起走，"弹丸飞过哪里"就被画出来了。
+    //   ⚠️ 用 scaleX 而不是动画 left/top：变形的速度是线性的，头部才会**匀速**，
+    //      与弹丸的 linear transition 严格同步（两者用的是同一个 projFlyMs）。
+    if (v.k === 'streak') {
+      el.className = 'vfx vfx-streak';
+      el.style.left = (v.x0 * 100) + '%';
+      el.style.top = (v.y0 * 100) + '%';
+      el.style.width = Math.max(8, visLen(v)).toFixed(1) + 'px';   // 整个弹道有多长（像素）
+      el.style.setProperty('--ang', visAng(v) + 'rad');
+      el.style.setProperty('--wx', WX_COLOR[v.wx] || '#ffe9a8');
+      el.style.setProperty('--fly', v.delayMs + 'ms');
+      el.style.setProperty('--fade', VFX.STREAK_FADE_MS + 'ms');
+      arena.appendChild(el);
+      box[v._id] = el;
+      continue;
+    }
     el.className = 'vfx ' + (v.k === 'arc' ? 'vfx-arc' : 'vfx-proj vfx-' + v.kind);
     el.style.left = (v.x0 * 100) + '%';
     el.style.top = (v.y0 * 100) + '%';
@@ -2791,12 +2930,22 @@ function vfxRender(arena) {
     if (v.k === 'arc') {
       // ★ R64：尺寸 = 真实 reach（不再是"距离+0.11"），角度 = 真实扇面角
       //   ⇒ 弧光覆盖范围与"谁挨打"严格一致
+      //   ⚠️ 弧光的角度走的是 `--ang`（0~1 差值算出来的），因为它本来就用同一个
+      //      0~1 空间画（宽高各自缩放的扇形），换算到像素反而会与判定不一致。
       const rad = (v.radius || 0.12) * 100;
       el.style.setProperty('--sz', rad + '%');
       el.style.setProperty('--a', (v.arcDeg || 40) + 'deg');
     } else {
-      el.style.setProperty('--fly', v.delayMs + 'ms');
-      el.style.transform = 'rotate(' + ang + 'rad)';
+      // ★ R71：弹丸本体
+      //   ① 换成真素材（PROJ_GLYPH）—— 白色"炽热"本体 + 五行色外发光
+      //   ② 朝向按【像素空间】算（visAng）。⚠️ 实测 #arena 是 382×380（≈正方形），
+      //      所以这一步今天几乎看不出差别，是**防回归**；真正必需的是 visLen
+      //      （拖尾的长度必须是像素长度，否则够不到目标）。
+      //   ③ 命中那一刻炸开（CSS 动画的 delay = 飞行时长，与位移同时结束）
+      el.innerHTML = PROJ_GLYPH[v.kind] || '';
+      el.style.setProperty('--ang', visAng(v) + 'rad');
+      el.style.setProperty('--wx', WX_COLOR[v.wx] || '#ffe9a8');
+      el.style.setProperty('--burst', v.delayMs + 'ms');
     }
     arena.appendChild(el);
     box[v._id] = el;
@@ -6718,8 +6867,11 @@ const G = {
   deathT: null, peakField: 0, downgraded: 0,
   fx: [], shake: 0, hurtAcc: 0, threats: 0,
   // ★ R61：表现层队列（数值瞬时结算，这两个只管"让玩家看见过程"）
-  vfxq: [],           // 战斗特效事件：arc 近战弧光 / proj 弹道
+  vfxq: [],           // 战斗特效事件：arc 近战弧光 / proj 弹丸 / streak 弹道拖尾 / skill / ghost
   dmgq: [],           // 延后出现的伤害飘字（远程要等弹道飞到）
+  // ★ R71：顿帧把 CSS 动画暂停了，寿命必须扣掉那段时间（见 vfxTick）
+  fxFreezeMs: 0,      // 累计"冻掉"的真实毫秒
+  fxFreezeAt: 0,      // 当前这次顿帧的开始时刻（0 = 没在冻）
   heroX: 0.5, heroY: 0.56, wanderT: 0, wanderTarget: null,
   dodgeAcc: 0, dodgeFlash: 0, dashT: 0, crowdAvoid: 0,
   mobAtkAcc: 0, mobAtkT: 0,   // ★ R210：怪出手的累积器（伤害 + 节拍）
@@ -7500,6 +7652,8 @@ function startRun() {
   try { ruleRollReset("run"); } catch (e) { }
   G.field = []; G.actAcc = 0; G.spawnAcc = 0; G.overloadT = 0;
   G.vfxq.length = 0; G.dmgq.length = 0; SFX_Q.length = 0;   // ★ R61：清掉上一局残留的特效/延迟
+  HITSTOP_Q.length = 0;                                     // ★ R71：延后顿帧也要清（否则上一局的顿帧会砸到新一局头上）
+  G.fxFreezeMs = 0; G.fxFreezeAt = 0;                       // ★ R71：冻结时长统计也要归零
   G.deathT = null; G.peakField = 0; G.downgraded = 0;
   G.origin = 0;
   G.heroX = 0.5; G.heroY = 0.56; G.wanderT = 0; G.wanderTarget = null;
@@ -7732,18 +7886,35 @@ function step(st, dt) {
     //            玩家的因果链变成「拉弓 → 箭飞 → 怪中箭」，可读性最高
     //   武器 → 手感映射（纯表现，不影响任何数值）：
     //     剑/刀/枪 → arc 弧光；弓 → arrow 箭矢；杖 → orb 法球
-    //   弹道飞行时长 = 距离 × VFX.PROJ_MS_PER_UNIT（弓 reach 0.23 ⇒ 约 290ms，看得见飞）
+    //   弹道飞行时长 = projFlyMs()（保底 200ms + 距离 × 700，弓 reach 0.23 ⇒ 约 360ms）
+    //   ⚠️ 别再写成"距离 × PROJ_MS_PER_UNIT" —— 那正是"看不见弹道"的成因（见下）。
     const _wid = st.weapon.id;
     const _proj = (_wid === 'bow') ? 'arrow' : (_wid === 'staff' ? 'orb' : null);
     const _hitN = Math.min(aoeN, cand.length);
-    // ★ R63：飞行时长按【真实毫秒】算（PROJ_MS_PER_UNIT × 距离）
-    const _flyMs = e2 => Math.hypot(e2.x - G.heroX, e2.y - G.heroY) * VFX.PROJ_MS_PER_UNIT;
+    // ★ R71：飞行时长走**唯一真相源** projFlyMs（保底 200ms + 按距离加）。
+    //   旧代码这里写的是 `距离 × PROJ_MS_PER_UNIT`（纯比例）—— 怪贴到
+    //   P.MOB_REACH(0.055) 才停 ⇒ 那次飞行只有 **69ms**（横向 ≈21px，实测场宽 382），
+    //   等于根本没飞：玩家看到的是一帧之内"箭闪了一下"。
+    //   ⚠️ 表现（弹丸位移/拖尾时长）、命中音延迟、飘字延迟**必须全部用这个函数**，
+    //      任何一处另算一遍就会出现"箭没到、数字先跳"的漂移。
+    const _flyMs = e2 => projFlyMs(G.heroX, G.heroY, e2.x, e2.y);
     if (_proj) {
       for (let k = 0; k < _hitN; k++) {
         const e = cand[k].e;
+        const fly = _flyMs(e);
+        // ① 弹丸本体（带五行色 ⇒ 外发光按属性变色）
         G.vfxq.push({
           k: 'proj', kind: _proj, x0: G.heroX, y0: G.heroY, x1: e.x, y1: e.y,
-          t0Real: Date.now(), delayMs: _flyMs(e),
+          t0Real: Date.now(), delayMs: fly, wx: st.wuxing,
+        });
+        // ② 弹道拖尾 —— 与弹丸同一段距离、同一个飞行时长，"弹丸飞过哪里"看得见
+        //    ⚠️ 落点用的是【出手瞬间】的怪位置。怪贴到近战距离后就不动了，
+        //       所以主目标（最近的、也是 hitCandidates 排序后的第一个）落点是准的；
+        //       仍在接近中的副目标会有一点点偏差 —— 这是刻意不做"追瞄"：
+        //       逐帧改终点会不断重启 CSS 过渡，反而让弹丸永远到不了。
+        G.vfxq.push({
+          k: 'streak', kind: _proj, x0: G.heroX, y0: G.heroY, x1: e.x, y1: e.y,
+          t0Real: Date.now(), delayMs: fly, wx: st.wuxing,
         });
       }
     } else if (_hitN > 0) {
@@ -7784,7 +7955,10 @@ function step(st, dt) {
       //   ⚠️ R61：远程的命中音也要等弹道飞到 —— 否则「咻」和「咚」同时响，听起来是没飞
       const _fly = _proj ? _flyMs(e) : 0;
       sfxDelay(isCrit ? 'crit' : 'hit', wxKe > 1 ? 1.25 : 1, _fly);
-      if (isCrit) hitstop(VFX.HIT_CRIT);   // ★ R62：暴击顿帧（远程要等弹道飞到才顿）
+      // ★ R62/R71：暴击顿帧。近战出手即命中 ⇒ 立刻顿；
+      //   远程必须【等弹道飞到】才顿 —— R62 的注释是这么写的，代码却立刻顿，
+      //   等于顿在"拉弓那一下"，白瞎了一个飞行时间。现在按 _fly 延后。
+      if (isCrit) { if (_proj) hitstopDelay(VFX.HIT_CRIT, _fly); else hitstop(VFX.HIT_CRIT); }
       // ★ R61：飘字错开 —— 同一次出手打多个目标时，逐个错开 STAGGER 出现，
       //   否则 5 个数字同帧糊在一起（实测单刀最多结算 5 个目标）
       pushDmgFx(e.x, e.y, Math.round(d) + (isCrit ? '!' : ''), cls,
@@ -10379,7 +10553,8 @@ globalThis.__api = {
   // ★ R60：音效（供 _smoke.js 校验「映射不漏 + 文件在盘上 + 默认关闭 + 节流生效」）
   SFX, SFX_FILES, SFX_CFG, SFX_FORM, SFX_CORE, SFX_STORE_KEY, sfx, sfxSet, sfxOn, sfxWarm,
   // ★ R62：战斗表现层（特效原型 / 顿帧），供 _smoke.js 校验"没漏配、没冻数值"
-  VFX, SKILL_ARCH, FABAO_ARCH, skillVfx, hitstop,
+  // ★ R71：再加弹道（projFlyMs = 飞行时长唯一真相源 / PROJ_GLYPH = 弹丸素材 / arenaPx = 像素换算）
+  VFX, SKILL_ARCH, FABAO_ARCH, skillVfx, hitstop, hitstopDelay, projFlyMs, PROJ_GLYPH, arenaPx,
   // ★ R64：几何命中（武器扇面/溅射），供 _smoke.js 与 _tools/reach.js 用
   WPN_HIT, WPN_HIT_DEF, hitCandidates,
   // ★ R66：进度条（供 _smoke.js 校验"与真实触发同源"）

@@ -36,6 +36,14 @@ function makeEl() {
     replaceChildren() { this.children.length = 0; this._html = ''; return this; },
     querySelector() { return makeEl(); },
     querySelectorAll() { return []; },
+    // ★ R71：桩补上 cloneNode —— 闪避残影（.vfx-ghost）用 `el.cloneNode(true)` 拖出 3 份。
+    //   ⚠️ 桩从 R65 起就漏了这个方法，后果比"漏一个方法"严重得多：
+    //      cloneNode 只在【真的触发闪避的那一局】才被走到，于是变成**随机崩溃**——
+    //      崩在测试序号中段 ⇒ 后面所有断言**根本没跑**，而输出里只有一段 Node 堆栈，
+    //      "通过 865 项"看起来一切正常。这类"静默丢覆盖"比断言失败更危险。
+    //   ⚠️ 必须返回**新对象**（各自独立的 style/classList）。浅拷贝会让
+    //      `g.style.setProperty('--i', gi)` 改到本体那份上（真 DOM 的 cloneNode 是深拷贝）。
+    cloneNode() { const c = makeEl(); c._html = this._html; c.className = this.className; return c; },
     get innerHTML() { return this._html; }, set innerHTML(v) { this._html = v; },
   };
   return el;
@@ -4578,18 +4586,24 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
 
   // ④ ★★ 硬约束：顿帧**绝不能**冻游戏时钟（冻了会改 DPS 与一局时长 ⇒ 破坏配平）
   //    ⚠️ 只统计【代码行】—— 注释里提到 G.freezeUntil 不算（第一次写就误报在注释上）
+  //    ★ R71：白名单加了 vfxTick 里的两处**读**（判断在不在冻 / 结算冻了多久）。
+  //      那是"把顿帧暂停掉的动画时长从寿命里扣掉"，属于表现层记账，
+  //      与"冻游戏时钟"是两回事 —— 真正的守门是下面那条「tick 里没有 G.t/dt 冻结写法」。
   const fzCode = J62.split('\n')
     .map((l, i) => ({ l: l, i: i + 1 }))
     .filter(x => /freezeUntil/.test(x.l) && !/^\s*(\/\/|\*|\/\*)/.test(x.l));
   const okFz = x =>
     /G\.freezeUntil/.test(x.l) &&                              // 只允许读写这一个字段
-    (/const until = Date.now\(\) \+ ms/.test(x.l) ||            // hitstop 里算截止时刻
+    (/const until = Date\.now\(\) \+ ms/.test(x.l) ||            // hitstop 里算截止时刻
      /if \(until > \(G\.freezeUntil/.test(x.l) ||              // hitstop 里写
-     /_frozen = Date\.now\(\) < \(G\.freezeUntil/.test(x.l));   // render 里读
+     /_frozen = Date\.now\(\) < \(G\.freezeUntil/.test(x.l) ||  // render 里读
+     /if \(G\.freezeUntil > now\) \{/.test(x.l) ||              // ★ R71：vfxTick 里读（在不在冻）
+     /Math\.max\(0, G\.freezeUntil - G\.fxFreezeAt\)/.test(x.l));  // ★ R71：vfxTick 里结算冻了多久
   const badFz = fzCode.filter(x => !okFz(x));
-  chk('★ 顿帧·只冻表现、绝不冻游戏时钟', badFz.length === 0 && fzCode.length <= 3,
+  // 合法的 4 处：hitstop 写 / hitstop 读 / vfxTick 读 / vfxTick 结算 / render 读
+  chk('★ 顿帧·只冻表现、绝不冻游戏时钟', badFz.length === 0 && fzCode.length <= 5,
     badFz.length ? '可疑: 行 ' + badFz.map(x => x.i).join(',') :
-      fzCode.length + ' 处（hitstop 写 / render 读）');
+      fzCode.length + ' 处（hitstop 写 / vfxTick 读·结算 / render 读）');
   chk('★ 顿帧·tick 里没有对 G.t / dt 的冻结写法',
     !/G\.t\s*[-+]?=\s*0[\s\S]{0,40}freeze/.test(J62) && !/dt\s*\*=\s*0/.test(J62));
 
@@ -4639,10 +4653,12 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
     ks.map(k => k + '=' + V[k]).join(' '));
 
   // ② 时序层必须用真实时钟（Date.now），不许再用 G.t 计表现时长
+  //    ★ R71：年龄不再是裸的 `now - t0Real`，而是扣掉了顿帧冻掉的时间
+  //      （顿帧会 animation-play-state:paused 把动画停住，寿命不扣就会提前删元素）
   chk('★ 时序·表现层计时用 Date.now（与 CSS 同一个钟）',
     /if \(now >= G\.dmgq\[i\]\.at\)/.test(J63) &&
     /if \(now >= SFX_Q\[i\]\.at\)/.test(J63) &&
-    /now - v\.t0Real > life/.test(J63) &&
+    /const age = now - v\.t0Real - \(frozenTotal - v\.froze0\)/.test(J63) &&
     !/G\.t >= G\.dmgq\[i\]\.at/.test(J63) && !/G\.t - v\.t0 >/.test(J63));
 
   // ③ ★★ 核心不变量：JS 的元素存活期 ≥ CSS 动画时长
@@ -5049,6 +5065,145 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
   chk('★ 低压段·行为：超过 thresh 后由【高压曲线】接管（低压不参与）',
     Math.abs(exAt(th + 5) - 5) < 1e-9,
     '威胁 thresh+5 ⇒ excess ' + exAt(th + 5) + '（应恰为 5）');
+})();
+
+// ============================================================================
+// ★ R71：远程弹道 —— "看得见的弹丸 + 看得见的弹道"
+//   本轮查出的根因：飞行时长是【纯距离比例】(距离 × 1250)，而怪的近战距离
+//   P.MOB_REACH 只有 0.055 ⇒ 打最近的怪只要 69ms / 横向 23px，
+//   **弹丸是在一帧里瞬移过去的** —— 不是画得小，是压根没有飞行过程。
+//   风险点：① 有人"优化"回纯比例 ⇒ 老毛病复发（静默：只看得出"箭不见了"）
+//          ② 表现/飘字/命中音各自算一遍飞行时长 ⇒ 箭没到数字先跳
+//          ③ 拖尾被提前删掉 ⇒ 动画截断（R63 的老毛病）
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J71 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const H71 = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+  const V = A.VFX;
+
+  // ① ★★ 根因守门：贴脸也要有最小飞行时长
+  const flyAt = d => A.projFlyMs(0.5, 0.5, 0.5 + d, 0.5);   // 同一 y ⇒ 纯横向
+  const oldFly = P.MOB_REACH * 1250;                          // 修前的公式算出来是多少
+  chk('★ 弹道·贴脸也保底 ≥180ms（修前只有 69ms，一帧就过去了）',
+    flyAt(P.MOB_REACH) >= 180 && flyAt(P.MOB_REACH) > oldFly * 2.5,
+    'MOB_REACH=' + P.MOB_REACH + ' ⇒ 修前 ' + Math.round(oldFly) + 'ms → 修后 ' +
+    flyAt(P.MOB_REACH) + 'ms');
+  chk('★ 弹道·保底之上仍随距离增加（不是拍死一个常数）',
+    flyAt(0) === V.PROJ_BASE_MS && flyAt(0.1) < flyAt(0.2) && flyAt(0.2) < flyAt(0.3),
+    '0 ⇒ ' + flyAt(0) + ' · 0.1 ⇒ ' + flyAt(0.1) + ' · 0.2 ⇒ ' + flyAt(0.2) +
+    ' · 0.3 ⇒ ' + flyAt(0.3) + 'ms');
+  // 弓的 reach 是 0.230（WEAPONS 表里的最大值，也是远程射程上限）
+  const BOW_REACH = (A.WEAPON_BY_ID.bow || {}).reach || 0.23;
+  chk('★ 弹道·弓满射程也在"看得见"区间（200~600ms）',
+    flyAt(BOW_REACH) > 200 && flyAt(BOW_REACH) < 600, BOW_REACH + ' ⇒ ' + flyAt(BOW_REACH) + 'ms');
+
+  // ② ★★ 唯一真相源：比例算法只许出现一次，且表现/听觉/视觉全走 projFlyMs
+  chk('★ 弹道·飞行时长只有一个算法（某处另算一遍 = 箭没到数字先跳）',
+    (J71.match(/\* VFX\.PROJ_MS_PER_UNIT/g) || []).length === 1 &&
+    /function projFlyMs\(/.test(J71) &&
+    /const _flyMs = e2 => projFlyMs\(G\.heroX, G\.heroY, e2\.x, e2\.y\);/.test(J71) &&
+    /sfxDelay\(isCrit \? 'crit' : 'hit', wxKe > 1 \? 1\.25 : 1, _fly\);/.test(J71) &&
+    /pushDmgFx\(e\.x, e\.y, Math\.round\(d\) \+ \(isCrit \? '!' : ''\), cls,/.test(J71) &&
+    /wxKe > 1 \? myEl : null, _fly \+ k \* VFX\.STAGGER_MS\);/.test(J71));
+
+  // ③ 弹丸素材：两种齐、是内联 SVG、且**不许带 <defs>**（渐变 id 会串色）
+  const gA = A.PROJ_GLYPH.arrow || '', gO = A.PROJ_GLYPH.orb || '';
+  chk('★ 弹道·两种弹丸素材齐（箭 / 法球）且是内联 SVG',
+    /<svg/.test(gA) && /<svg/.test(gO) && gA.length > 100 && gO.length > 100,
+    '箭 ' + gA.length + ' 字符 · 法球 ' + gO.length + ' 字符');
+  chk('★ 弹道·素材里没有 <defs>/渐变（内联多份时 id 会撞车 ⇒ 颜色全串）',
+    !/<defs/.test(gA + gO) && !/Gradient/.test(gA + gO) && !/id="/.test(gA + gO));
+  chk('★ 弹道·五把武器的表现分流没漏（弓→箭 / 杖→法球 / 其余近战→弧光）',
+    /const _proj = \(_wid === 'bow'\) \? 'arrow' : \(_wid === 'staff' \? 'orb' : null\);/.test(J71) &&
+    /el\.innerHTML = PROJ_GLYPH\[v\.kind\] \|\| '';/.test(J71));
+
+  // ④ 拖尾成对入队 + 带五行色（不是写死金色）
+  chk('★ 弹道·每次远程出手都成对压入【弹丸 + 拖尾】',
+    /k: 'proj', kind: _proj/.test(J71) && /k: 'streak', kind: _proj/.test(J71) &&
+    (J71.match(/k: 'streak'/g) || []).length === 1 &&
+    /if \(v\.k === 'streak'\) \{/.test(J71));
+  chk('★ 弹道·弹丸与拖尾都用【该弟子属性】的五行色',
+    (J71.match(/wx: st\.wuxing,/g) || []).length === 2 &&
+    /WX_COLOR\[v\.wx\] \|\| '#ffe9a8'/.test(J71));
+  chk('★ 弹道·拖尾 CSS 用 --wx 上色（不是死色）',
+    /var\(--wx,#ffe9a8\)/.test(H71) && /--wx/.test(H71));
+
+  // ⑤ ★ 角度/长度必须按【像素空间】算：left/top 用 % 是按宽高各自缩放的，
+  //    ⚠️ 实测口径：#arena 是 382×380（≈正方形），所以**角度**换算今天几乎看不出差别，
+  //       属防回归；而**长度**换算是硬需求（拖尾不够长就够不到目标）。
+  //       别把这条读成"修好了一支歪箭"。
+  chk('★ 弹道·朝向/长度按【像素空间】算（长度是硬需求，角度防回归）',
+    /const PX = arenaPx\(arena\);/.test(J71) &&
+    /const visAng = q => Math\.atan2\(\(q\.y1 - q\.y0\) \* PX\.h, \(q\.x1 - q\.x0\) \* PX\.w\);/.test(J71) &&
+    /const visLen = q => Math\.hypot\(\(q\.x1 - q\.x0\) \* PX\.w, \(q\.y1 - q\.y0\) \* PX\.h\);/.test(J71) &&
+    /el\.style\.setProperty\('--ang', visAng\(v\) \+ 'rad'\);/.test(J71) &&
+    /el\.style\.width = Math\.max\(8, visLen\(v\)\)\.toFixed\(1\) \+ 'px';/.test(J71) &&
+    !/el\.style\.transform = 'rotate\(' \+ ang \+ 'rad\)'/.test(J71));
+  // 长度换算的必要性：非正方战场里"0~1 长度"与像素长度不同
+  const pxLen = (dx, dy, W, H) => Math.hypot(dx * W, dy * H);
+  const normLen = (dx, dy) => Math.hypot(dx, dy);
+  chk('★ 弹道·行为：拖尾长度必须换算（0~1 长度 ≠ 像素长度）',
+    Math.abs(pxLen(0.2, 0, 382, 380) - normLen(0.2, 0)) > 70 &&
+    pxLen(0.2, 0, 382, 380) > 70,
+    '0.2 单位：像素长 ' + pxLen(0.2, 0, 382, 380).toFixed(1) + 'px vs 0~1 长 ' +
+    normLen(0.2, 0) + '（换算前拖尾只有 1/382 长 ⇒ 等于没有）');
+  chk('★ 弹道·arenaPx 拿不到尺寸时退化成 1:1（不许抛错）',
+    A.arenaPx(null).w === 1 && A.arenaPx(undefined).h === 1 && A.arenaPx({}).w === 1);
+
+  // ⑥ ★ CSS 动画时长必须与 JS 常量一致，否则"寿命够/动画没播完"照样断
+  const sec2ms = re => { const m = H71.match(re); return m ? Math.round(parseFloat(m[1]) * 1000) : null; };
+  const cssBurst = sec2ms(/animation:vfxProjHit (\d*\.?\d+)s ease-out/);
+  chk('★ 弹道·命中炸开的 CSS 时长 == VFX.HIT_BURST_MS',
+    cssBurst === V.HIT_BURST_MS, 'CSS ' + cssBurst + 'ms / JS ' + V.HIT_BURST_MS + 'ms');
+  const cssFade = (H71.match(/vfxStreakOut var\(--fade,(\d+)ms\)/) || [])[1];
+  chk('★ 弹道·拖尾淡出的 CSS 兜底时长 == VFX.STREAK_FADE_MS',
+    cssFade !== undefined && Number(cssFade) === V.STREAK_FADE_MS,
+    'CSS ' + cssFade + 'ms / JS ' + V.STREAK_FADE_MS + 'ms');
+  chk('★ 弹道·拖尾寿命 = 飞行 + 淡出（两段动画都要算进寿命）',
+    /v\.k === 'streak' \? v\.delayMs \+ VFX\.STREAK_FADE_MS/.test(J71) &&
+    /vfxStreak var\(--fly,\d+ms\) linear forwards/.test(H71) &&
+    /vfxStreakOut var\(--fade,\d+ms\) linear var\(--fly,\d+ms\) forwards/.test(H71));
+  chk('★ 弹道·弹丸寿命 = 飞行 + 炸开（旧代码错用了弧光的 ARC_MS）',
+    /: v\.delayMs \+ VFX\.HIT_BURST_MS\)\)\);/.test(J71) &&
+    /el\.style\.setProperty\('--burst', v\.delayMs \+ 'ms'\);/.test(J71) &&
+    /el\.style\.setProperty\('--fade', VFX\.STREAK_FADE_MS \+ 'ms'\);/.test(J71));
+  chk('★ 弹道·炸开动画是 forwards 不是 both（否则飞行期间就被缩放）',
+    /animation:vfxProjHit \d*\.?\d+s ease-out var\(--burst,0ms\) forwards\}/.test(H71) &&
+    !/animation:vfxProjHit[^}]*\bboth\b/.test(H71));
+
+  // ⑦ ★ 远程顿帧要落在【命中那一刻】。R62 的注释这么写、代码却立刻顿
+  chk('★ 弹道·远程顿帧落在命中那一瞬（不是拉弓那一下）',
+    /if \(isCrit\) \{ if \(_proj\) hitstopDelay\(VFX\.HIT_CRIT, _fly\); else hitstop\(VFX\.HIT_CRIT\); \}/.test(J71) &&
+    /function hitstopDelay\(ms, delayMs\)/.test(J71) &&
+    /HITSTOP_Q\.push\(\{ at: Date\.now\(\) \+ delayMs, ms: ms \}\);/.test(J71) &&
+    /if \(now >= HITSTOP_Q\[i\]\.at\) \{ hitstop\(HITSTOP_Q\[i\]\.ms\)/.test(J71));
+  chk('★ 弹道·延后顿帧每局清零（不然上一局的顿帧砸到新一局头上）',
+    /HITSTOP_Q\.length = 0;/.test(J71));
+  // 行为：延后顿帧不能变成"永不过期"的定时炸弹（没有定时器，只在 vfxTick 里到期）
+  chk('★ 弹道·延后顿帧不依赖 setTimeout（表现层统一走 vfxTick 的真实时钟）',
+    !/setTimeout\([^)]*hitstop/.test(J71) && !/setTimeout[\s\S]{0,80}HITSTOP_Q/.test(J71));
+
+  // ⑧ ★★ 顿帧把 CSS 动画暂停了，寿命必须扣掉那段时间（R63 不变量的漏网路径）
+  chk('★ 顿帧·寿命扣除"被冻住的时长"（暂停的动画不算寿命）',
+    /if \(G\.freezeUntil > now\) \{/.test(J71) &&
+    /G\.fxFreezeMs = \(G\.fxFreezeMs \|\| 0\) \+ Math\.max\(0, G\.freezeUntil - G\.fxFreezeAt\);/.test(J71) &&
+    /if \(v\.froze0 === undefined\) v\.froze0 = frozenTotal;/.test(J71) &&
+    /const age = now - v\.t0Real - \(frozenTotal - v\.froze0\);/.test(J71) &&
+    /G\.fxFreezeMs = 0; G\.fxFreezeAt = 0;/.test(J71));
+  // 行为：冻 150ms 的一段，若照旧按真实时间扣寿命，动画会被砍掉 150ms
+  const life = 400, born = 0, frozen = 150, nowT = 450;
+  chk('★ 顿帧·行为：不扣冻结会提前删元素（动画被截断）',
+    (nowT - born) > life && (nowT - born - frozen) <= life,
+    '真实过了 450ms / 寿命 400ms / 冻了 150ms ⇒ 不扣就删，扣了还剩 ' +
+    (life - (nowT - born - frozen)) + 'ms');
+
+  // ⑨ 新增常量都在"真实毫秒"量级（沿用 R63 的判据）
+  const ks71 = ['PROJ_BASE_MS', 'PROJ_MS_PER_UNIT', 'STREAK_FADE_MS', 'HIT_BURST_MS'];
+  chk('★ 弹道·新增时长都是真实毫秒（都 ≥ 40）',
+    ks71.every(k => typeof V[k] === 'number' && V[k] >= 40),
+    ks71.map(k => k + '=' + V[k]).join(' '));
 })();
 
 console.log('\n' + '='.repeat(84));

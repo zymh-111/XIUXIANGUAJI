@@ -331,15 +331,58 @@
     100%{opacity:0;  transform:rotate(var(--ang)) scale(1.34)}
   }
 
-  /* 远程弹道：箭 = 细长光刺；法球 = 发光圆点拖尾 */
-  .vfx-proj{margin:0;transform-origin:50% 50%;z-index:7}
-  .vfx-arrow{width:22px;height:3px;margin:-1.5px 0 0 -11px;border-radius:2px;
-    transform-origin:50% 50%;
-    background:linear-gradient(90deg,rgba(255,240,200,0),#fff6d8 55%,#ffffff);
-    box-shadow:0 0 6px #ffe9a8dd,0 0 12px #ffe9a866}
-  .vfx-orb{width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
-    background:radial-gradient(circle at 40% 35%,#ffffff,#9fd8ff 45%,#3f86d8);
-    box-shadow:0 0 10px #7ec4ffdd,0 0 20px #3f86d866}
+  /* ============ 远程弹道（Round 71 重做）============
+     旧版是「22×3px 的渐变细条」当箭。问题**不在画得小，而在压根没有飞行过程**：
+     怪会一路贴到 P.MOB_REACH(0.055) 才停，而飞行时长是纯距离比例
+     ⇒ 打最近的怪只有 0.055×1250 = **69ms**、横向约 23px，一帧就过去了。
+     现在三件事一起做：弹丸换成真素材（内联 SVG）+ 一条看得见的弹道拖尾 + 命中炸开。
+     ⚠️ 全部时长走 _game.js 的 projFlyMs()（保底 200ms），与飘字/命中音同一个数。 */
+  .vfx-proj{margin:0;z-index:7;
+    /* 本体是白色"炽热"，五行色只走外发光（--wx）⇒ 与场上"发光体"的语言一致 */
+    filter:drop-shadow(0 0 3px var(--wx,#ffe9a8)) drop-shadow(0 0 7px var(--wx,#ffe9a8));
+    transform:rotate(var(--ang,0rad));
+    /* ★ 命中炸开：delay = 飞行时长（--burst），与位移**同时**结束 ⇒ 到点就"砰"
+       （fill-mode 是 forwards 而不是 both ⇒ 飞行期间这个动画完全不参与，
+         元素用的是上面那行 transform:rotate(--ang)，不会提前被缩放） */
+    animation:vfxProjHit .18s ease-out var(--burst,0ms) forwards}
+  .vfx-proj svg{display:block;width:100%;height:100%}
+  /* 箭：20×10，形状朝 +x。⚠️ 定位锚点放在【箭镞】（右边缘）而不是中心 ——
+     这样"飞到哪里"就是镞到哪里，镞正好落在怪身上；锚在中心会整体超出半个箭长。
+     ⚠️ 长度是量过的：飞行距离只有 21~88px（0.055~0.23 单位 × 382px 场宽），
+        第一版做成 26px ⇒ 箭自己就盖掉了前 26px 的弹道，拖尾基本看不见。
+        20px 是"还认得出是箭"与"别盖住弹道"之间的折中（实测 8× 放大下仍能分辨镞/杆/尾羽）。 */
+  .vfx-arrow{width:20px;height:10px;margin:-5px 0 0 -20px;transform-origin:100% 50%}
+  /* 法球：16×16，锚在中心（圆的中心就是它自己） */
+  .vfx-orb{width:16px;height:16px;margin:-8px 0 0 -8px;transform-origin:50% 50%}
+  @keyframes vfxProjHit{
+    0%  {opacity:1;transform:rotate(var(--ang,0rad)) scale(1)}
+    30% {opacity:1;transform:rotate(var(--ang,0rad)) scale(1.45)}
+    100%{opacity:0;transform:rotate(var(--ang,0rad)) scale(2.1)}
+  }
+
+  /* 弹道拖尾 —— 这行才是玩家嘴里"看得见的弹道"。
+     一条从出手点指向目标的细光带，用 scaleX(0→1) 长出来：
+     ⚠️ 用 scaleX 不用动 left/top —— 变形的进度是**线性**的，光带头部才会匀速，
+        与弹丸的 linear transition 严格同步（两边用的是同一个 projFlyMs）。
+     ⚠️ 渐变做成"22% 之后基本实心"而不是"只有头部亮"：因为弹丸本体就骑在这条带上、
+        会盖住靠头部的一段。实心带 ⇒ 露出来的那一段无论在哪都亮，观感才稳定。
+       （第一版把最亮处放在 100%（正被弹丸盖住）+ 中间只有 .16 透明度 ⇒ 8× 放大下几乎看不见。）
+     两段动画：① 长出来（--fly）② 命中后淡出（--fade），所以元素寿命必须 ≥ 两者之和。 */
+  .vfx-streak{height:4px;margin:-2px 0 0 0;z-index:6;transform-origin:0 50%;
+    background:linear-gradient(90deg,
+      rgba(255,255,255,0) 0%,
+      var(--wx,#ffe9a8) 22%,
+      #ffffff 60%,
+      #ffffff 100%);
+    opacity:.85;
+    filter:drop-shadow(0 0 3px var(--wx,#ffe9a8)) drop-shadow(0 0 8px var(--wx,#ffe9a8));
+    animation:vfxStreak var(--fly,300ms) linear forwards,
+              vfxStreakOut var(--fade,300ms) linear var(--fly,300ms) forwards}
+  @keyframes vfxStreak{
+    from{transform:rotate(var(--ang,0rad)) scaleX(0)}
+    to  {transform:rotate(var(--ang,0rad)) scaleX(1)}
+  }
+  @keyframes vfxStreakOut{from{opacity:.85}to{opacity:0}}
 
   /* 死亡消散：怪不再"凭空消失"，而是被打碎、淡出、缩下去 */
   /* ★ R63：.26s → .42s（真实时间）。原来 112ms 就被删了，碎裂完全没播出来 */
