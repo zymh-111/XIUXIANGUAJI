@@ -269,6 +269,22 @@
     background:radial-gradient(circle at 35% 32%,#ffdf90,#c9871b)}
   .mob.hit{filter:brightness(2.6)}
 
+  /* ★ R66：弟子脚下的技能进度条（自走棋那种"还差多少才放"）
+     设计取舍：最多 3 条、每条 3px 高 ⇒ 总高仅 ~13px，不抢战场信息；
+     靠【颜色】区分是哪一条（功法按五类上色，法宝用五行色）。
+     满条(.rdy)会呼吸闪一下 —— 这一下才是"期待感"的来源。 */
+  #skillBar{position:absolute;left:50%;top:calc(100% - 3px);transform:translateX(-50%);
+    width:60px;display:flex;flex-direction:column;gap:2px;pointer-events:none}
+  #skillBar .sk{position:relative;display:block;height:3px;border-radius:2px;
+    background:#00000066;box-shadow:0 0 0 0.5px #ffffff1a;overflow:hidden}
+  #skillBar .sk > b{display:block;height:100%;width:0%;border-radius:2px;
+    background:var(--c,#c8b08a);box-shadow:0 0 4px var(--c,#c8b08a);transition:width .12s linear}
+  #skillBar .sk.rdy{animation:skReady .9s ease-in-out infinite}
+  @keyframes skReady{
+    0%,100%{box-shadow:0 0 0 0.5px #ffffff1a}
+    50%    {box-shadow:0 0 0 0.5px var(--c,#c8b08a),0 0 7px var(--c,#c8b08a)}
+  }
+
   /* ============ 战斗特效（Round 61）============
      问题：出手 4.68 次/秒 + 一次结算最多 11 个目标 ⇒ 过程压成 1 帧，
      玩家只看到怪"凭空少了几只"。这里让「打 → 命中 → 死」摊开成可见的时间轴。
@@ -811,6 +827,18 @@
   .gf-row .tp{width:44px;color:var(--dim2);flex:0 0 auto;font-size:9.5px;
     display:flex;align-items:center;gap:3px}
   .gf-row select{flex:1;font-size:10px;padding:1px 2px;min-width:0}
+  /* ★ R66：列表行里的进度条 —— 贴在行底，从名称栏右侧拉到最右。
+     行内空间已经很紧（10px 字 + 下拉框），所以只用 2px 细线；
+     精确数值放 title，鼠标悬停才看。 */
+  .gf-row,.fb-row{position:relative;padding-bottom:5px}
+  .gf-row .pg,.fb-row .pg{position:absolute;left:47px;right:0;bottom:1px;height:2px;
+    border-radius:1px;background:#ffffff14;overflow:hidden;display:block}
+  .fb-row .pg{left:4px}
+  .gf-row .pg > b,.fb-row .pg > b{display:block;height:100%;border-radius:1px;
+    background:var(--c,#c8b08a);box-shadow:0 0 3px var(--c,#c8b08a)}
+  /* 条满 = 就绪 ⇒ 亮起来（这一下就是"期待感"） */
+  .gf-row .pg.rdy > b,.fb-row .pg.rdy > b{animation:pgReady 1s ease-in-out infinite}
+  @keyframes pgReady{0%,100%{opacity:.75}50%{opacity:1}}
   .gf-stack{font-size:9.5px;color:var(--gold);padding-left:47px}
   .prio{display:inline-flex;align-items:center;gap:1px;font-size:9.5px;color:#9aa5b8;
     background:#161c26;border:1px solid #ffffff12;border-radius:3px;
@@ -1090,6 +1118,9 @@
           <div class="halo"></div>
           <div class="hpwrap"><i id="heroHp"></i></div>
           <img id="heroImg" src="assets/弟子/弟子_2@2x.webp" alt="">
+          <!-- ★ R66：技能进度条（自走棋那种"还差多少才放"）—— 内容由 renderSkillBar() 填，
+               挂在弟子脚下而不是面板里，因为挂机时玩家看的是战场、不是背包抽屉 -->
+          <div id="skillBar"></div>
         </div>
         <div id="arena"></div>
         <div id="battleBarWrap"><div id="battleBar"></div></div>

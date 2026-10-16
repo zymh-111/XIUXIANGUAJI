@@ -2440,6 +2440,61 @@ const VFX = {
 };
 
 // ============================================================
+// ★ R66：进度条 —— 把"还差多少才放"这个隐藏计数器摊开给玩家看
+// ------------------------------------------------------------
+// 用户："能不能把功法的进度条像自走棋那样显示出来，只看直观一点"
+//
+// 设计意图（自走棋蓝条的本质）：它解决的**不是信息，是期待**——
+//   玩家看到条快满了，就会盯着看"要放了"；释放瞬间清空，形成节拍。
+//   所以进度必须是【真实触发用的那个量】，不能是另算一套漂亮的数字。
+//
+// ⚠️ 因此这两个函数的取值源必须与真实触发**逐字对齐**：
+//    · 功法 → gfReady() 用的 GF.lastSwing / GF.lastSec / GF.usedRun（含 CDR）
+//    · 法宝 → fbTriggered() 的 ctx（G.threats / G.hp / G.kills / GF.swingW / 精英存活）
+//    口径一旦不同，进度条就会骗人 —— 有断言盯着"同源"。
+//
+// 返回 0~1（1 = 就绪）；返回 null 表示这条没有"进度"概念（不该画条）。
+const clamp01 = v => Math.max(0, Math.min(1, v));
+
+/** 功法主动技的冷却进度（与 gfReady 同源）。 */
+function gfProgress(g) {
+  if (!g || !g.cd) return null;
+  if (g.cd === 'swing') {
+    const last = GF.lastSwing[g.id];
+    if (last === undefined) return 1;                 // 从未放过 ⇒ 就绪
+    return clamp01((GF.swingW - last) / g.cdN);
+  }
+  if (g.cd === 'sec') {
+    const last = GF.lastSec[g.id];
+    if (last === undefined) return 1;
+    const cdr = 1 - Math.min(P.CDR_CAP, G.cdr || 0);  // ★ 与 gfReady 一样要算 CDR
+    return clamp01(((G.t || 0) - last) / Math.max(0.1, g.cdN * cdr));
+  }
+  if (g.cd === 'run') return GF.usedRun[g.id] ? 0 : 1;
+  return null;
+}
+
+/** 法宝催动条件的进度（与 fbTriggered 的 ctx 同源）。 */
+function fbProgress(f) {
+  if (!f) return null;
+  if (FB.used[f.id]) return 0;                        // 本局已催动过
+  switch (f.cond) {
+    case 'crisis': return clamp01((G.threats || 0) / f.condN);
+    case 'kill':   return clamp01((G.kills || 0) / f.condN);
+    // hp 是【反向】进度：生命越低越接近条件 ⇒ 玩家看到条涨满就知道"再挨打就要护国了"
+    case 'hp':     return clamp01((1 - G.hp / Math.max(1, G.hpMax)) / Math.max(1e-6, 1 - f.condN));
+    case 'elite':  return (G.field || []).some(e => e.kind === 'elite') ? 1 : 0;
+    case 'period': return GF.swingW > 0 ? (GF.swingW % f.condN) / f.condN : 0;
+    default: return null;
+  }
+}
+
+// 功法五类 → 颜色（战场条靠颜色区分"是哪一条"，比塞图标省地方）
+const GF_TYPE_COLOR = {
+  心法: '#e0c464', 身法: '#8fd0c0', 攻伐: '#e08a6a', 护体: '#8fa8e0', 秘术: '#c0a0e0',
+};
+
+// ============================================================
 // ★ R64：几何命中 —— 「谁挨打」由【位置】决定，不再是"距离最近的 N 个"
 // ------------------------------------------------------------
 // 用户："把 aoe 数量绑在实际的攻击上面？弹道或者近战砍击打到怪上面才算伤害？"
@@ -2544,6 +2599,50 @@ function pushDmgFx(x, y, txt, cls, wx, delayMs) {
   const o = { x: x, y: y, txt: txt, cls: cls, wx: wx || null, life: 1 };
   if (!delayMs || delayMs <= 0) { G.fx.push(o); return; }
   G.dmgq.push({ at: Date.now() + delayMs, o: o });                 // ★ R63：真实时钟
+}
+
+/** ★ R66：战场技能条 —— 把"还差多少才放"挂在弟子脚下（自走棋那种蓝条）。
+ *
+ *  ⚠️ 实现要点：**结构变了才重建，每帧只改宽度**。
+ *     这是 R61/R65 两次踩过的坑（每帧 innerHTML ⇒ 元素被反复销毁，
+ *     连带事件丢失、DOM 抖动）。进度条每帧都在动，更不能整块重建。
+ *  设计取舍：最多显示 3 条（再多就变成信息墙）；靠【颜色】区分是哪一条
+ *     （功法按五类上色 = GF_TYPE_COLOR，法宝统一金色），比塞图标省地方。
+ */
+function renderSkillBar() {
+  const box = document.getElementById('skillBar');
+  if (!box) return;
+  const items = [];
+  for (const id of gfPriority()) {
+    const g = GF_BY_ID[id];
+    if (!g) continue;
+    const p = gfProgress(g);
+    if (p === null) continue;
+    items.push({ key: 'gf' + id, p: p, c: GF_TYPE_COLOR[g.type] || '#c8b08a' });
+    if (items.length >= 3) break;
+  }
+  if (items.length < 3) {
+    for (const id of (FB.eq || [])) {
+      const f = FABAO_BY_ID[id];
+      if (!f) continue;
+      const p = fbProgress(f);
+      if (p === null) continue;
+      items.push({ key: 'fb' + id, p: p, c: WX_COLOR[f.wx] || '#c9a227' });
+      if (items.length >= 3) break;
+    }
+  }
+  const sig = items.map(x => x.key).join('|');
+  if (box._sig !== sig) {                     // ① 只有"显示哪几条"变了才重建
+    box._sig = sig;
+    box.innerHTML = items.map(x =>
+      '<i class="sk" style="--c:' + x.c + '"><b></b></i>').join('');
+  }
+  const kids = box.children;
+  for (let i = 0; i < items.length && i < kids.length; i++) {   // ② 每帧只改宽度
+    const bar = kids[i].firstElementChild;
+    if (bar) bar.style.width = (items[i].p * 100).toFixed(1) + '%';
+    if (kids[i].classList) kids[i].classList.toggle('rdy', items[i].p >= 1);
+  }
 }
 
 /** 每帧推进表现层：到点的飘字/音效放出来，过期的特效清掉。 */
@@ -8401,6 +8500,8 @@ function render() {
   const rrM = $('#reachRing');
   if (rrM) { rrM.style.left = (G.heroX * 100) + '%'; rrM.style.top = (G.heroY * 100) + '%'; }
 
+  renderSkillBar();   // ★ R66：弟子脚下的技能进度条（自走棋那种"还差多少才放"）
+
   // ★★ R62：顿帧（hitstop）—— 只冻【表现】，数值照旧跑
   //   冻游戏时钟会改 DPS 与一局时长 ⇒ 破坏配平，所以 G.freezeUntil 是一段真实时间。
   //   冻结期间：① 不写 mob 的 left/top（位置不跳变）② #battleWrap 挂 .freeze 暂停关键帧动画
@@ -8740,8 +8841,20 @@ function render() {
             .map(g => '<option value="' + g.id + '"' +
               (GF.eq[t] === g.id ? ' selected' : '') + '>' + g.name + '</option>').join('');
           const _lk = (GF.gfLock && GF.gfLock[t]) ? ' 🔒' : '';
+          // ★ R66：这一行的进度条 = 该类型【已装功法】的冷却进度（与 gfReady 同源）
+          const _eqg = GF_BY_ID[GF.eq[t]];
+          const _pg = _eqg ? gfProgress(_eqg) : null;
+          const _pgTxt = _eqg && _pg !== null
+            ? '（还差 ' + Math.max(0, Math.round((1 - _pg) * (_eqg.cd === 'swing' ? _eqg.cdN : _eqg.cdN))) +
+              (_eqg.cd === 'swing' ? ' 加权出手' : _eqg.cd === 'sec' ? ' 秒' : '') + '）'
+            : '';
           return '<div class="gf-row"><span class="tp">' + ico('gf', t, 'ico16') + t + _lk + '</span>' +
-            '<select data-gftype="' + t + '"><option value="">（空）</option>' + opts + '</select></div>';
+            '<select data-gftype="' + t + '"><option value="">（空）</option>' + opts + '</select>' +
+            (_pg === null ? ''
+              : '<i class="pg' + (_pg >= 1 ? ' rdy' : '') + '" title="' + _eqg.name + ' ' + _pgTxt +
+                '"><b style="width:' + (_pg * 100).toFixed(1) + '%;background:' +
+                (GF_TYPE_COLOR[t] || '#c8b08a') + '"></b></i>') +
+            '</div>';
         }).join('');
         const stacks = [];
         if (GF.killStack > 0) stacks.push('焚心 ' + Math.min(GF.killStack, 50) + ' 层');
@@ -9487,10 +9600,16 @@ function render() {
           _fb += "<details class=\"fb-swap\"><summary>切换法宝（另有 " + others.length +
             " 件）</summary>" +
             others.map(function (f) {
+              // ★ R66：催动条件的进度条（与 fbTriggered 的 ctx 同源）
+              const _fbp = fbProgress(f);
+              const _fbTxt = _fbp === null ? '' : '（进度 ' + Math.round(_fbp * 100) + '%）';
               return "<div class=\"fb-row\"><span class=\"nm\" data-fbid=\"" + f.id +
-                "\" title=\"" + f.desc + "\">" + ico("fb", f.name, "ico20") + f.name +
+                "\" title=\"" + f.desc + _fbTxt + "\">" + ico("fb", f.name, "ico20") + f.name +
                 "<span class=\"wx\" style=\"color:" + (WX_COLOR[f.wx] || "#888") + "\">" + f.wx +
-                "</span> · " + condOf(f) + "（本源 " + f.cost + "）</span></div>";
+                "</span> · " + condOf(f) + "（本源 " + f.cost + "）" +
+                (_fbp === null ? '' : '<i class="pg' + (_fbp >= 1 ? ' rdy' : '') +
+                  '" style="--c:' + (WX_COLOR[f.wx] || '#c9a227') + '"><b style="width:' +
+                  (_fbp * 100).toFixed(1) + '%"></b></i>') + "</span></div>";
             }).join('') + "</details>";
         } else if (owned.length === 0) {
           _fb += "<div style=\"color:#5d574c;font-size:10px\">尚未拥有法宝（掉落获得）</div>";
@@ -10062,4 +10181,6 @@ globalThis.__api = {
   VFX, SKILL_ARCH, FABAO_ARCH, skillVfx, hitstop,
   // ★ R64：几何命中（武器扇面/溅射），供 _smoke.js 与 _tools/reach.js 用
   WPN_HIT, WPN_HIT_DEF, hitCandidates,
+  // ★ R66：进度条（供 _smoke.js 校验"与真实触发同源"）
+  gfProgress, fbProgress, GF_TYPE_COLOR, renderSkillBar,
 };

@@ -4784,6 +4784,68 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
     !/G\.dodgeFlash = 0\.35/.test(J65));
 })();
 
+// ============================================================================
+// ★ R66：功法/法宝进度条（自走棋那种"还差多少才放"）
+//   风险点：① 进度与【真实触发】口径不一致 ⇒ 进度条骗人（最严重，且看不出）
+//          ② 每帧重建 DOM ⇒ 进度条每帧被销毁重建（R61/R65 踩过两次的坑）
+//          ③ 战场条漏掉/表错地方（挂在抽屉里等于挂机时看不到）
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J66 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const H66 = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+
+  // ① 两个进度函数存在
+  chk('★ 进度条·功法/法宝进度函数齐', typeof A.gfProgress === 'function' && typeof A.fbProgress === 'function');
+
+  // ② ★★ 与真实触发【同源】—— 一旦不同源，进度条就会骗人
+  const gfBody = (J66.match(/function gfProgress[\s\S]*?\n\}/) || [''])[0];
+  const fbBody = (J66.match(/function fbProgress[\s\S]*?\n\}/) || [''])[0];
+  chk('★ 进度条·功法进度与 gfReady 同源（lastSwing/lastSec/usedRun + CDR）',
+    /GF\.lastSwing\[g\.id\]/.test(gfBody) && /GF\.lastSec\[g\.id\]/.test(gfBody) &&
+    /GF\.usedRun\[g\.id\]/.test(gfBody) && /CDR_CAP/.test(gfBody));
+  chk('★ 进度条·法宝进度与 fbTriggered 的 ctx 同源',
+    /G\.threats/.test(fbBody) && /G\.kills/.test(fbBody) && /G\.hp \/ Math\.max\(1, G\.hpMax\)/.test(fbBody) &&
+    /kind === 'elite'/.test(fbBody) && /GF\.swingW % f\.condN/.test(fbBody));
+
+  // ③ ★★ 不许每帧重建：必须走"签名变了才重建"
+  chk('★ 进度条·战场条结构变了才重建（不许每帧 innerHTML）',
+    /box\._sig !== sig/.test(J66) && /bar\.style\.width = \(items\[i\]\.p/.test(J66));
+
+  // ④ 两处都挂了
+  chk('★ 进度条·战场条挂在弟子脚下（不是抽屉里）',
+    /<div id="skillBar"><\/div>/.test(H66) && /#skillBar\{/.test(H66) &&
+    /getElementById\('skillBar'\)/.test(J66) && /renderSkillBar\(\);/.test(J66));
+  chk('★ 进度条·列表行也有（功法 + 法宝）',
+    /class="pg' \+ \(_pg >= 1 \? ' rdy' : ''\)/.test(J66) &&
+    /class="pg' \+ \(_fbp >= 1 \? ' rdy' : ''\)/.test(J66) &&
+    /\.gf-row \.pg,/.test(H66));
+
+  // ⑤ 满条要"亮起来"（这一下才是期待感；缺了它就只是一根静态条）
+  chk('★ 进度条·满条有就绪高亮（战场 + 列表）',
+    /\.sk\.rdy\{animation:skReady/.test(H66) && /@keyframes skReady/.test(H66) &&
+    /\.pg\.rdy > b\{animation:pgReady/.test(H66));
+
+  // ⑥ 行为：进度确实随计数器变化（造数据验一次）
+  const keep = { kills: globalThis.__G.kills, threats: globalThis.__G.threats };
+  try {
+    const f = A.FABAO.find(x => x.cond === 'kill');
+    globalThis.__G.kills = 0; const p0 = A.fbProgress(f);
+    globalThis.__G.kills = f.condN; const p1 = A.fbProgress(f);
+    chk('★ 进度条·行为：法宝进度随计数器从 0 → 1', p0 === 0 && p1 === 1,
+      '击杀 0 ⇒ ' + p0 + ' · 击杀 ' + f.condN + ' ⇒ ' + p1);
+    const g = A.GONGFA.find(x => x.cd === 'swing');
+    A.GF.lastSwing[g.id] = 0; A.GF.swingW = 0;
+    const g0 = A.gfProgress(g);
+    A.GF.swingW = g.cdN; const g1 = A.gfProgress(g);
+    chk('★ 进度条·行为：功法进度按加权出手数从 0 → 1', g0 === 0 && g1 === 1,
+      g.name + ' cdN=' + g.cdN + '：0 ⇒ ' + g0 + ' · ' + g.cdN + ' ⇒ ' + g1);
+  } finally {
+    globalThis.__G.kills = keep.kills; globalThis.__G.threats = keep.threats;
+  }
+})();
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));
