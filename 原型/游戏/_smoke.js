@@ -4670,6 +4670,88 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
   chk('★ 时序·技能特效 ≥600ms（"看着爽"的下限）', V.SKILL_MS >= 600, V.SKILL_MS + 'ms');
 })();
 
+// ============================================================================
+// ★ R64：几何命中 —— 「谁挨打」由位置决定
+//   风险点：① 某把武器漏配扇面 ⇒ 退化成一刀一只，手感身份消失（静默）
+//          ② 弧光的覆盖范围与判定不一致 ⇒ 又回到"扫一大片只掉一只血"
+//          ③ 几何把它变成了 no-op（扇角过宽）或过窄（打不到看得见的怪）
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J64 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const H64 = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+
+  // ① 五把武器全覆盖（漏一把 = 那把武器的一刀一只，手感身份没了）
+  const miss = A.WEAPONS.filter(w => !A.WPN_HIT[w.id]).map(w => w.name);
+  chk('★ 几何·五把武器都有命中几何', miss.length === 0,
+    miss.length ? '缺: ' + miss.join(',') : A.WEAPONS.length + ' 把');
+
+  // ② 手感身份要跟 WEAPONS 的 desc 对得上 —— 但【近战比扇角、远程比溅射半径】：
+  //    杖的"打击面广"落在 splash 上（0.080，最大），不在扇角上（它只 30°）。
+  //    ⚠️ 第一版我拿扇角去比所有武器 ⇒ 误报（量错了字段）。
+  const arc = id => A.WPN_HIT[id].arc, spl = id => (A.WPN_HIT[id].splash || 0);
+  chk('★ 几何·近战扇面宽窄与描述一致（剑>刀>枪）',
+    arc('sword') > arc('blade') && arc('blade') > arc('spear'),
+    '剑' + arc('sword') + '° 刀' + arc('blade') + '° 枪' + arc('spear') + '°');
+  chk('★ 几何·远程溅射与描述一致（杖"打击面广" > 弓"落点溅射"，且都 > 0）',
+    spl('staff') > spl('bow') && spl('bow') > 0,
+    '杖' + spl('staff') + ' 弓' + spl('bow'));
+
+  // ③ 判定必须走唯一入口（不能再有"直接按 reach 取最近 N 个"的第二条路）
+  chk('★ 几何·判定只走 hitCandidates',
+    /const cand = hitCandidates\(st\);/.test(J64) &&
+    !/G\.field\s*\n?\s*\.map\(\(e\) => \(\{ e, d: distToHero/.test(J64));
+
+  // ④ ★★ 行为断言：造几只怪在已知位置，验扇面/溅射真的按几何挑人
+  const G64 = globalThis.__G;
+  const keep = { field: G64.field, heroX: G64.heroX, heroY: G64.heroY };
+  const mk = (x, y) => ({ x: x, y: y, hp: 999, maxHp: 999, kind: 'mob', wx: null });
+  const stT = A.playerStats();
+  const R = stT.reach;
+  try {
+    G64.heroX = 0.5; G64.heroY = 0.5;
+    // 剑（55° 扇面）：正前方一只、正后方一只、侧前方 30° 一只
+    G64.field = [
+      mk(0.5 + R * 0.9, 0.5),                                     // 正右（最近 ⇒ 定朝向）
+      mk(0.5 - R * 0.9, 0.5),                                     // 正左（背向 ⇒ 不该被打）
+      mk(0.5 + R * 0.7 * Math.cos(0.52), 0.5 + R * 0.7 * Math.sin(0.52)), // 右偏 30° ⇒ 该打
+    ];
+    const swordHit = A.hitCandidates({ reach: R, aoe: 6, weapon: { id: 'sword' } });
+    // 枪（18° 扇面）：那个 30° 的怪应当被扇面切掉
+    const spearHit = A.hitCandidates({ reach: R, aoe: 6, weapon: { id: 'spear' } });
+
+    // 弓（溅射 0.055）：落点周围 0.04 内的算、0.12 外的不算
+    //   ⚠️ 三只都必须落在 reach 内，否则会被 reach 先滤掉、测不到溅射
+    //      （第一版把第 3 只放到 R*0.9+0.12 ⇒ 超出 reach ⇒ 误报）
+    const d0 = 0.5 + R * 0.4;
+    G64.field = [
+      mk(d0, 0.5),             // 落点（最近）
+      mk(d0 + 0.04, 0.5),      // 落点旁 0.04 ⇒ 溅射到
+      mk(d0 + 0.12, 0.5),      // 落点旁 0.12 ⇒ 溅射不到（但仍在 reach 内）
+    ];
+    const bowHit = A.hitCandidates({ reach: R, aoe: 6, weapon: { id: 'bow' } });
+
+    chk('★ 几何·行为：扇面只打朝向内的（背向的不打）',
+      swordHit.length === 2 && swordHit.every(c => c.e.x > 0.5),
+      '剑命中 ' + swordHit.length + ' 只（期望 2：正前方 + 偏 30°，背向那只不算）');
+    chk('★ 几何·行为：窄扇面（枪 18°）能切掉偏 30° 的怪',
+      spearHit.length === 1,
+      '枪命中 ' + spearHit.length + ' 只（期望 1：30° 超出 18° 半角）');
+    chk('★ 几何·行为：溅射只覆盖落点周围（0.04 内算、0.12 外不算）',
+      bowHit.length === 2,
+      '弓命中 ' + bowHit.length + ' 只（期望 2：落点 + 0.04 旁）');
+  } finally {
+    G64.field = keep.field; G64.heroX = keep.heroX; G64.heroY = keep.heroY;
+  }
+
+  // ⑤ 弧光覆盖范围必须与判定同源（半径=reach、角度=扇面角）
+  chk('★ 几何·弧光半径与角度由判定值驱动',
+    /arcDeg: _H\.arc, radius: st\.reach/.test(J64) &&
+    /setProperty\('--a', \(v\.arcDeg/.test(J64) && /setProperty\('--sz', rad \+ '%'\)/.test(J64) &&
+    /conic-gradient\(from calc\(var\(--a/.test(H64));
+})();
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));

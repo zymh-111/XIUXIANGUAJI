@@ -2432,6 +2432,64 @@ const VFX = {
   HIT_BIG: 150,        // Boss 现身 / Boss 倒地 / 突破（一局没几次，要"砸"出来）
 };
 
+// ============================================================
+// ★ R64：几何命中 —— 「谁挨打」由【位置】决定，不再是"距离最近的 N 个"
+// ------------------------------------------------------------
+// 用户："把 aoe 数量绑在实际的攻击上面？弹道或者近战砍击打到怪上面才算伤害？"
+//
+// 实测支撑（剑 · 127 次出手）：reach 圈内中位 **1 只**、平均 1.25 只，
+//   **打满 aoe 上限的比例 0%** ⇒ 几何命中对配平的影响 ≈ 0（DPS ×1.00）。
+//   同时也是旧实现"违和"的来源：弧光最多张开 reach 的 3 倍宽，
+//   看起来扫了一大片，实际只掉 1 只怪的血。
+//
+// 扇面角度【不是新设定】—— 它就是 WEAPONS 里早就写好的手感描述：
+//   sword "范围极短 · 横扫一片" ⇒ 宽扇面 55°
+//   blade "范围中等 · 兼顾"     ⇒ 中扇面 40°
+//   spear "一寸长一寸强"        ⇒ 窄扇面 18°（靠 reach 长来区分）
+//   staff "打击面广 · 单发偏弱"  ⇒ 大溅射 0.080
+//   bow   "范围最长 · 落点溅射"  ⇒ 小溅射 0.055
+//
+// ⚠️ 伤害仍在【出手瞬间】结算（数值层一个字不动 ⇒ 配平零风险），
+//    几何只用来决定"打谁"。远程的飘字/命中音本来就已经是"飞到才播"（R61），
+//    所以观感上完全就是"打到才算伤害"。
+const WPN_HIT = {
+  sword: { kind: 'fan',    arc: 55 },
+  blade: { kind: 'fan',    arc: 40 },
+  spear: { kind: 'fan',    arc: 18 },
+  bow:   { kind: 'splash', arc: 22, splash: 0.055 },
+  staff: { kind: 'splash', arc: 30, splash: 0.080 },
+};
+const WPN_HIT_DEF = { kind: 'fan', arc: 30 };   // 没配的武器（空手等）退化成窄扇面
+
+/** 按【几何】挑出这次出手真正打到的怪（已按距离升序）。 */
+function hitCandidates(st) {
+  const cx = G.heroX, cy = G.heroY;
+  const inReach = G.field
+    .map(function (e) { return { e: e, d: Math.hypot(e.x - cx, e.y - cy) }; })
+    .filter(function (x) { return x.d <= st.reach; });
+  if (!inReach.length) return [];
+  const H = WPN_HIT[st.weapon.id] || WPN_HIT_DEF;
+  if (H.kind === 'fan') {
+    // 朝向 = 最近那只怪（玩家意图最可能的方向），落点由它定
+    let near = inReach[0];
+    for (let i = 1; i < inReach.length; i++) if (inReach[i].d < near.d) near = inReach[i];
+    const base = Math.atan2(near.e.y - cy, near.e.x - cx);
+    const half = H.arc * Math.PI / 180;
+    return inReach.filter(function (c) {
+      let a = Math.atan2(c.e.y - cy, c.e.x - cx) - base;
+      while (a > Math.PI) a -= 2 * Math.PI;
+      while (a < -Math.PI) a += 2 * Math.PI;
+      return Math.abs(a) <= half;
+    }).sort(function (a, b) { return a.d - b.d; });
+  }
+  // 溅射：最近那只当"落点"，落点半径内的都算上
+  inReach.sort(function (a, b) { return a.d - b.d; });
+  const drop = inReach[0].e;
+  return inReach.filter(function (c) {
+    return c.e === drop || Math.hypot(c.e.x - drop.x, c.e.y - drop.y) <= H.splash;
+  }).sort(function (a, b) { return a.d - b.d; });
+}
+
 // 法宝/功法的特效原型：不给 6 件法宝各画一套（又慢又乱），
 // 而是【三类原型 × 五行色】。玩家靠"色 + 形状 + 名字横幅"识别发生了什么。
 const SKILL_ARCH = {
@@ -2542,9 +2600,11 @@ function vfxRender(arena) {
     el.style.top = (v.y0 * 100) + '%';
     el.style.setProperty('--ang', ang + 'rad');
     if (v.k === 'arc') {
-      // 弧光：朝目标方向张开；张开的尺度跟距离成正比（贴脸短、稍远长）
-      const reach = Math.min(0.28, Math.hypot(v.x1 - v.x0, v.y1 - v.y0) + 0.11);
-      el.style.setProperty('--sz', (reach * 100) + '%');
+      // ★ R64：尺寸 = 真实 reach（不再是"距离+0.11"），角度 = 真实扇面角
+      //   ⇒ 弧光覆盖范围与"谁挨打"严格一致
+      const rad = (v.radius || 0.12) * 100;
+      el.style.setProperty('--sz', rad + '%');
+      el.style.setProperty('--a', (v.arcDeg || 40) + 'deg');
     } else {
       el.style.setProperty('--fly', v.delayMs + 'ms');
       el.style.transform = 'rotate(' + ang + 'rad)';
@@ -7290,11 +7350,8 @@ function step(st, dt) {
   while (G.actAcc >= 1 && swings++ < 20) {   // ★ 加保险：单步最多 20 次出手，防死循环
       // ★ Round 36：玩家出手 ⇒ 打攻击动画标记（#hero.attacking，原来从未触发）
       G.attackT = 0.34;
-    // 候选 = 攻击距离内，按距离升序
-    const cand = G.field
-      .map((e) => ({ e, d: distToHero(e) }))
-      .filter(x => x.d <= st.reach)
-      .sort((a, b) => a.d - b.d);
+    // ★ R64：候选 = 【几何命中】的怪（扇面 / 溅射），不再是"最近的 N 个"
+    const cand = hitCandidates(st);
     if (cand.length === 0) {
       // ★ 范围内没怪 ⇒ 空挥。必须把累积量清零，
       //   否则 while 条件永远成立 ⇒ 死循环（曾把整个页面卡死）
@@ -7413,10 +7470,13 @@ function step(st, dt) {
         });
       }
     } else if (_hitN > 0) {
-      // 近战：一次弧光盖住本次所有目标（朝最优先的那个）
+      // 近战：弧光朝目标张开，**扇面角 = 实际命中扇面角**、半径 = reach
+      //   ⇒ "弧光扫到的就是挨到血的"，不再"扫一大片只掉一只血"
+      const _H = WPN_HIT[st.weapon.id] || WPN_HIT_DEF;
       G.vfxq.push({
         k: 'arc', x0: G.heroX, y0: G.heroY, x1: cand[0].e.x, y1: cand[0].e.y,
         t0Real: Date.now(), delayMs: 0, n: _hitN,
+        arcDeg: _H.arc, radius: st.reach,
       });
     }
     for (let k = 0; k < aoeN && k < cand.length; k++) {
@@ -9957,4 +10017,6 @@ globalThis.__api = {
   SFX, SFX_FILES, SFX_CFG, SFX_FORM, SFX_CORE, SFX_STORE_KEY, sfx, sfxSet, sfxOn, sfxWarm,
   // ★ R62：战斗表现层（特效原型 / 顿帧），供 _smoke.js 校验"没漏配、没冻数值"
   VFX, SKILL_ARCH, FABAO_ARCH, skillVfx, hitstop,
+  // ★ R64：几何命中（武器扇面/溅射），供 _smoke.js 与 _tools/reach.js 用
+  WPN_HIT, WPN_HIT_DEF, hitCandidates,
 };

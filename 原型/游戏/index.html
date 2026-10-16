@@ -252,12 +252,17 @@
 
   /* 近战弧光：朝目标张开的月牙（不是实心扇形 —— 那看着像手电筒不像刀光）
      做法：conic-gradient 切出角度范围 + radial-gradient 遮罩只留一圈 ⇒ 细月牙 */
-  .vfx-arc{width:var(--sz,26%);aspect-ratio:1;margin:-0.5px 0 0 -0.5px;
+  /* ★ R64：扇面角由 --a 驱动（= 该武器【实际命中扇面角】的 2 倍），半径由 --sz
+     （= 真实 reach）驱动 ⇒ 弧光覆盖范围与"谁挨打"严格一致。
+     之前是写死 68° + 最多 reach 的 3 倍宽 ⇒ 看起来扫一大片、实际只掉一只血。 */
+  .vfx-arc{width:var(--sz,12%);aspect-ratio:1;margin:-0.5px 0 0 -0.5px;
     transform-origin:0 50%;
-    background:conic-gradient(from -34deg,
-      rgba(255,255,255,0) 0deg, rgba(255,255,255,.45) 14deg,
-      rgba(226,242,255,1) 30deg, rgba(255,255,255,.40) 48deg,
-      rgba(255,255,255,0) 68deg);
+    background:conic-gradient(from calc(var(--a,80deg) * -0.5),
+      rgba(255,255,255,0) 0,
+      rgba(255,255,255,.45) calc(var(--a,80deg) * 0.22),
+      rgba(226,242,255,1) calc(var(--a,80deg) * 0.5),
+      rgba(255,255,255,.40) calc(var(--a,80deg) * 0.78),
+      rgba(255,255,255,0) var(--a,80deg));
     /* ⚠️ 内半径太小 ⇒ 变成实心楔子（像手电筒）；太大 ⇒ 细到看不见。
        实测 54→82% 这档：能看清是"一道月牙"、又不至于糊。 */
     -webkit-mask:radial-gradient(circle at 0 50%,
