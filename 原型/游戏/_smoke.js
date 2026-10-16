@@ -4378,6 +4378,90 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
     /const aico = FAC_ICON\[b\.fac\]/.test(J59));
 })();
 
+// ============================================================================
+// ★ R60：音效校验
+//   音效最容易犯的错：① 映射里写了个不存在的文件名 ⇒ 那一下永远没声（静默失败）
+//                     ② 代码里 sfx('xxx') 拼错 key ⇒ 同上，且没有任何报错
+//                     ③ 敌人新增了形态、但 SFX_FORM 没加 ⇒ 那种怪死的时候没声
+//                     ④ 哪天有人"顺手"改用 Web Audio ⇒ file:// 下全哑（发布包就是双击打开的）
+//   这些全是"不出声"的错，肉眼与耳朵都很难定位 ⇒ 必须靠断言。
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const DIR = ROOT + 'assets/音效/';
+  const files = fsx.readdirSync(DIR);
+
+  // ① 映射里每个名字都真的在盘上
+  const miss = [];
+  Object.keys(A.SFX_FILES).forEach(k => {
+    A.SFX_FILES[k].forEach(n => { if (!files.includes(n + '.mp3')) miss.push(k + '→' + n); });
+  });
+  chk('★ 音效·映射里的文件都在盘上', miss.length === 0,
+    miss.length ? '缺文件: ' + miss.join(',') : Object.keys(A.SFX_FILES).length + ' 个事件');
+  chk('★ 音效·每个事件都有音量/间隔/概率配置',
+    Object.keys(A.SFX_FILES).every(k => A.SFX_CFG[k] && typeof A.SFX_CFG[k].gap === 'number'),
+    Object.keys(A.SFX_FILES).filter(k => !A.SFX_CFG[k]).join(',') || 'OK');
+
+  // ② 代码里的 sfx('key') 全部合法（拼错 key 是"永久静音"的隐形杀手）
+  const J60 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const used = new Set();
+  for (const m of J60.matchAll(/\bsfx\(\s*'([a-z_]+)'/g)) used.add(m[1]);
+  const badKey = [...used].filter(k => !A.SFX_FILES[k]);
+  chk('★ 音效·代码里调用的 key 全部有映射', badKey.length === 0,
+    badKey.length ? '非法 key: ' + badKey.join(',') : used.size + ' 个事件在用');
+
+  // ③ 敌人【形态】全覆盖（漏一个 ⇒ 那种怪死时没声）
+  const forms = new Set(A.MOB_KINDS.map(m => m.form));
+  const missForm = [...forms].filter(f => !A.SFX_FORM[f]);
+  chk('★ 音效·所有敌人形态都有死亡音', missForm.length === 0,
+    missForm.length ? '缺: ' + missForm.join(',') : [...forms].join('/'));
+
+  // ④ 硬约束：不许用 Web Audio（file:// 下 fetch/XHR 被 CORS 拦 ⇒ decodeAudioData 拿不到数据）
+  //   ⚠️ 不要"先剥注释再匹配" —— 试过，`/*` 会撞上代码里出现的 `/*`，非贪婪匹配把 79K 代码一起吃掉了
+  //      （388K → 309K），断言随后误报。改为只匹配【真实调用形态】：
+  //      注释里写"decodeAudioData"不带括号 ⇒ 不会误报。
+  chk('★ 音效·不用 Web Audio（file:// 下才有声）',
+    !/new\s+AudioContext\b/.test(J60) && !/\.decodeAudioData\s*\(/.test(J60) &&
+    /new Audio\(/.test(J60));
+
+  // ⑤ 默认关闭（上班摸鱼场景：一开页面就出声是灾难）
+  chk('★ 音效·默认关闭', A.SFX.on === false && A.sfxOn() === false);
+
+  // ⑥ 行为：关着时 sfx() 什么都不做；节流真的拦得住
+  const calls = [];
+  const _Audio = global.Audio;
+  global.Audio = function () {
+    const self = this;
+    this.volume = 1; this.currentTime = 0;
+    this.play = function () { calls.push(self.volume); return Promise.resolve(); };
+    this.addEventListener = function () { };
+  };
+  try {
+    A.sfx('ui');                        // 关着 ⇒ 不该有任何播放
+    const off = calls.length;
+    A.sfxSet(true, true);               // 打开（quiet：不播开关音，避免污染计数）
+    calls.length = 0;
+    A.sfx('crit'); A.sfx('crit'); A.sfx('crit');   // gap=140ms ⇒ 后面两次应被拦
+    const afterThrottle = calls.length;
+    chk('★ 音效·关闭时不播 / 打开后节流生效',
+      off === 0 && afterThrottle === 1,
+      '关时播了 ' + off + ' 次 · 连调 3 次实播 ' + afterThrottle + ' 次');
+    // 音量分层：里程碑音必须明显大于战斗音
+    chk('★ 音效·音量分层（里程碑 > 战斗）',
+      A.SFX_CFG.break.v > A.SFX_CFG.swing.v * 2 && A.SFX_CFG.boss_spawn.v > A.SFX_CFG.hit.v * 2,
+      '挥击 ' + A.SFX_CFG.swing.v + ' / 命中 ' + A.SFX_CFG.hit.v +
+      ' / 突破 ' + A.SFX_CFG.break.v + ' / Boss ' + A.SFX_CFG.boss_spawn.v);
+    A.sfxSet(false, true);
+  } finally {
+    global.Audio = _Audio;
+  }
+
+  // ⑦ 素材量对得上（转码管线没漏文件）
+  chk('★ 音效·素材齐（113 个 mp3）', files.filter(f => f.endsWith('.mp3')).length === 113,
+    files.filter(f => f.endsWith('.mp3')).length + ' 个 mp3');
+})();
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));

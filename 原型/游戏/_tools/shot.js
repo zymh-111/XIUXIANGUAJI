@@ -25,7 +25,8 @@ function arg(name, def) {
 }
 
 const out = process.argv[2] || path.join(os.tmpdir(), 'shot.png');
-const expr = process.argv[3] || '';
+const exprFile = arg('expr-file', '');
+const expr = exprFile ? fs.readFileSync(exprFile, 'utf8') : (process.argv[3] || '');
 const W = +arg('w', 440);
 const H = +arg('h', 800);
 const WAIT = +arg('wait', 900);
@@ -86,8 +87,23 @@ async function listTargets() {
   await send('Page.enable');
   await sleep(BOOT);
   if (expr) {
-    const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true });
+    const r = await send('Runtime.evaluate', {
+      expression: expr, returnByValue: true, awaitPromise: true,
+      // ★ --gesture：把这次求值当成【用户手势】。
+      //   为什么需要：Chromium 的自动播放策略要求文档有 sticky activation，
+      //   否则 audio.play() 一律 NotAllowedError。而 `el.click()` 是【合成事件】，
+      //   不给用户激活 ⇒ 用它验证音效会全军覆没（会误导人以为音效接错了）。
+      userGesture: process.argv.includes('--gesture'),
+    });
     if (r.exceptionDetails) throw new Error('表达式报错: ' + JSON.stringify(r.exceptionDetails));
+    // ★ 允许用表达式「取数据」而不只是改界面（例：让浏览器报音效加载成功/失败）
+    if (r.result && r.result.value !== undefined) {
+      const v = r.result.value;
+      console.log(typeof v === 'string' ? v : JSON.stringify(v, null, 1));
+    }
+  }
+  if (process.argv.includes('--noshot')) {
+    ws.close(); child.kill(); process.exit(0);
   }
   await sleep(WAIT);
   const shot = await send('Page.captureScreenshot', { format: 'png' });

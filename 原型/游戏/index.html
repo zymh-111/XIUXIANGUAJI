@@ -70,6 +70,17 @@
   .seal{width:26px;height:26px;border:1px solid var(--cinnabar);color:var(--cinnabar);
     display:flex;align-items:center;justify-content:center;border-radius:2px;
     opacity:.85;flex:0 0 auto}
+
+  /* ============ 音效开关（Round 60）============
+     为什么是「默认关闭」：这是上班摸鱼游戏 —— 打开页面就出声是灾难。
+     玩家必须显式点开；选择存 localStorage（`mijinglu_sfx`）。
+     `margin-left:auto` 把它跟右边的印章一起推到行尾（.top 是三段的 space-between）。 */
+  .sfx-btn{margin-left:auto;margin-right:7px;flex:0 0 auto;width:26px;height:26px;padding:0;
+    font:13px/1 inherit;background:transparent;border:1px solid #ffffff22;border-radius:2px;
+    color:#8c8574;cursor:pointer;opacity:.65;
+    display:flex;align-items:center;justify-content:center}
+  .sfx-btn:hover{opacity:1;border-color:#ffffff44}
+  .sfx-btn.on{opacity:.95;border-color:var(--gold);color:var(--gold);background:#c9a22712}
   .seal span{writing-mode:vertical-rl;font-size:9px;line-height:1.05;letter-spacing:1px}
 
   /* ★ 事件横幅 */
@@ -892,6 +903,7 @@
   <div class="screen on" data-v="jing">
     <div class="top">
       <div class="gen" id="genLabel">第一代</div>
+      <button id="btnSfx" class="sfx-btn" type="button">🔇</button>
       <div class="seal"><span>秘境</span></div>
     </div>
 
@@ -1046,6 +1058,7 @@
   <div class="screen" data-v="zong">
     <div class="top">
       <div class="gen">宗门 · <b id="sectName">小宗门</b></div>
+      <button id="btnSfx2" class="sfx-btn" type="button">🔇</button>
       <div class="seal"><span>宗门</span></div>
     </div>
     <!-- ★★ Round 42：常驻状态栏（不管在首屏还是设施页都能看到全局信息）

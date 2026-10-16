@@ -670,6 +670,7 @@ function fmtClock(ms) {
 
 // ★ 渲染编年史（双区）
 function renderIdleReport(sinceMs) {
+  sfx('banner');                     // ★ R60：归山见闻弹出
   const d = idleReportData(sinceMs);
   const since = sinceMs || G._seenAt || 0;
   const periodEvents = EVENTS.filter(function (_e) { return _e.t > since && _e.imp >= 4; });
@@ -1412,6 +1413,7 @@ function zbWeights() {
   });
 }
 function zbAdvance() {
+  sfx('scene');                      // ★ R60：换秘境
   // ★ 按权重随机（而不是均匀）—— 用户要求"权重优先自己的主灵根…"
   let ws = zbWeights();
   // ★★ Round 34 挂点3：门规排除的秘境（负门规"避赤炎窟"）
@@ -2270,6 +2272,192 @@ function ico(kind, name, cls) {
          'srcset="' + p + '@2x.webp 2x" alt="">';
 }
 
+// ============================================================
+// ★ R60：音效（表现层最后一块短板）
+// ------------------------------------------------------------
+// 素材：`assets/音效/*.mp3` —— 113 个，由 `_tools/audio_pack.py` 从
+//       `美术资源/05_音效/` 转码（**立体声 WAV 16.3MB → 单声道 MP3 0.73MB，22×**）。
+//
+// ⚠️ 四条硬约束（全部来自这个项目的实际处境，不是通用最佳实践）：
+//
+//  1) 【默认关闭】—— 这是**上班摸鱼**游戏。一打开就出声＝灾难。
+//     必须玩家显式打开（右上角小喇叭），选择存 localStorage。
+//
+//  2) 【用 <audio> 元素，不用 Web Audio】—— 发布包是**双击 index.html** 打开的
+//     （file:// 协议）。file:// 下 fetch/XHR 被 CORS 拦 ⇒ `decodeAudioData` 拿不到数据。
+//     `<audio src>` 不受此限，是唯一在 file:// 下可用的路子。
+//
+//  3) 【必须节流 + 概率】—— 挂机战斗每秒 1~2 次击杀、每次出手打多个目标。
+//     不处理的话是"机关枪"，**比没有音效更糟**。所以每个事件都有
+//     `gap`（最小间隔 ms）与 `p`（播放概率）。
+//
+//  4) 【音量分层】—— 战斗音（挥击/命中）必须比里程碑音（突破/渡劫/Boss）小得多，
+//     否则持续推进的战斗音会把里程碑音淹掉。
+// ============================================================
+const SFX_STORE_KEY = 'mijinglu_sfx';    // '1' = 开
+const SFX = {
+  on: false,          // 默认关闭（用户首次打开页面时静音）
+  vol: 0.55,          // 主音量
+  pool: {},           // name → [Audio, Audio, ...]（每名 3 份，允许多次叠加）
+  next: {},           // name → 轮转下标
+  last: {},           // name → 上次播放时间戳（节流用）
+  fail: 0,            // 加载失败计数（只为排错，不打扰玩家）
+};
+
+// 事件 → 音频文件名（不含 .mp3）；一个事件给多个 ⇒ 随机取，避免听腻
+const SFX_FILES = {
+  ui:          ['interface1', 'interface2', 'interface3', 'interface4', 'interface5', 'interface6'],
+  ui_open:     ['door', 'interface6'],
+  ui_tab:      ['interface2', 'interface5'],
+  swing:       ['swish-1', 'swish-2', 'swish-3', 'swish-4', 'swish-5', 'swish-6',
+                'swish-7', 'swish-8', 'swish-9', 'swish-10', 'swish-11', 'swish-12', 'swish-13'],
+  hit:         ['melee-sound', 'sword-sound', 'swing', 'swing2', 'swing3'],
+  crit:        ['metal-ringing', 'metal-small1', 'metal-small2', 'metal-small3'],
+  miss:        ['swish-2', 'swish-7', 'swish-11'],
+  dodge:       ['cloth', 'cloth-heavy'],
+  hurt:        ['giant3', 'ogre2', 'giant4'],
+  qi:          ['bubble', 'bubble2', 'bubble3'],
+  // —— 敌人死亡：按【形态】分组（见 MOB_KINDS 的 form 字段），而不是按具体名字 ——
+  kill_heavy:  ['ogre1', 'ogre2', 'ogre3', 'ogre4', 'ogre5'],
+  kill_fast:   ['bite-small', 'bite-small2', 'bite-small3'],
+  kill_std:    ['slime1', 'slime2', 'slime3', 'slime4', 'slime5',
+                'slime6', 'slime7', 'slime8', 'slime9', 'slime10'],
+  kill_grind:  ['mnstr1', 'mnstr4', 'mnstr7', 'mnstr10', 'mnstr13'],
+  kill_sec:    ['shade1', 'shade4', 'shade7', 'shade11', 'shade14'],
+  kill_elite:  ['mnstr3', 'mnstr9', 'mnstr14', 'wolfman'],
+  kill_boss:   ['giant1', 'giant2', 'giant4', 'giant5'],
+  // —— 里程碑 ——
+  boss_spawn:  ['ogre5', 'giant1'],
+  elite_spawn: ['mnstr6', 'wolfman', 'giant5'],
+  break:       ['magic1', 'spell'],
+  dujie:       ['spell', 'magic1'],
+  death:       ['ogre3', 'giant3', 'ogre5'],
+  drop:        ['coin', 'coin2', 'coin3'],
+  equip:       ['cloth', 'chainmail1', 'armor-light', 'metal-small1', 'wood-small'],
+  fac:         ['wood-small', 'metal-ringing', 'bottle', 'bubble'],   // ⚠️ 源文件是 bubble（不是 bubbles）
+  banner:      ['beads'],
+  scene:       ['door'],
+};
+// 每个事件的【音量 / 最小间隔 ms / 概率】
+const SFX_CFG = {
+  ui:          { v: 0.40, gap: 45,  p: 1.00 },
+  ui_open:     { v: 0.45, gap: 120, p: 1.00 },
+  ui_tab:      { v: 0.35, gap: 90,  p: 1.00 },
+  swing:       { v: 0.16, gap: 130, p: 0.65 },   // 出手最频繁 ⇒ 音量最小、还会跳
+  hit:         { v: 0.18, gap: 95,  p: 0.55 },
+  crit:        { v: 0.34, gap: 140, p: 1.00 },
+  miss:        { v: 0.16, gap: 130, p: 0.60 },
+  dodge:       { v: 0.22, gap: 200, p: 1.00 },
+  hurt:        { v: 0.30, gap: 260, p: 1.00 },
+  qi:          { v: 0.22, gap: 400, p: 1.00 },
+  kill_heavy:  { v: 0.22, gap: 110, p: 0.55 },
+  kill_fast:   { v: 0.17, gap: 110, p: 0.50 },
+  kill_std:    { v: 0.19, gap: 110, p: 0.50 },
+  kill_grind:  { v: 0.19, gap: 110, p: 0.50 },
+  kill_sec:    { v: 0.19, gap: 110, p: 0.50 },
+  kill_elite:  { v: 0.48, gap: 300, p: 1.00 },   // 精英死亡＝值得听见
+  kill_boss:   { v: 0.70, gap: 500, p: 1.00 },
+  boss_spawn:  { v: 0.85, gap: 500, p: 1.00 },   // 全场最响
+  elite_spawn: { v: 0.55, gap: 400, p: 1.00 },
+  break:       { v: 0.65, gap: 600, p: 1.00 },   // 突破：境界台阶
+  dujie:       { v: 0.80, gap: 600, p: 1.00 },
+  death:       { v: 0.70, gap: 600, p: 1.00 },   // 弟子死了：只响一次，要响
+  drop:        { v: 0.24, gap: 160, p: 0.70 },
+  equip:       { v: 0.32, gap: 200, p: 1.00 },
+  fac:         { v: 0.26, gap: 500, p: 1.00 },
+  banner:      { v: 0.40, gap: 800, p: 1.00 },
+  scene:       { v: 0.50, gap: 400, p: 1.00 },
+};
+// 敌对形态（MOB_KINDS 的 form）→ 死亡音事件
+const SFX_FORM = {
+  '重装': 'kill_heavy', '迅捷': 'kill_fast', '标准': 'kill_std',
+  '磨': 'kill_grind', '秒': 'kill_sec', '精英': 'kill_elite', 'Boss': 'kill_boss',
+};
+const SFX_CORE = ['ui', 'ui_tab', 'swing', 'hit', 'kill_std'];   // 开机预热的几组
+
+function sfxOn() { return SFX.on; }
+
+function sfxLoad(key) {
+  const names = SFX_FILES[key];
+  if (!names || SFX.pool[key]) return;
+  // ⚠️ 这里必须是【扁平池】：把每个变体做 2 份丢进同一个数组。
+  //    早期写成了 `names.map(n => [3 个 Audio])` ⇒ pool 元素是【数组】，
+  //    `pool[i].play()` 不存在 ⇒ 被 sfx() 的 try/catch 吞掉 ⇒ **永远无声**。
+  //    这个错是 _smoke.js 抓出来的（"连调 3 次实播 0 次"）。
+  //    扁平池顺带把"随机取变体"和"允许叠加"一次解决：随机下标即可。
+  const out = [];
+  names.forEach(function (n) {
+    for (let i = 0; i < 2; i++) {
+      const a = new Audio('assets/音效/' + n + '.mp3');
+      a.preload = 'auto';
+      a.addEventListener('error', function () { SFX.fail++; });
+      out.push(a);
+    }
+  });
+  SFX.pool[key] = out;
+}
+function sfxWarm() {                              // 打开开关时预热，避免第一次卡顿
+  SFX_CORE.concat(['crit', 'kill_heavy', 'break']).forEach(sfxLoad);
+}
+
+/** 播一个音效事件。key 见 SFX_FILES；节流/概率/音量都在这里统一处理。 */
+function sfx(key, volMul) {
+  if (!SFX.on) return;
+  const names = SFX_FILES[key];
+  if (!names) return;
+  const cfg = SFX_CFG[key] || { v: 0.3, gap: 100, p: 1 };
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if (SFX.last[key] && now - SFX.last[key] < cfg.gap) return;          // ③ 节流
+  if (cfg.p < 1 && Math.random() > cfg.p) return;                      // ③ 概率
+  SFX.last[key] = now;
+  const pool = SFX.pool[key] || (sfxLoad(key), SFX.pool[key]);
+  if (!pool || !pool.length) return;
+  const i = (SFX.next[key] = ((SFX.next[key] || 0) + 1) % pool.length);
+  const a = pool[i];
+  try {
+    a.volume = Math.max(0, Math.min(1, SFX.vol * cfg.v * (volMul === undefined ? 1 : volMul)));
+    a.currentTime = 0;
+    const pr = a.play();
+    if (pr && pr.catch) pr.catch(function () { });   // 自动播放策略拒绝 ⇒ 静默忽略
+  } catch (e) { /* 播不出来不该影响游戏 */ }
+}
+
+function sfxSet(on, quiet) {
+  SFX.on = !!on;
+  try { localStorage.setItem(SFX_STORE_KEY, SFX.on ? '1' : '0'); } catch (e) { }
+  if (SFX.on) { sfxWarm(); if (!quiet) sfx('ui_open'); }
+  sfxRender();
+}
+function sfxRender() {
+  // 两个页签（境 / 宗）各有一个开关 ⇒ 状态要同步
+  ['btnSfx', 'btnSfx2'].forEach(function (id) {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.textContent = SFX.on ? '🔊' : '🔇';
+    b.classList.toggle('on', SFX.on);
+    b.title = SFX.on
+      ? '音效已开（点击关闭）'
+      : '音效已关 · 默认关闭，避免上班摸鱼时出声（点击打开）';
+  });
+}
+function sfxInit() {
+  try { SFX.on = localStorage.getItem(SFX_STORE_KEY) === '1'; } catch (e) { SFX.on = false; }
+  ['btnSfx', 'btnSfx2'].forEach(function (id) {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener('click', function () { sfxSet(!SFX.on); });
+  });
+  // ① 全局点击音（事件委派，一处接全部按钮；不用逐个按钮挂）
+  document.addEventListener('click', function (ev) {
+    if (!SFX.on) return;
+    const t = ev.target;
+    if (!t || !t.closest) return;
+    const el = t.closest('button, .spot, .nav div, select, .arc-item, .bio-related');
+    if (!el || el.id === 'btnSfx' || el.id === 'btnSfx2') return;
+    sfx(el.classList && el.classList.contains('spot') ? 'ui_tab' : 'ui');
+  }, true);
+  sfxRender();
+}
+
 // ---- 分派规则（玩家定义 · 一次性）----
 const ASSIGN_RULES = [
   { id: 'talent', name: '按天赋', desc: '天赋 ≥ X 的出去历练', levels: ['shang', 'tian', 'yao'] },
@@ -2578,6 +2766,7 @@ function facYieldAdd(b, gens, healed) {
   y.ilvl += Math.round((b.ilvl || 0) * (gens || 0));
   y.lifeSec += Math.round((b.life || 0) * (gens || 0));
   y.healed += (healed || 0);
+  if ((b.mats || 0) + (b.ilvl || 0) + (b.life || 0) > 0) sfx('fac');   // ★ R60：设施真有产出才响
   y.b = b;                       // 系数（每届独立 ⇒ 取最近一届，不累加）
   return y;
 }
@@ -2700,6 +2889,7 @@ function dujieRate() {
 }
 // 渡劫（返回结果对象）
 function doDujie() {
+  sfx('dujie');                      // ★ R60
   const info = dujieRate();
   const roll = Math.random();
   const ok = roll < info.rate;
@@ -4201,6 +4391,7 @@ function pickLegacy_old(owned, n) {
 
 function endDisciple(cause) {
   DISCIPLE.deathCause = cause;
+  sfx('death');                     // ★ R60：弟子死了 —— 一局只响一次，必须响
   const gen = SECT.generation;
   const owned = buildFingerprint().concat(G.bag);
   let carried = [], lost = [];
@@ -6738,10 +6929,12 @@ G.tier++;
         '（基础属性 ×' + (P.R_ATK * P.R_ATK).toFixed(3) +
         ' · 小怪同步变强 ×' + P.DIFF_MOBHP_RATE.toFixed(2) + '）', 'break');
       G.fx.push({ x: G.heroX, y: G.heroY - 0.08, txt: '突破！', cls: 'break', life: 1 });
+      sfx('break');                        // ★ R60：境界台阶 —— 这是玩家最想听到的声音
       breakoutFlash = 1.2;
     } else {
       log('修为精进：' + P.REALMS[after] + ' 第 ' + (G.tier % P.REALM_PER_TIER + 1) +
         '/2 层（小怪强度 ×' + P.DIFF_MOBHP_RATE.toFixed(2) + '）', 'ok');
+      sfx('qi');                           // ★ R60：小台阶给个轻的水泡音
     }
   }
 }
@@ -6835,6 +7028,7 @@ function step(st, dt) {
       G.field = [];
       G.bossIntro = 1.2;                 // 出场演出倒计时（秒）
       try { log('★ 【Boss 现身】' + (rollBossKind().name || '') + ' —— 小怪尽散', 'break'); } catch (e) { }
+      sfx('boss_spawn');                            // ★ R60：全场最响的一个音
       ev('boss_spawn', 10, {});
     }
     // ★ 敌人分类（Round 14/15）：五行 × 形态；精英也有五行（用户要求）
@@ -6853,6 +7047,8 @@ function step(st, dt) {
     const hits = mh * hpMul / baseDmg;
     const isTrash = kind === 'elite' && hits <= P.ELITE_DOWNGRADE_HITS;   // Boss 不降级
     if (isTrash) G.downgraded++;
+    // ★ R60：精英出场音（被降级成杂兵的【不算】—— 不然没精英也会响）
+    if (isElite && !isTrash) sfx('elite_spawn');
     const ang = R(0, Math.PI * 2), rad = R(0.54, 0.66);
     G.field.push({
       kind: isTrash ? 'mob' : kind,
@@ -6972,10 +7168,12 @@ function step(st, dt) {
     aoeN += gfw.extraTargets;
     // ★ 金钟罩 / 凝神归元：给护盾（护盾吸收伤害，见受击结算）
     if (gfw.shield > 0) { G.shield = Math.max(G.shield || 0, (st.hp || 0) * gfw.shield); G.shieldT = gfw.shieldT; }
+    sfx('swing', 1 + Math.min(0.5, aoeN * 0.04));   // ★ R60：出手（打的目标越多越响一点）
     for (let k = 0; k < aoeN && k < cand.length; k++) {
       const e = cand[k].e;
       if (Math.random() < st.missRate) {
         G.fx.push({ x: e.x, y: e.y, txt: 'MISS', cls: 'miss', life: 1 });
+        sfx('miss');                                 // ★ R60
         continue;
       }
       // ★ 属性同调乘区：基础攻击之后、随机浮动之前
@@ -6994,6 +7192,8 @@ function step(st, dt) {
     if (_sg && e.wx && KE[_sg.wx] === e.wx) wxKe *= (1 + SIGN_KE_BONUS);
       const cls = (isCrit && wxKe > 1) ? 'crit ke'
         : isCrit ? 'crit' : (wxKe > 1 ? 'dmg ke' : 'dmg');
+      // ★ R60：命中音。暴击单独一个更亮的音（相克再响一点）
+      sfx(isCrit ? 'crit' : 'hit', wxKe > 1 ? 1.25 : 1);
       G.fx.push({ x: e.x, y: e.y, txt: Math.round(d) + (isCrit ? '!' : ''),
         cls, wx: wxKe > 1 ? myEl : null, life: 1 });
     }
@@ -7002,6 +7202,13 @@ function step(st, dt) {
         if (G.field[k].kind === 'elite') {
           G.elites++;
           G.fx.push({ x: G.field[k].x, y: G.field[k].y, txt: '精英击杀', cls: 'crit', life: 1 });
+          sfx('kill_elite');                        // ★ R60：精英死亡，值得听见
+        } else if (G.field[k].kind === 'boss') {
+          sfx('kill_boss');                         // ★ R60：Boss 倒下
+        } else {
+          // ★ R60：小怪死亡音按【形态】分组（重装/迅捷/标准/磨/秒）——
+          //   全库 54 个敌人音，按形态分才既有变化又不杂乱
+          sfx(SFX_FORM[G.field[k].form] || 'kill_std');
         }
         const dead = G.field[k];
         G.kills++; G.totalKills++;
@@ -7104,11 +7311,13 @@ function step(st, dt) {
       if (gfOn('s_lingbo')) GF.lingboT = P.GF_LINGBO_WINDOW;   // ★ 凌波微步：闪避→提速
       G.dodgeCount++; G.lastDodgeT = G.t;    // ★ 身法钩子
       G.fx.push({ x: G.heroX, y: G.heroY - 0.05, txt: '闪避', cls: 'dodge', life: 1 });
+      sfx('dodge');                          // ★ R60
     }
     G.hurtAcc = (G.hurtAcc || 0) + (before - G.hp);
     if (G.hurtAcc > st.hp * 0.06) {
       G.hurtAcc = 0; G.shake = 0.2;
       G.fx.push({ x: G.heroX, y: G.heroY + 0.14, txt: '-' + Math.round(dps * 0.4), cls: 'player', life: 1 });
+      sfx('hurt');                           // ★ R60：挨打了要听得见（这条比命中音更重要）
     }
     if (G.hp <= 0) { G.hp = 0; endRun(false); return; }
   }
@@ -7143,6 +7352,7 @@ function rollDrop(dead) {
   const isBoss = dead && dead.kind === 'boss';
   const p = DROP.PER_KILL * (isBoss ? 8 : (isElite ? DROP.ELITE_MULT : 1)) * traitMul('drop');
   if (Math.random() >= p) return;
+  sfx(isBoss ? 'kill_boss' : (isElite ? 'equip' : 'drop'));   // ★ R60：出货了
   const ilvl = 1 + G.tier * DROP.ILVL_PER_TIER;
   const it = makeItem(ilvl, null);
   G.dropped++;
@@ -9341,6 +9551,7 @@ function exportSave() {
 function boot() {
   try {
     buildUI();
+    sfxInit();                     // ★ R60：音效（默认关闭；开关状态从 localStorage 恢复）
     log('秘境录 · 挂机刷宝原型', 'sys');
     log('拖动背包装备到身体分区即可穿戴', 'sys');
     // ★ 先尝试读档；没有存档才新建第 1 代弟子
@@ -9445,4 +9656,6 @@ globalThis.__api = {
   ZONE_CAP, SHAPES, QUALITIES, P,
   // ★ R59：图标（供 _smoke.js 校验「每个 id 都有图 + 文件真的在盘上」）
   FAC_ICON, ICO_DIR, WEAPON_ICON, ico, TRAIT_RAR, TRAITS, TRAIT_BY_ID, rollTraits,
+  // ★ R60：音效（供 _smoke.js 校验「映射不漏 + 文件在盘上 + 默认关闭 + 节流生效」）
+  SFX, SFX_FILES, SFX_CFG, SFX_FORM, SFX_CORE, SFX_STORE_KEY, sfx, sfxSet, sfxOn, sfxWarm,
 };
