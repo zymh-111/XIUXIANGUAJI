@@ -336,6 +336,17 @@ const P = {
   THREAT_PER_TIER: 1.035,
 
   MOB_REACH: 0.055,       // 怪的近战距离（很小：它们要贴上来才施压）
+  // ★★ R210：怪"出手"的节拍 —— 把连续承压伤害离散成"可见的一次扑击"
+  //   为什么需要（用户："表现得和怪更有来有回一点"）：
+  //     旧实现是【连续 DPS 按帧摊】，怪只有"存在/消失"两态、没有任何出手动作
+  //     ⇒ 整个战斗是单向的，只有弟子在打，玩家看到的是"血条缓缓下降"。
+  //   做法：把 dps × dt 累积起来，每 MOB_ATK_CD 游戏秒结算一次，并由
+  //     【威胁圈内最近的几只怪】各出一份（最多 MOB_ATK_MOBS 只）。
+  //   ⚠️ 伤害积分【严格不变】（同一积分的离散化）⇒ 配平零风险，有探针复核。
+  //   1.0 游戏秒 = 真实 400ms —— 真实 ≥250ms 才看得清一次动作，且不至于太稀。
+  MOB_ATK_CD: 1.0,
+  MOB_ATK_MOBS: 3,        // 一拍最多几只怪一起扑（再多就糊了，且总伤害仍精确分摊）
+  MOB_LUNGE_MS: 380,      // 扑击动作时长（真实毫秒）
   HIT: { MISS_BASE: 0.08, HIT_BASE: 0.90, EVADE_BASE: 0.05, CRIT_BASE: 0.05, CRIT_DMG_BASE: 0.50 },
   // ★ 闪避：软上限（和防御完全同一套逻辑）
   //   基础闪避 5.8% 只是"标定基准"，玩家堆的是【原始闪避 rawEvade】
@@ -6635,6 +6646,7 @@ const G = {
   dmgq: [],           // 延后出现的伤害飘字（远程要等弹道飞到）
   heroX: 0.5, heroY: 0.56, wanderT: 0, wanderTarget: null,
   dodgeAcc: 0, dodgeFlash: 0, dashT: 0, crowdAvoid: 0,
+  mobAtkAcc: 0, mobAtkT: 0,   // ★ R210：怪出手的累积器（伤害 + 节拍）
   lastPressure: null, // 上一局的【承压强度】（威胁圈内怪数 ÷ 阈值），驱动避怪权重
   lastKillRate: 0,    // （保留）上一局击杀速率，仅用于展示
   lastSurvived: true,
@@ -7416,6 +7428,7 @@ function startRun() {
   G.origin = 0;
   G.heroX = 0.5; G.heroY = 0.56; G.wanderT = 0; G.wanderTarget = null;
   G.dodgeAcc = 0; G.dodgeFlash = 0; G.dashT = 0;
+  G.mobAtkAcc = 0; G.mobAtkT = 0;   // ★ R210
   G.attackT = 0;                        // ★ Round 36：攻击动画标记
   G.dodgeCount = 0; G.lastDodgeT = -99;
   G.pressureAcc = 0; G.pressureN = 0;
@@ -7798,7 +7811,36 @@ function step(st, dt) {
       const refl = dpsAfterShield * dt * st.thorns / Math.max(1, threats);
       for (const e of G.field) { if (distToHero(e) <= st.threat) e.hp -= refl * 8; }
     }
-    G.hp -= dpsAfterShield * dt; G.overloadT += dt;
+    // ★★ R210：连续承压伤害 → "某几只怪扑上来咬一口"
+    //   伤害积分不变（累加后一次性结算），但每一次伤害都有【可见的出手者】。
+    G.mobAtkAcc += dpsAfterShield * dt;
+    G.mobAtkT += dt;
+    if (G.mobAtkT >= P.MOB_ATK_CD) {
+      G.mobAtkT -= P.MOB_ATK_CD;
+      const _dmg = G.mobAtkAcc; G.mobAtkAcc = 0;
+      if (_dmg > 0) {
+        // 出手者 = 威胁圈内最近的 N 只（它们才是压上来的那些）
+        const _atk = G.field
+          .map(function (e) { return { e: e, d: distToHero(e) }; })
+          .filter(function (x) { return x.d <= st.threat && x.e.hp > 0; })
+          .sort(function (a, b) { return a.d - b.d; })
+          .slice(0, P.MOB_ATK_MOBS);
+        G.hp -= _dmg;
+        G.dmgTaken = (G.dmgTaken || 0) + _dmg;
+        // 每只分摊一份（总和严格等于这一拍的全部伤害 ⇒ 不改配平）
+        const per = _atk.length ? _dmg / _atk.length : 0;
+        for (let ai = 0; ai < _atk.length; ai++) {
+          const ae = _atk[ai].e;
+          ae._lungeUntil = Date.now() + P.MOB_LUNGE_MS;      // 表现：扑击（render 消费）
+          if (per >= 1) {
+            pushDmgFx(ae.x, ae.y + 0.05, '-' + Math.round(per), 'player', null, 0);
+          }
+        }
+        if (!_atk.length) pushDmgFx(G.heroX, G.heroY + 0.14, '-' + Math.round(_dmg), 'player', null, 0);
+        sfxDelay('hurt', 1, 0);
+      }
+    }
+    G.overloadT += dt;
     G.hitT = P.GF_JINGANG_SEC;   // ★ 受击标记（金刚体：受击后抬阈值）
     // ★ 功法计时
     GF.idleT += dt; GF.holdT += dt;
@@ -8597,6 +8639,7 @@ function render() {
     }
     el.style.opacity = 0.5 + 0.5 * Math.max(0, e.hp / e.maxHp);
     el.classList.toggle('hit', e.hit > 0);
+    el.classList.toggle('lunge', Date.now() < (e._lungeUntil || 0));   // ★ R210：扑击
     // ★ 妖怪贴图（Round 38）：有图的用图，没图的（域外天魔）退回五行色块
     //   贴图挂 .sprite（::before 会挡住 hpbar，所以用真实子元素更好控制层级）
     //   Round 39：Boss 走独立映射表 BOSS_SPRITE（文件名不带 _Boss 后缀）

@@ -269,6 +269,17 @@
     background:radial-gradient(circle at 35% 32%,#ffdf90,#c9871b)}
   .mob.hit{filter:brightness(2.6)}
 
+  /* ★ R210：怪「扑击」—— 只有看得见的出手，才有"有来有回"
+     扑击时先向后蓄力、再向玩家方向一冲、然后弹回（380ms，见 P.MOB_LUNGE_MS）。
+     ⚠️ 这是纯表现：伤害积分不变（见 settleAway 之外 R210 的注释）。 */
+  .mob.lunge{animation:mobLunge .38s cubic-bezier(.3,.9,.35,1)}
+  @keyframes mobLunge{
+    0%  {transform:translate(-50%,-50%) scale(1,1)}
+    22% {transform:translate(-50%,-50%) scale(1.16,.86)}          /* 下蹲蓄力 */
+    46% {transform:translate(-50%,calc(-50% + 7px)) scale(.9,1.14)} /* 窜出去 */
+    100%{transform:translate(-50%,-50%) scale(1,1)}
+  }
+
   /* ★ R66：弟子脚下的技能进度条（自走棋那种"还差多少才放"）
      设计取舍：最多 3 条、每条 3px 高 ⇒ 总高仅 ~13px，不抢战场信息；
      靠【颜色】区分是哪一条（功法按五类上色，法宝用五行色）。

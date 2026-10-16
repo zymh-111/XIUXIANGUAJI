@@ -4920,6 +4920,39 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
   }
 })();
 
+// ============================================================================
+// ★ R210：怪"会打人"（连续承压伤害 → 可见的扑击）
+//   风险点：① 离散化时把伤害改掉（这是配平红线）
+//          ② 表现没人消费（写了 _lungeUntil 但 render 不读 ⇒ 静默无效果）
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J210 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const H210 = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+
+  chk('★ 怪出手·节拍常量齐（CD / 每拍只数 / 动作时长）',
+    A.P.MOB_ATK_CD > 0 && A.P.MOB_ATK_MOBS >= 1 && A.P.MOB_LUNGE_MS >= 250,
+    'CD ' + A.P.MOB_ATK_CD + '游戏秒 · 最多 ' + A.P.MOB_ATK_MOBS + ' 只 · ' + A.P.MOB_LUNGE_MS + 'ms');
+
+  // ★★ 配平红线：伤害必须【先累积再结算】（同一积分的离散化），不许边算边丢
+  chk('★ 怪出手·伤害是"累积后整拍结算"（积分不变）',
+    /G\.mobAtkAcc \+= dpsAfterShield \* dt/.test(J210) &&
+    /const _dmg = G\.mobAtkAcc; G\.mobAtkAcc = 0;/.test(J210) &&
+    /G\.hp -= _dmg;/.test(J210) &&
+    !/G\.hp -= dpsAfterShield \* dt;/.test(J210));
+
+  chk('★ 怪出手·分摊总和严格等于整拍伤害（不改配平）',
+    /const per = _atk\.length \? _dmg \/ _atk\.length : 0;/.test(J210));
+
+  chk('★ 怪出手·表现真的被消费（_lungeUntil → .lunge 类 + CSS 关键帧）',
+    /el\.classList\.toggle\('lunge', Date\.now\(\) < \(e\._lungeUntil/.test(J210) &&
+    /\.mob\.lunge\{animation:mobLunge/.test(H210) && /@keyframes mobLunge/.test(H210));
+
+  chk('★ 怪出手·累积器每局重置',
+    /G\.mobAtkAcc = 0; G\.mobAtkT = 0;/.test(J210));
+})();
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));
