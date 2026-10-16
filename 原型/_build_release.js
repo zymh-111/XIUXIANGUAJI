@@ -49,6 +49,14 @@ fs.writeFileSync(PKG + '/index.html', h, 'utf8');
 // ---- ② _game.js ----
 copy(SRC + '/_game.js', PKG + '/_game.js');
 
+// ---- ②之二 本地启动器（R69）----
+//   用户："存档不要存在浏览器上面"。而双击 index.html（file://）下浏览器
+//   【禁止静默写文件】，必须有个能写盘的通道 ⇒ 启动器起本地服务 + 无边框窗口。
+//   ⚠️ 加了新文件就要加进这里，不然发布包里没有（漏一次就是"启动.bat 点了没反应"）
+for (const _lf of ['启动.bat', '_launcher.py']) {
+  if (fs.existsSync(SRC + '/' + _lf)) { copy(SRC + '/' + _lf, PKG + '/' + _lf); console.log('  ✅ 启动器已打包：' + _lf); }
+}
+
 // ---- ③ 背景图（拷进来，因为它是画面的一部分）----
 const bg = ROOT + '/美术资源/04_水墨背景/asian-mountain-forest-bg__sprite_northWindShrineBG.png';
 if (fs.existsSync(bg)) {

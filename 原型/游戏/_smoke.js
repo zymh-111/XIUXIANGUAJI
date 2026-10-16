@@ -4953,6 +4953,57 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
     /G\.mobAtkAcc = 0; G\.mobAtkT = 0;/.test(J210));
 })();
 
+// ============================================================================
+// ★ R69：存档通道（SAVE_IO）—— 优先写真实文件，双击 html 时退回 localStorage
+//   风险点：① 探针没跑在 boot 之前 ⇒ loadGame 读不到文件（且不能把 boot 改 async）
+//          ② 只写了文件、没留 localStorage 兜底 ⇒ 换回双击 html 就丢档
+//          ③ 启动器没进发布包 / 端点缺失 ⇒ "启动.bat 点了没反应"
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J69 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const L69 = fsx.readFileSync(ROOT + '_launcher.py', 'utf8');
+  const B69 = fsx.readFileSync(ROOT + '启动.bat', 'utf8');
+
+  chk('★ 存档·SAVE_IO 三件套齐（read / write / probe）',
+    A.SAVE_IO && typeof A.SAVE_IO.read === 'function' &&
+    typeof A.SAVE_IO.write === 'function' && typeof A.SAVE_IO.probe === 'function');
+
+  // ★★ 存/读都必须走通道（不许留直连 localStorage 的旁路，否则文件通道会被绕过）
+  chk('★ 存档·saveGame / loadGame 都走 SAVE_IO（无旁路）',
+    /SAVE_IO\.write\(JSON\.stringify\(\{/.test(J69) &&
+    /const raw = SAVE_IO\.read\(\);/.test(J69) &&
+    !/localStorage\.setItem\(SAVE_KEY, JSON\.stringify\(\{/.test(J69));
+
+  // ★★ 探针必须在 boot 之前（否则 loadGame 拿不到文件内容；且 boot 不能改成 async）
+  chk('★ 存档·探针跑在 boot 之前（loadGame 保持同步）',
+    /p = SAVE_IO\.probe\(\)/.test(J69) && /p\.then\(go, go\)/.test(J69) &&
+    /if \(!p \|\| typeof p\.then !== 'function'\) \{ go\(\); return; \}/.test(J69));
+
+  // 两条通道都保留：文件是正本，localStorage 是兜底
+  chk('★ 存档·localStorage 仍作兜底（换回双击 html 也不丢档）',
+    /try \{ localStorage\.setItem\(SAVE_KEY, str\); \} catch/.test(J69));
+
+  // 启动器端点齐
+  chk('★ 启动器·三个端点齐（/ping /load /save）+ 写文件带备份与原子替换',
+    /path == '\/ping'/.test(L69) && /path == '\/load'/.test(L69) && /path != '\/save'/.test(L69) &&
+    /BACKUP/.test(L69) && /os\.replace\(tmp, SAVE\)/.test(L69) &&
+    /bad-save/.test(L69), '含非法档拒绝');
+
+  // 无边框窗口
+  chk('★ 启动器·用 --app= 开无边框窗口', /'--app=' \+ url/.test(L69));
+
+  // 启动脚本能自己找到 Python
+  chk('★ 启动器·启动.bat 会自己找 Python 并给出兜底说明',
+    /Python314/.test(B69) && /where python/.test(B69) && /直接双击 index\.html/.test(B69));
+
+  // 打包脚本必须带上启动器（漏一次 = 发布包里"点了没反应"）
+  const build = fsx.readFileSync('D:/游戏资料库/原型/_build_release.js', 'utf8');
+  chk('★ 启动器·已纳入发布打包清单',
+    /启动\.bat/.test(build) && /_launcher\.py/.test(build));
+})();
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));

@@ -4944,6 +4944,60 @@ function autoTakeFromPool() {
 const SAVE_KEY = 'miyu_save_v1';
 const SAVE_VER = 1;
 
+// ============================================================
+// ★ R69：存档通道（SAVE_IO）—— 优先写【真实文件】，双击 html 时退回 localStorage
+// ------------------------------------------------------------
+// 用户："存档做一下，不要存在浏览器上面"
+//
+// ⚠️ 硬约束：发布包是"双击 index.html"（`file://`），该协议下浏览器**禁止静默写文件**
+//   （安全限制，无 API 可绕）。所以要让存档落成真文件，必须有一个能写盘的通道。
+//   ⇒ 配套 `启动.bat` + `_tools/launcher.py`：起本地服务 + 用 Edge 的 --app=
+//     开【无边框窗口】（顺手解决"隐藏框"），并暴露 /ping /load /save 三个端点。
+//
+// 设计：**两个通道都保留**，谁能用就用谁 ——
+//   · 启动器下（http）→ 写 `存档.json`（可备份/可手改/可塞网盘），同时镜像一份到 localStorage 兜底
+//   · 双击 html（file://）→ 走 localStorage，行为与以前完全一致（不破坏老用法）
+//   ⚠️ loadGame() 是【同步】的（boot 里直接调），所以探针必须在 boot 之前跑完，
+//     把拿到的原文塞进 SAVE_IO._raw —— 这样不用把 boot 改成 async。
+const SAVE_IO = {
+  mode: 'local',        // 'file' = 跑在本地启动器下 | 'local' = 双击 html
+  _raw: null,           // 启动探针取回的存档原文
+  read() {
+    if (this.mode === 'file' && this._raw) return this._raw;
+    try { return localStorage.getItem(SAVE_KEY); } catch (e) { return null; }
+  },
+  write(str) {
+    // 两条通道都写：文件是"正本"，localStorage 是兜底（换回双击 html 也不丢档）
+    try { localStorage.setItem(SAVE_KEY, str); } catch (e) { }
+    if (this.mode !== 'file') return;
+    try {
+      fetch('/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: str })
+        .catch(function () { });
+    } catch (e) { }
+  },
+  /** 探针：跑在启动器下就把存档取回来。
+   *  ⚠️ 只有跑在 http(s) 下才【需要异步】—— 启动器一定用 http://127.0.0.1 提供服务，
+   *     所以双击 index.html（file://）**不可能**在启动器下 ⇒ 直接返回 null，
+   *     让 boot 保持【同步】（行为与以前完全一致，也让 _init_test 的同步断言仍成立）。 */
+  probe() {
+    const _http = (typeof location !== 'undefined') && /^https?:$/.test(location.protocol || '');
+    if (!_http || typeof fetch !== 'function') return null;
+    let to = null;
+    const timeout = new Promise(function (res) { to = setTimeout(res, 400); });
+    const hit = fetch('/ping', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (info) {
+        if (!info || info.app !== 'mijinglu') return null;
+        SAVE_IO.mode = 'file';
+        return fetch('/load', { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.text() : ''; })
+          .then(function (t) { if (t) SAVE_IO._raw = t; });
+      });
+    return Promise.race([hit, timeout]).then(function () { clearTimeout(to); });
+  },
+};
+
 // 装备扁平化（不存 _anchor 之类运行时状态）
 function serItem(it) {
   // ★ 非装备条目（功法书 / 法宝）走单独分支 —— 它们没有 slot/shape/mainVal
@@ -5032,7 +5086,8 @@ function saveGame() {
   if (globalThis.__DSH_RESETTING) return;
   try {
     const z = serZones();
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
+    // ★ R69：走 SAVE_IO（启动器下写真实文件，否则 localStorage）
+    SAVE_IO.write(JSON.stringify({
       v: SAVE_VER,
       tier: G.tier, qi: G.qi, qiTotal: G.qiTotal, breakCount: G.breakCount,
       origin: G.origin,   // ⚠️ Round 18：materials 已搬到 sect 段（SECT_RES）
@@ -5077,7 +5132,7 @@ function saveGame() {
 
 function loadGame() {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = SAVE_IO.read();      // ★ R69：文件优先，退回 localStorage
     if (!raw) return false;
     const d = JSON.parse(raw);
     if (!d || d.v !== SAVE_VER) return false;   // 版本不符 ⇒ 弃档（原型阶段可接受）
@@ -10219,7 +10274,15 @@ if (typeof window !== 'undefined' && window.addEventListener) {
 
 // 双保险：DOM 已就绪就直接跑，否则等事件
 if (typeof document !== 'undefined') {
-  const ready = () => { try { boot(); } catch (e) { showErr('boot 异常：' + e.message); } };
+  // ★ R69：先探针（是否跑在本地启动器下 / 取回存档），再 boot ——
+  //   这样 loadGame() 保持同步，不用把 boot 改成 async
+  const ready = () => {
+    const go = () => { try { boot(); } catch (e) { showErr('boot 异常：' + e.message); } };
+    let p = null;
+    try { p = SAVE_IO.probe(); } catch (e) { p = null; }
+    if (!p || typeof p.then !== 'function') { go(); return; }   // file:// ⇒ 同步 boot
+    p.then(go, go);                                            // http ⇒ 等探针取回存档
+  };
   if (document.readyState === 'loading' && typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('DOMContentLoaded', ready);
   } else {
@@ -10293,4 +10356,6 @@ globalThis.__api = {
   gfProgress, fbProgress, GF_TYPE_COLOR, renderSkillBar,
   // ★ R67：离开结算（离线 / 后台共用一套公式）
   settleAway, applyOffline, settleBackground, CLOCK_RATIO,
+  // ★ R69：存档通道（供 _smoke.js 校验"无旁路 / 探针在 boot 前"）
+  SAVE_IO,
 };

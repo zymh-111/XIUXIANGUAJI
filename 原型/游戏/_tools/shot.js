@@ -34,7 +34,9 @@ const BOOT = +arg('boot', 1600);
 const PORT = +arg('port', 9333);
 
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-cdp-'));
-const url = 'file:///' + path.join(ROOT, 'index.html').replace(/\\/g, '/');
+// ★ R69：支持 --url=<http地址>（验证"跑在本地启动器下"的场景；默认仍走 file://）
+const _urlArg = arg('url', '');
+const url = _urlArg || ('file:///' + path.join(ROOT, 'index.html').replace(/\\/g, '/'));
 
 const child = spawn(EDGE, [
   '--headless=new',
