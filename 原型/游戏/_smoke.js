@@ -1484,11 +1484,53 @@ chk("血量触发：≤35%", A.fbTriggered(A.FABAO_BY_ID["f_huguo"], fbCtx({ hpP
 chk("血量触发：>35% 不触发", A.fbTriggered(A.FABAO_BY_ID["f_huguo"], fbCtx({ hpPct: 0.5 })) === false);
 chk("击杀触发：≥60", A.fbTriggered(A.FABAO_BY_ID["f_huoyu"], fbCtx({ kills: 60 })) === true);
 chk("精英触发", A.fbTriggered(A.FABAO_BY_ID["f_binghen"], fbCtx({ eliteAlive: 1 })) === true);
-chk("每局每件只催动一次",
+chk("★ R229：催动后进冷却（冷却中不再触发）",
   (function () {
-    A.fbResetRun(); A.FB.used["f_zhuxian"] = 1;
-    const r = A.fbTriggered(A.FABAO_BY_ID["f_zhuxian"], fbCtx({ threats: 20 }));
-    A.fbResetRun(); return r === false;
+    A.fbResetRun();
+    const f = A.FABAO_BY_ID["f_zhuxian"];
+    // 造一次"刚催动完"的状态
+    A.FB.n[f.id] = 1; A.FB.cd[f.id] = 100; A.FB.cdFrom[f.id] = 80;
+    // ⚠️ 必须把 swings 传进 ctx —— fbTriggered 读的是 `ctx.swings`（不是全局 GF.swingW），
+    //    而 fbCtx 的默认值是 0 ⇒ 不传的话"冷却结束"那次也还在冷却里（第一版就这么错的）
+    const blocked = A.fbTriggered(f, fbCtx({ threats: 20, swings: 90 }));
+    const ok = A.fbTriggered(f, fbCtx({ threats: 20, swings: 101 }));
+    A.fbResetRun();
+    return (blocked === false && ok === true)
+      ? true : ('冷却中=' + blocked + ' · 冷却后=' + ok);
+  })());
+chk("★ R229：冷却逐次翻倍且有封顶（不能变'永不再触发'）",
+  (function () {
+    A.fbResetRun();
+    const f = A.FABAO_BY_ID["f_zhuxian"];
+    const lens = [];
+    for (let k = 0; k < 8; k++) { A.FB.n[f.id] = k; lens.push(A.fbCdLen(f)); }
+    const base = A.P.FABAO_CD_BASE, cap = A.P.FABAO_CD_MAX;
+    const good = lens[0] === base && lens[1] === base * 2 && lens[2] === base * 4 &&
+      lens[lens.length - 1] === cap && lens.every(v => v <= cap);
+    A.fbResetRun();
+    return good ? true : lens.join(',');
+  })());
+chk("★ R229：反噬确实给了负面 buff（出手↓ · 承压↑）",
+  (function () {
+    A.fbResetRun();
+    const f0 = A.gfMods();
+    A.FB.backlash = 4;
+    const f4 = A.gfMods();
+    const freqDown = f4.freq < f0.freq, takenUp = f4.dmgTaken > f0.dmgTaken;
+    A.FB.backlash = 99;                      // 极端值：出手频率必须有下限，不能被压成 0
+    const fBig = A.gfMods();
+    const floored = fBig.freq > 0;
+    A.fbResetRun(); A.FB.backlash = 0;
+    return (freqDown && takenUp && floored) ? true
+      : ('freq ' + f0.freq + '→' + f4.freq + ' · taken ' + f0.dmgTaken + '→' + f4.dmgTaken + ' · 极端 ' + fBig.freq);
+  })());
+chk("★ R229：走火入魔不算阵亡（弟子活着回宗门）",
+  (function () {
+    // ⚠️ 这段测试区没有现成的源码变量，自己读一份（别用别处那种 `J`）
+    const _J229 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8');
+    return /if \(!survived && !backlash\) \{/.test(_J229) &&
+      /endRun\(false, 'backlash'\)/.test(_J229) &&
+      /reason === 'backlash'/.test(_J229);
   })());
 chk("重置后可以再催动",
   (function () { A.fbResetRun(); return A.fbTriggered(A.FABAO_BY_ID["f_zhuxian"], fbCtx({ threats: 20 })) === true; })());

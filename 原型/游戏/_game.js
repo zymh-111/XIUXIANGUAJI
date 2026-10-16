@@ -405,7 +405,27 @@ const P = {
   //   让"几刀击杀"不再随档位恶化。
   HARMONY: [0.94, 1.03, 1.06, 1.10, 1.15, 1.22],
   HARMONY_TH: [0, 2, 5, 8, 10, 13],
-  ORIGIN_PER_KILL: 1, ORIGIN_COST: 60,
+  // ★ R229：本源从 1 降到 0.22 —— 一局约 150。
+  //   为什么：改成"可重复催动"之后，本源才是【硬约束】。
+  //   原来 674/局 而支出上限被锁死 45 ⇒ 93% 每局被扔掉（R72 实测），
+  //   **只要"每局 1 次"这条限制在，把收入砍到多少本源都不可能稀缺**。
+  ORIGIN_PER_KILL: 0.22, ORIGIN_COST: 60,
+  // ---- ★ R229：法宝「反噬」----
+  //   法宝可重复催动 ⇒ 有了刹车才谈得上取舍。用户决策："烧法宝烧多了该有负面 buff，
+  //   严重点就提前回宗门了"，控制方式选【逐次变长的冷却】。
+  //   ⚠️⚠️ 关键：反噬**不能和冷却并列**。冷却本身会把催动拦住 ⇒ 反噬永远叠不上去
+  //      ⇒ 走火入魔永远触发不了（形同虚设）。所以两者是**一套**：
+  //      冷却决定"多久能再烧一次"，反噬决定"还该不该烧"，且反噬直接压低出手频率
+  //      ⇒ 越烧越慢 ⇒ 自然收敛。
+  FABAO_CD_BASE: 20,          // 冷却基数（swingW 单位，与功法 cd:'swing' 同口径）
+  FABAO_CD_MAX: 120,          // 冷却封顶（不封顶就变成"永不再触发"）
+  FABAO_BL_MAX: 8,            // 反噬满层 ⇒ 走火入魔 ⇒ 本局提前结束（回宗门）
+  // ⚠️ 每层只给 −1% 出手频率（初版 3% ⇒ 一局平均 5.7 层 = −17% 出手，
+  //   **正好把法宝那点伤害增益全吃光，实测反而 −15% 收益**）。
+  //   反噬的"代价"主要由【承压】和【走火入魔】承担 —— 那才是"走火入魔"该有的样子
+  //   （让你更危险，不是让你更慢）。
+  FABAO_BL_FREQ: 0.01,        // 每层反噬：出手频率 −1%（象征气息紊乱）
+  FABAO_BL_TAKEN: 0.06,       // 每层反噬：承压伤害 +6%（★ 这是主要代价）
 };
 
 const QUALITIES = ['普通', '精良', '史诗', '传奇', '神话'];
@@ -2562,7 +2582,13 @@ function gfProgress(g) {
 /** 法宝催动条件的进度（与 fbTriggered 的 ctx 同源）。 */
 function fbProgress(f) {
   if (!f) return null;
-  if (FB.used[f.id]) return 0;                        // 本局已催动过
+  // ★ R229：冷却中 ⇒ 条显示"还差多久能再催动"（与 fbTriggered 的冷却判定同源）
+  const until = FB.cd[f.id] || 0;
+  if (until > GF.swingW) {
+    const from = FB.cdFrom[f.id] || 0;
+    const span = Math.max(1, until - from);
+    return clamp01(1 - (until - GF.swingW) / span);
+  }
   switch (f.cond) {
     case 'crisis': return clamp01((G.threats || 0) / f.condN);
     case 'kill':   return clamp01((G.kills || 0) / f.condN);
@@ -5749,6 +5775,15 @@ function gfMods() {
   }
   // 龟息功：机制·永续（一条加成 + 一个真实代价，不再互相抵消）
   if (gfOn('h_guixi')) { m.dmgTaken *= 1 - P.GF_GUIXI_CUT; m.freq *= 1 - P.GF_GUIXI_FREQ; }
+  // ★ R229：法宝【反噬】的负面 buff（烧法宝烧多了的代价）。
+  //   ⚠️ 加在这里是因为 `gfMods().freq` → 出手频率（playerStats 的 actFreq）、
+  //      `gfMods().dmgTaken` → 承压强度，两处消费点已经现成。
+  //   ⚠️ 出手频率给一个下限（0.4）：满层 8 × 3% = −24%，本来就到不了，
+  //      但写死下限能防以后有人调大 FABAO_BL_FREQ 把出手压成 0（那会让整局卡死）。
+  if (FB.backlash > 0) {
+    m.freq *= Math.max(0.4, 1 - P.FABAO_BL_FREQ * FB.backlash);
+    m.dmgTaken *= 1 + P.FABAO_BL_TAKEN * FB.backlash;
+  }
 
   // ---- 秘术 ----
   if (gfOn('m_lianqi')) m.qi *= 1.03;   // 兜底（主要效果是事件型：每 20 杀 +60 灵气）
@@ -6663,7 +6698,12 @@ function refreshItemCounts(root) {
 // ★ 已拥有的法宝（掉落获得；用户要求：法宝也是掉落）
 const FB_OWNED = {};
 FABAO.forEach(f => { FB_OWNED[f.id] = false; });
-const FB = { eq: [], used: {}, lastSwing: 0 };
+// ★ R229：法宝状态
+//   cd[id]     该法宝下一次可催动的 swingW 时刻
+//   cdFrom[id] 本次冷却的起点（只用于画进度条）
+//   n[id]      本局该法宝已催动次数（决定冷却长度：20 × 2^(n-1)，封顶 120）
+//   backlash   本局累积的【反噬】层数（跨法宝共享，**卸下法宝不清零**）
+const FB = { eq: [], cd: {}, cdFrom: {}, n: {}, lastSwing: 0, backlash: 0 };
 function fbEquip(id) {
   if (!FABAO_BY_ID[id]) return false;
   if (FB.eq.includes(id)) { FB.eq = FB.eq.filter(x => x !== id); return true; }
@@ -6671,11 +6711,20 @@ function fbEquip(id) {
   FB.eq.push(id);
   return true;
 }
-function fbResetRun() { FB.used = {}; FB.lastSwing = 0; }
+// ★ R229：只清【局内】的东西。
+//   ⚠️ 反噬是"本局"的账 ⇒ 每局清零；但**卸下法宝**不清零（否则玩家一卸一装就白嫖）。
+function fbResetRun() { FB.cd = {}; FB.cdFrom = {}; FB.n = {}; FB.lastSwing = 0; FB.backlash = 0; }
+/** 该法宝这次的冷却长度（逐次翻倍，封顶）。 */
+function fbCdLen(f) {
+  const k = FB.n[f.id] || 0;                        // 已催动次数
+  return Math.min(P.FABAO_CD_BASE * Math.pow(2, k), P.FABAO_CD_MAX);
+}
 
-// 触发条件判定（每局每件只能催动 1 次）
+// 触发条件判定
+//   ★ R229 变更：原来是「每局每件只能催动 1 次」（FB.used），
+//     现在改成【逐次变长的冷却】—— 见 fbCdLen()。
 function fbTriggered(f, ctx) {
-  if (FB.used[f.id]) return false;
+  if ((FB.cd[f.id] || 0) > ctx.swings) return false;   // 冷却中
   switch (f.cond) {
     case 'crisis': return ctx.threats >= f.condN;
     case 'hp':     return ctx.hpPct <= f.condN;
@@ -7828,7 +7877,11 @@ let GIFT_CONSUME_WARD = false;
 function startRun() {
   GIFT_CONSUME_WARD = giftOn('ward');
   gfResetRun();   // ★ 功法：清空本局层数（焚心诀/追风步/魂力）
-  fbResetRun();   // ★ 法宝：每局每件只能催动 1 次
+  fbResetRun();   // ★ R229：法宝 —— 清本局冷却与【反噬】（反噬是"本局"的账）
+  G._backlashDown = false;   // 走火入魔的旗（上一局没跑完就重开也要清）
+  // ★ R229：这三个是【本局】统计（探针与日志用）⇒ 每局清零，
+  //   别像 fbDropped/itemDropped 那样做成跨局累计（那个会害探针要算差值）
+  G.fbFired = 0; G.backlashMax = 0; G.backlashDown = 0;
   // ★ R72：道具 —— 只清【本局临时层数】（寻宝符的层数）与出手节拍游标。
   //   ⚠️ **数量不清**：道具是跨局的消耗品，数量就是玩家攒的东西。
   itemResetRun();
@@ -7874,6 +7927,16 @@ function tick() {
     }
   }
   if (!G.running) return;
+
+  // ★ R229：走火入魔（反噬满）—— 出手循环里只立旗，收在这里。
+  //   为什么不在催动处直接 endRun：那段在 step() 的出手循环深处，
+  //   半路 return 会跳过本次出手剩下的收尾（结算/掉落/特效）。
+  if (G._backlashDown) {
+    G._backlashDown = false;
+    endRun(false, 'backlash');
+    render();
+    return;
+  }
 
   const st = playerStats();
   for (let s = 0; s < 5; s++) {   // 每帧推进 0.5 秒
@@ -8002,7 +8065,16 @@ function step(st, dt) {
         if (!f) continue;
         if (G.origin < f.cost) continue;
         if (!fbTriggered(f, ctx)) continue;
-        FB.used[f.id] = 1; FB.lastSwing = ctx.swings;
+        // ★ R229：催动 ⇒ 进冷却（逐次翻倍，封顶）+ 反噬 +1
+        //   ⚠️ 改这里之前是 `FB.used[f.id] = 1`（每局只准 1 次）。
+        //      现在法宝变成"能重复烧，但越烧越贵、越烧越慢、烧爆就走火入魔"。
+        FB.n[f.id] = (FB.n[f.id] || 0) + 1;
+        FB.cdFrom[f.id] = ctx.swings;
+        FB.cd[f.id] = ctx.swings + fbCdLen(f);
+        FB.lastSwing = ctx.swings;
+        FB.backlash++;
+        G.fbFired = (G.fbFired || 0) + 1;                  // 本局催动次数（统计/探针用）
+        G.backlashMax = Math.max(G.backlashMax || 0, FB.backlash);
         G.origin -= f.cost;                        // 消耗【本源】
         // 效果按类型结算
         if (f.id === 'f_huguo' || f.id === 'f_muhun') {
@@ -8028,7 +8100,21 @@ function step(st, dt) {
         // ★ R62：法宝特效（三类原型 × 五行色）+ 名字横幅 + 顿帧
         skillVfx(f.name, f.wx, FABAO_ARCH[f.id] || 'rays');
         hitstop(VFX.HIT_SKILL);
-        log('✦ 法宝催动：' + f.name + '（耗本源 ' + f.cost + '）', 'break');
+        log('✦ 法宝催动：' + f.name + '（耗本源 ' + f.cost + ' · 反噬 ' +
+          FB.backlash + '/' + P.FABAO_BL_MAX + '）', 'break');
+        // ★ R229：反噬满 ⇒ 走火入魔。
+        //   ⚠️ 不在这里直接 endRun —— 这段在 tick() 的出手循环深处，
+        //      半路 return 会跳过本次出手剩下的收尾。改成立个旗，
+        //      由 tick() 开头收（只差约一个 tick≈215ms，看不出来，但安全）。
+        if (FB.backlash >= P.FABAO_BL_MAX && !G._backlashDown) {
+          G._backlashDown = true;
+          G.backlashDown = (G.backlashDown || 0) + 1;   // 本局走火入魔次数（探针用）
+          log('💥 走火入魔！反噬积满 ' + FB.backlash + ' 层 —— 本局提前结束，回宗门', 'bad');
+          ev('backlash', 9, { n: FB.backlash, name: f.name });
+          skillVfx('走火入魔', '火', 'flash');
+          hitstop(VFX.HIT_BOSS);
+          G.fx.push({ x: G.heroX, y: G.heroY - 0.24, txt: '💥 走火入魔', cls: 'crit', life: 2 });
+        }
       }
     }
     // ★ 功法一次出手结算（周期型/释放型）
@@ -8412,7 +8498,15 @@ function rollDrop(dead) {
   }
 }
 
-function endRun(survived) {
+// ★ R229：多了个 reason —— 'backlash'（走火入魔）
+//   ⚠️ 走火入魔**不是阵亡**：弟子是"提前回宗门"，不是死了。
+//      所以下面那条"战斗身亡 ⇒ endDisciple"必须排掉 reason === 'backlash'
+//      （否则会被判成阵亡、直接把弟子收掉 —— 那就比死亡还狠了）。
+function endRun(survived, reason) {
+  const backlash = reason === 'backlash';
+  // ★ R229：记下收局原因 —— 探针要靠它把"走火入魔"和"阵亡"分开
+  //   （两者都是 survived=false，不记原因就分不出来）
+  G.lastReason = backlash ? 'backlash' : (survived ? 'win' : 'battle');
   G.running = false; G.phase = 'rest';
   G.runs++;
   DISCIPLE.runs++;
@@ -8438,7 +8532,8 @@ function endRun(survived) {
   if (!SEARCH.active && SECT.lostLegacy.length > 0 && G.runs % 2 === 0) startSearch();
   DISCIPLE.peakTier = Math.max(DISCIPLE.peakTier, G.tier);
   // ★ 战斗身亡：传承遗落（弟子结束）
-  if (!survived) {
+  //   ⚠️ R229：走火入魔（backlash）不算阵亡 —— 弟子活着回宗门，只是本局没通关。
+  if (!survived && !backlash) {
     // ★ 护佑（封存档给赠）：首次致命伤免疫，触发即消耗
     if (GIFT_CONSUME_WARD) {
       GIFT_CONSUME_WARD = false;
@@ -8505,12 +8600,14 @@ function endRun(survived) {
   if (G.t > 5) G.lastKillRate = G.kills / G.t;
   if (G.pressureN > 0) G.lastPressure = G.pressureAcc / G.pressureN;   // ★ 承压强度
   G.lastSurvived = survived;
-  log((survived ? '✅ 通关' : '💀 阵亡') + ' · 击杀 ' + G.kills +
+  log((backlash ? '💥 走火入魔' : (survived ? '✅ 通关' : '💀 阵亡')) +
+    ' · 击杀 ' + G.kills +
     ' · 掉落 ' + G.dropped + ' 件' +
     (bonus ? '（含通关保底 ' + bonus + '）' : '') +
     (G.disenchanted ? ' · 已分解 ' + G.disenchanted : '') +
-    ' · 本源 +' + G.origin,
-    survived ? 'ok' : 'bad');
+    ' · 本源 +' + G.origin +
+    (backlash ? ' —— 反噬积满，本局提前结束（弟子活着回来了）' : ''),
+    backlash ? 'bad' : (survived ? 'ok' : 'bad'));
   render();
   setTimeout(() => { if (G.phase === 'rest') startRun(); }, 2200);
 }
@@ -9417,6 +9514,8 @@ function render() {
         if (GF.killStack > 0) stacks.push('焚心 ' + Math.min(GF.killStack, 50) + ' 层');
         if (GF.speedStack > 0) stacks.push('追风 ' + Math.min(GF.speedStack, 6) + ' 层');
         if (gfOn('m_hunli')) stacks.push('魂力 ' + GF.soul + '/100');
+        // ★ R229：反噬也进战场状态条 —— 打的时候就能看见，不用去翻面板
+        if (FB.backlash > 0) stacks.push('反噬 ' + FB.backlash + '/' + P.FABAO_BL_MAX);
         const _mh = html + (stacks.length
           ? '<div class="gf-stack">' + stacks.join(' · ') + '</div>' : '');
         // ★ 各自去重：内容没变 ⇒ 完全不碰 DOM（展开的下拉因此不会被刷掉）
@@ -10185,8 +10284,21 @@ function render() {
           "（同源 " + tdv.same + " 相生 " + tdv.sheng + " 相克 " + tdv.ke +
           (tdv.signBonus ? " 签名 +" + tdv.signBonus : "") +
           "） ⇒ 伤害 ×" + tdv.mul.toFixed(2);
-        const _fbh = "<div style=\"color:#66708a;font-size:10px\">法宝 · 限 " + FABAO_SLOTS + " 个</div>" +
-          _fb +
+        // ★ R229：反噬条 —— 玩家需要的"止损信号"。
+        //   没有它，走火入魔会变成"莫名其妙突然回宗门"；
+        //   有了它，看到 6/8 就卸下法宝，这才是那条取舍。
+        const _bl = FB.backlash, _blMax = P.FABAO_BL_MAX;
+        const _blTxt = _bl > 0
+          ? '<div class="fb-stack" style="color:' + (_bl >= _blMax - 2 ? '#e0785f' : '#c9a227') + '">' +
+            '反噬 ' + _bl + '/' + _blMax +
+            (_bl >= _blMax - 2 ? ' · ⚠️ 危险（再烧就走火入魔）' : '') +
+            '　出手 −' + Math.round(P.FABAO_BL_FREQ * _bl * 100) + '%' +
+            ' · 承压 +' + Math.round(P.FABAO_BL_TAKEN * _bl * 100) + '%' +
+            (_bl >= _blMax - 2 ? '　⇒ 卸下法宝可止损（反噬不会消退）' : '') + '</div>'
+          : '';
+        const _fbh = "<div style=\"color:#66708a;font-size:10px\">法宝 · 限 " + FABAO_SLOTS +
+          " 个 · 可重复催动（每烧一次冷却翻倍）</div>" +
+          _fb + _blTxt +
           "<div class=\"fb-stack\">" + _fbstacks + "</div>";
         if (setDedup(_fbMain, _fbh)) {
           _fbMain.querySelectorAll(".nm[data-fbid]").forEach(function (el) {
@@ -10719,7 +10831,7 @@ globalThis.__api = {
   rollFabaoDrop, makeGongfaItem, makeFabaoItem, bagHas, gfOf, gfOn, gfEquip, gfResetRun, gfMods, gfOnSwing, gfOnKill, rollGongfaDrop,
   gfActiveList, gfPriority, gfMovePrio, gfReady, gfMarkUsed,
   TD_THRESH, TD_MUL, tdValue, tdMul, tdScoreFor, slotWuxing,
-  FABAO, FABAO_BY_ID, FABAO_SLOTS, FB, fbEquip, fbResetRun, fbTriggered,
+  FABAO, FABAO_BY_ID, FABAO_SLOTS, FB, fbEquip, fbResetRun, fbTriggered, fbCdLen,
   AFFIXES, AFFIX_BY_ID, AFFIX_COUNT, AFFIX_QLV, softCapMul, SOFT_BUDGET_RATE, ITEM_SLOTS,
   // ★ R72：道具（消耗品）—— 供 _smoke.js 校验「数量会减 / 空了不触发 / 走 swingW / 存档往返」
   ITEMS, ITEM_BY_ID, ITEM_PER_KILL, ITEM_MAX, IT, itemHas, itemEquip, itemOnSwing, itemResetRun,
