@@ -176,7 +176,29 @@ const P = {
   //
   //   标定目标：离线 3 小时 ≈ 3 局（≈ 20 分钟主动游玩的价值）
   //   ⇒ 保留"主动玩更赚"，同时让挂机有实在收益
+  // ⚠️ 这个常量有【两套口径】，别混用（R67 差点因此静默改掉传承收益）：
+  //   ① 传承/交接里的"寿元兑现灵气"（legacyQiValue / 灵气封存）：
+  //      rate = atk × KILL_RATE_PER_ATK（只/【游戏秒】）× 寿元（【游戏秒】）
+  //      ⇒ 单位自洽，用的就是下面这个 0.12
+  //   ② 离开结算 settleAway：时长是【真实秒】⇒ 必须用 AWAY_EFFICIENCY（见下）
   OFFLINE_EFFICIENCY: 0.12,
+  // ★ R67：离开结算（settleAway）专用的效率 —— 真实秒口径。
+  //   为什么是 0.048 而不是 0.12：settleAway 里 rate 已换算成【只/真实秒】
+  //   （= 只/游戏秒 × CLOCK_RATIO）⇒ 0.048 × 2.5 = 0.12，
+  //   与原实现的实际产出【完全一致】。改成 0.12 会让离线收益凭空 ×2.5。
+  AWAY_EFFICIENCY: 0.048,
+  // ★ R67：后台（切标签页）结算 —— 与离线【分开】
+  //   设计：把"在线"与"离开"正式分成两件事
+  //     · 在线 = 看打（不追求挂机效率，反正你看得见）
+  //     · 离开（切后台 / 关页面）= 按真实时间结算
+  //   为什么这么分：浏览器对【不可见标签页】的定时器有节流（后台 ≥1 次/秒、长时间后台更狠），
+  //   而 tick() 每次固定推进 0.5 游戏秒 ⇒ 后台期间游戏其实在"龟速跑"，而旧代码对这种
+  //   短时离开【完全不补】（applyOffline 门槛 120 秒）⇒ 收益白丢。
+  //   效率定 0.5 的理由：要低于在线（否则"看着打"就没价值了），但不能像离线那样只有几个百分点
+  //   （上班摸鱼必然要切走，惩罚太重等于逼玩家不切）。⇒ "看着"值 2 倍于"切走"。
+  BG_EFFICIENCY: 0.5,
+  BG_MIN_SECONDS: 5,           // 低于这个时长不结算（避免频繁切窗口把收益刷成"结算制"）
+  BG_CAP_SECONDS: 3600,        // 单次后台结算封顶 1 小时（再长按"离线"那套算）
   KILL_RATE_PER_ATK: 0.0085,
   // ★ 五行相性（层 1 §5.2 定稿值）
   WX_KE: 1.30,                 // 克制
@@ -2415,6 +2437,11 @@ const SFX_CORE = ['ui', 'ui_tab', 'swing', 'hit', 'kill_std'];   // 开机预热
 //   而 CSS 动画走的是真实时间。之前把时长写成"游戏秒"⇒ 元素存活期比动画短 2.33 倍
 //   ⇒ **每个特效的动画都被截断在 43% 就被删掉**（弧光只闪 86ms、淡出都没开始）。
 //   现在统一到真实时间，表现层和 CSS 终于同一个钟。
+// ★ R67：游戏时钟倍数（实测口径）—— 游戏秒 = 真实秒 × 这个值。
+//   加它是因为"离线/后台结算"必须把【游戏秒】和【真实秒】分清：
+//   旧代码在这里串了单位，导致标称 12% 的效率实际只有 4.8%。
+const CLOCK_RATIO = 2.5;
+
 const VFX = {
   PROJ_MS_PER_UNIT: 1250,  // 弹道飞行 ms / 单位距离。弓 reach 0.23 ⇒ 约 290ms（看得见飞）
   STAGGER_MS: 85,          // 同一次出手多目标时，飘字逐个错开的间隔
@@ -5139,15 +5166,23 @@ function loadGame() {
 //   · 寿元照常流逝（离线也在变老 ⇒ 回来要处理）
 //   · 按【上一局的击杀速率】折算产出，并封顶 OFFLINE_CAP_HOURS
 //   · 掉落只给素材 + 统计，不逐件生成（避免撑爆背包）
-function applyOffline() {
-  const away = (Date.now() - (G._savedAt || Date.now())) / 1000;
-  if (away < 120) return null;
-  const capped = Math.min(away, P.OFFLINE_CAP_HOURS * 3600);
+// ★ R67：把"离开期间按真实时间结算"抽成【唯一公式】。
+//   ⚠️ 离线（关页面）与后台（切标签页）必须走同一套，否则两套口径必然漂 ——
+//      这次就是靠这次重构才发现旧代码的【单位串了】（rate 是"只/游戏秒"，
+//      而时长是"真实秒" ⇒ 实际效率只有标称值的 1/2.5）。
+//
+//   参数一律用【真实秒 + 只/真实秒】口径：
+//     rateReal = (G.kills / G.t) × CLOCK_RATIO   ← G.t 是游戏秒，要换算
+function settleAway(awaySec, eff, capSec) {
+  const capped = Math.min(awaySec, capSec);
+  if (!(capped > 0)) return null;
   const before = DISCIPLE.lifespanLeft;
   DISCIPLE.lifespanLeft = Math.max(0, DISCIPLE.lifespanLeft - capped);
 
-  const rate = G.lastKillRate > 0 ? G.lastKillRate : P.OFFLINE_RATE_FALLBACK;
-  const kills = Math.floor(rate * capped * P.OFFLINE_EFFICIENCY);
+  // 只/游戏秒 → 只/真实秒（在线 1 真实秒 = CLOCK_RATIO 游戏秒）
+  const rateQ = G.lastKillRate > 0 ? G.lastKillRate : P.OFFLINE_RATE_FALLBACK;
+  const rate = rateQ * CLOCK_RATIO;
+  const kills = Math.floor(rate * capped * eff);
   const qi = kills * P.QI_PER_KILL;
   const drops = Math.floor(kills * DROP.PER_KILL);
   G.dropped += drops;
@@ -5179,6 +5214,29 @@ function applyOffline() {
   if (died) log('☾ 离线期间寿元耗尽 · 弟子坐化，传承待结算', 'bad');
   ev('offline', 6, { kills, qi, drops, hours: capped / 3600 });
   return { away: capped, kills, qi, drops, died };
+}
+
+/** 离线：关页面后重开（保留 120 秒门槛 —— 太短的窗口切换不该走"离线"口径）。 */
+function applyOffline() {
+  const away = (Date.now() - (G._savedAt || Date.now())) / 1000;
+  if (away < 120) return null;
+  return settleAway(away, P.AWAY_EFFICIENCY, P.OFFLINE_CAP_HOURS * 3600);
+}
+
+/** ★ R67：后台：切标签页期间。与离线【分开】——门槛低（BG_MIN_SECONDS）、效率高（BG_EFFICIENCY）。
+ *  这是"在线 = 看打 / 离开 = 结算"这条分工的落地：后台不再指望 tick 龟速跑。 */
+function settleBackground() {
+  if (!G._bgAt) return null;
+  const away = (Date.now() - G._bgAt) / 1000;
+  G._bgAt = 0;
+  if (away < P.BG_MIN_SECONDS) return null;              // 太短不结算
+  if (!G.running) return null;                           // 没在打就不算
+  const r = settleAway(away, P.BG_EFFICIENCY, P.BG_CAP_SECONDS);
+  if (r && r.kills > 0) {
+    log('◷ 离开 ' + Math.round(away) + ' 秒 · 击杀 +' + r.kills + ' · 灵气 +' + r.qi +
+      '（后台结算 ' + Math.round(P.BG_EFFICIENCY * 100) + '%）', 'ok');
+  }
+  return r;
 }
 
 // ---------------- 三之二·八、功法（五类各 1 槽 · BD 深度主体）----------------
@@ -10104,7 +10162,14 @@ function boot() {
 
 // ★ 自动存档：切后台/关闭页面时保存（否则关掉就丢）
 if (typeof window !== 'undefined' && window.addEventListener) {
-  window.addEventListener('visibilitychange', () => { if (document.hidden && !globalThis.__DSH_RESETTING) saveGame(); });
+  // ★ R67：切后台/回前台 —— 记录离开时刻 + 存档；回来时【按真实时间结算】
+  //   为什么需要：浏览器对不可见标签页节流定时器（后台 ≥1 次/秒、长时间后台更狠），
+  //   而 tick() 每次固定推进 0.5 游戏秒 ⇒ 后台其实在龟速跑，旧代码对这种短时离开完全不补。
+  window.addEventListener('visibilitychange', () => {
+    if (globalThis.__DSH_RESETTING) return;
+    if (document.hidden) { G._bgAt = Date.now(); saveGame(); }
+    else { try { settleBackground(); render(); } catch (e) { } }
+  });
   window.addEventListener('beforeunload', () => { if (!globalThis.__DSH_RESETTING) saveGame(); });
   setInterval(function () { if (!globalThis.__DSH_RESETTING) saveGame(); }, 30000);
 }
@@ -10183,4 +10248,6 @@ globalThis.__api = {
   WPN_HIT, WPN_HIT_DEF, hitCandidates,
   // ★ R66：进度条（供 _smoke.js 校验"与真实触发同源"）
   gfProgress, fbProgress, GF_TYPE_COLOR, renderSkillBar,
+  // ★ R67：离开结算（离线 / 后台共用一套公式）
+  settleAway, applyOffline, settleBackground, CLOCK_RATIO,
 };

@@ -4831,6 +4831,9 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
   const keep = { kills: globalThis.__G.kills, threats: globalThis.__G.threats };
   try {
     const f = A.FABAO.find(x => x.cond === 'kill');
+    // ⚠️ 必须自己清前置条件：fbProgress 在本局已催动过时返回 0，
+    //    而前面的战斗测试会把 FB.used 置位 ⇒ 不断言自身预置就是一条不稳定断言
+    A.fbResetRun();
     globalThis.__G.kills = 0; const p0 = A.fbProgress(f);
     globalThis.__G.kills = f.condN; const p1 = A.fbProgress(f);
     chk('★ 进度条·行为：法宝进度随计数器从 0 → 1', p0 === 0 && p1 === 1,
@@ -4843,6 +4846,77 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
       g.name + ' cdN=' + g.cdN + '：0 ⇒ ' + g0 + ' · ' + g.cdN + ' ⇒ ' + g1);
   } finally {
     globalThis.__G.kills = keep.kills; globalThis.__G.threats = keep.threats;
+  }
+})();
+
+// ============================================================================
+// ★ R67：在线（看打）/ 离开（结算）分开
+//   风险点：① 两条路径（离线 / 后台）各写一套公式 ⇒ 口径必然漂
+//          ② 单位串了（只/游戏秒 vs 真实秒）—— 旧代码就是这样，标称 12% 实际只 4.8%
+//          ③ 悄悄改了经济（重构时把离线收益改了倍数）
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J67 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const P67 = A.P, V67 = A.VFX;
+
+  chk('★ 离开结算·只有一套公式（settleAway），离线与后台都调它',
+    /function settleAway\(awaySec, eff, capSec\)/.test(J67) &&
+    /return settleAway\(away, P\.AWAY_EFFICIENCY/.test(J67) &&
+    /settleAway\(away, P\.BG_EFFICIENCY/.test(J67));
+
+  chk('★ 离开结算·单位已统一（rate 换算成【只/真实秒】）',
+    /const CLOCK_RATIO = 2\.5/.test(J67) && /const rate = rateQ \* CLOCK_RATIO/.test(J67));
+
+  chk('★ 后台·visibilitychange 既记录离开也触发结算',
+    /G\._bgAt = Date\.now\(\); saveGame\(\)/.test(J67) &&
+    /else \{ try \{ settleBackground\(\); render\(\); \}/.test(J67));
+
+  chk('★ 后台·门槛与封顶有明确常量（不是散落的魔法数）',
+    P67.BG_MIN_SECONDS > 0 && P67.BG_CAP_SECONDS > P67.BG_MIN_SECONDS &&
+    P67.BG_EFFICIENCY > P67.AWAY_EFFICIENCY,
+    '后台 ' + P67.BG_EFFICIENCY + '（门槛 ' + P67.BG_MIN_SECONDS + 's）> 离线 ' + P67.AWAY_EFFICIENCY);
+
+  // ★★ 关键：重构【不许悄悄改经济】—— 新旧离线产出必须一致
+  //   旧：rateQ × 秒 × 0.12        新：rateQ × CLOCK_RATIO × 秒 × 0.048
+  const oldEff = 0.12, newEq = P67.AWAY_EFFICIENCY * 2.5;
+  chk('★ 离开结算·口径修正后离线产出与旧版【完全一致】（不许偷偷改经济）',
+    Math.abs(newEq - oldEff) < 1e-9,
+    '旧等效 ' + oldEff + ' vs 新等效 ' + newEq);
+  // ⚠️ 传承/交接那两处是【另一套口径】（游戏秒 × 只/游戏秒，自洽），必须仍是 0.12
+  //   —— R67 我差点把全局常量改成 0.048，那会静默削掉传承收益 2.5 倍
+  chk('★ 离开结算·传承那条的口径没被误伤（OFFLINE_EFFICIENCY 仍是 0.12）',
+    Math.abs(P67.OFFLINE_EFFICIENCY - 0.12) < 1e-9,
+    'OFFLINE_EFFICIENCY = ' + P67.OFFLINE_EFFICIENCY +
+    ' / AWAY_EFFICIENCY = ' + P67.AWAY_EFFICIENCY);
+  // ⚠️ 传承/交接那两处是【另一套口径】（游戏秒 × 只/游戏秒，自洽），必须仍是 0.12
+  //   —— R67 我差点把全局常量改成 0.048，那会静默削掉传承收益 2.5 倍
+  chk('★ 离开结算·传承那条的口径没被误伤（OFFLINE_EFFICIENCY 仍是 0.12）',
+    Math.abs(P67.OFFLINE_EFFICIENCY - 0.12) < 1e-9,
+    'OFFLINE_EFFICIENCY = ' + P67.OFFLINE_EFFICIENCY +
+    ' / AWAY_EFFICIENCY = ' + P67.AWAY_EFFICIENCY);
+
+  // 行为：后台结算确实产出，且低于【在线同等时长】
+  const G67 = globalThis.__G;
+  const keep = { kills: G67.totalKills, bgAt: G67._bgAt, running: G67.running, rate: G67.lastKillRate };
+  try {
+    G67.running = true; G67.lastKillRate = 1.5;
+    G67._bgAt = Date.now() - 60000;                    // 假装离开 60 秒
+    const k0 = G67.totalKills;
+    const r = A.settleBackground();
+    const got = G67.totalKills - k0;
+    // 在线 60 真实秒的理论值 = rateQ × CLOCK_RATIO × 60
+    const live60 = Math.floor(1.5 * 2.5 * 60);
+    chk('★ 后台·行为：离开 60 秒产出 = 在线同等时长的 50%',
+      r && r.kills === Math.floor(live60 * P67.BG_EFFICIENCY) && got === r.kills,
+      '得到 ' + got + ' / 在线应为 ' + live60 + '（50% ⇒ ' + Math.floor(live60 * 0.5) + '）');
+    // 太短不结算
+    G67._bgAt = Date.now() - 1000;
+    chk('★ 后台·行为：离开太短（<门槛）不结算', A.settleBackground() === null);
+  } finally {
+    G67.totalKills = keep.kills; G67._bgAt = keep.bgAt;
+    G67.running = keep.running; G67.lastKillRate = keep.rate;
   }
 })();
 
