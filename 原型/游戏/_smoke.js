@@ -5004,6 +5004,53 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
     /启动\.bat/.test(build) && /_launcher\.py/.test(build));
 })();
 
+// ============================================================================
+// ★ R70：低压段 —— 让"挨打"从 0% 变成"有但安全"（"有来有回"的地基）
+//   实测背景：筑基期威胁峰值 10.5 < thresh 25 ⇒ 承压整局 0% 触发 ⇒ 战斗是单方面的。
+//   风险点：① 动了 thresh 会破坏【危险模型·25 秒恒定】的标定
+//          ② 守卫没放宽 ⇒ excess 算了但走不到（第一版就漏了这里）
+//          ③ 高压段被低压段改掉（配平红线）
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const J70 = fsx.readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8');
+  const P70 = A.P;
+
+  chk('★ 低压段·常量存在且低压 < 高压标定（不越界）',
+    P70.LOW_GATE > 0 && P70.LOW_GATE < 1 && P70.LOW_MUL > 0,
+    'LOW_GATE ' + P70.LOW_GATE + ' · LOW_MUL ' + P70.LOW_MUL);
+
+  // ★★ thresh 必须【原样不动】—— 它标定"危险模型·25 秒恒定"，动它全盘皆输
+  chk('★ 低压段·没动 thresh 的算法（THRESHOLD_R / 危险模型 保持原样）',
+    /P\.THRESHOLD_R \+ Math\.floor\(zoneMod\.thresh \* P\.THRESHOLD_R\)/.test(J70) &&
+    /P\.OVERLOAD_ASSUMED \* mul \* mul \* P\.SURVIVE_SECONDS/.test(J70) &&
+    P70.THRESHOLD_R === 10 && P70.SURVIVE_SECONDS === 25);
+
+  // ★★ 高压段必须用 max() 保护：excessHigh 大于低压封顶时，低压段不许影响结果
+  chk('★ 低压段·高压曲线用 max() 保护（高压配平不受影响）',
+    /const _exHigh = threatW - st\.thresh;/.test(J70) &&
+    /const excess = Math\.max\(_exHigh, _dLow \* P\.LOW_MUL\);/.test(J70) &&
+    !/const excess = threatW - st\.thresh;/.test(J70));
+
+  // ★★ 守卫也要放宽（第一版漏了：excess 算对但整块走不到 ⇒ 依旧 0%）
+  chk('★ 低压段·守卫已放宽到 LOW_GATE（否则修了等于没修）',
+    /if \(threatW > st\.thresh \* P\.LOW_GATE\) \{/.test(J70) &&
+    !/if \(threatW > st\.thresh\) \{/.test(J70));
+
+  // 行为：威胁在 [LOW_GATE×thresh, thresh) 之间时必须算出非零 excess
+  //   （这正是"修前 0%、修后非 0"的关键区间）
+  const th = 20, gate = P70.LOW_GATE, mul = P70.LOW_MUL;
+  const dLowAt = tw => Math.max(0, tw - th * gate) / Math.max(1e-6, th * (1 - gate));
+  const exAt = tw => Math.max(tw - th, dLowAt(tw) * mul);
+  chk('★ 低压段·行为：威胁低于 thresh 时也产生压力（修前恒为 0）',
+    exAt(th * 0.5) > 0 && exAt(th * 0.8) > 0 && exAt(th * 0.1) === 0,
+    'thresh=20 时：威胁 2 ⇒ ' + exAt(2).toFixed(3) + ' · 威胁 10 ⇒ ' + exAt(10).toFixed(3) +
+    ' · 威胁 16 ⇒ ' + exAt(16).toFixed(3));
+  chk('★ 低压段·行为：超过 thresh 后由【高压曲线】接管（低压不参与）',
+    Math.abs(exAt(th + 5) - 5) < 1e-9,
+    '威胁 thresh+5 ⇒ excess ' + exAt(th + 5) + '（应恰为 5）');
+})();
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));

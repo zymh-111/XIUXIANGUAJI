@@ -317,6 +317,27 @@ const P = {
   //     每刀伤害同时 ×3（在 baseDmg 处）⇒ **DPS 与一局收益不变**（有探针复核）。
   CADENCE: 3,
   THRESHOLD_R: 10, SURVIVE_SECONDS: 25, OVERLOAD_ASSUMED: 10,
+  // ★★ R70：低压段 —— 让"挨打"从 0% 变成"有但安全"
+  //   背景（实测）：筑基期威胁峰值只有 10.5，而 thresh = 25 ⇒ 承压【整局 0% 触发】
+  //   ⇒ 战斗是单方面的，用户一直说的"没有来有回"就是这个。
+  //   ⚠️ 但 thresh 不是随手取的数：它是【危险模型·25 秒恒定】的标定
+  //      （thresh 处刚好 = "满压力撑 25 秒"）。所以**不能动 thresh**。
+  //   ⇒ 做法：在高压曲线【下面】再接一条低压段，用 max() 取大 ——
+  //      高压段（excessHigh ≥ LOW_MUL）完全不受影响，只在低压侧新增一点压力。
+  //   LOW_GATE：威胁达到 thresh 的 25% 就开始有"挨打"
+  //   LOW_MUL ：低压段的封顶。0.08 的依据：excess=1 ⇒ 撑 25 秒
+  //             ⇒ excess 0.08 ⇒ 撑 312 秒 > 一局 300 秒 ⇒ **整局不会因低压段死**
+  //             而实测威胁 0.42×thresh ⇒ excess ≈ 0.018 ⇒ 一局掉 ~22% 血
+  //             ——「有挨打、但不致命」正是我们要的那个区间。
+  LOW_GATE: 0.25,
+  //   ⚠️ 这个值【必须按实测标定】，理论换算（excess=1 ⇒ 撑 25 秒）比实际保守得多
+  //      （威胁在波动、怪只在部分时间进圈）—— 第一版写 0.08，实测一局只掉 5% 血，等于没修。
+  //      实测（炼气期 · 每档 3 轮平均）：
+  //        LOW_MUL 0.5 ⇒ 掉血 14% · 扑击 129 · 阵亡 0/3
+  //        LOW_MUL 1.5 ⇒ 掉血 76% · 扑击 179 · 阵亡 0/3   ← 选它
+  //        LOW_MUL 3.0 ⇒ 掉血 287% · 扑击 270 · 阵亡 3/3   ← 过头了
+  //      ⇒ 1.5 = 血条会明显波动（看得见挨打）但不会死。**嫌太疼就调小这个数**。
+  LOW_MUL: 1.5,
 
   // ★ 距离 / 威胁圈（用户提案 + 二次修正）
   //
@@ -7824,8 +7845,15 @@ function step(st, dt) {
   G.threatsN = threatN;         // 实际只数（供显示 / 测试）
   const threats = threatN;
   if (st.thresh > 0) { G.pressureAcc += threatW / st.thresh; G.pressureN++; }
-  if (threatW > st.thresh) {
-    const excess = threatW - st.thresh;
+  // ★★ R70：守卫也要跟着放宽 —— 否则低压段算出来的 excess 根本走不到
+  //   （第一版就是漏了这里：excess 算对了，但整块被 threatW > thresh 挡住 ⇒ 依旧是 0%）
+  if (threatW > st.thresh * P.LOW_GATE) {
+    // ★ R70：高压段（原曲线，一个字不动）+ 低压段（新增），取大者
+    //   高压段在 threatW ≥ thresh + LOW_MUL 时必然更大 ⇒ 高压配平完全不受影响
+    const _exHigh = threatW - st.thresh;
+    const _dLow = Math.max(0, threatW - st.thresh * P.LOW_GATE)
+      / Math.max(1e-6, st.thresh * (1 - P.LOW_GATE));
+    const excess = Math.max(_exHigh, _dLow * P.LOW_MUL);
     // ★ 五行相性·反向：怪物打玩家也按相性结算（层 1 §5.2「双向生效」）
   //   取【圈内怪的相性均值】，避免逐只结算导致的抖动
   let wxIn = 1;
@@ -7887,11 +7915,13 @@ function step(st, dt) {
         for (let ai = 0; ai < _atk.length; ai++) {
           const ae = _atk[ai].e;
           ae._lungeUntil = Date.now() + P.MOB_LUNGE_MS;      // 表现：扑击（render 消费）
-          if (per >= 1) {
-            pushDmgFx(ae.x, ae.y + 0.05, '-' + Math.round(per), 'player', null, 0);
+          // ★ R70：门槛从 1 放到 0.5 —— 低压段的单次伤害本就很小，
+          //   若按 >=1 过滤就【完全没有数字】⇒ "挨打"变成不可见（等于没修）
+          if (per >= 0.5) {
+            pushDmgFx(ae.x, ae.y + 0.05, '-' + Math.max(1, Math.round(per)), 'player', null, 0);
           }
         }
-        if (!_atk.length) pushDmgFx(G.heroX, G.heroY + 0.14, '-' + Math.round(_dmg), 'player', null, 0);
+        if (!_atk.length) pushDmgFx(G.heroX, G.heroY + 0.14, '-' + Math.max(1, Math.round(_dmg)), 'player', null, 0);
         sfxDelay('hurt', 1, 0);
       }
     }
