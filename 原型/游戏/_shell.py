@@ -43,6 +43,25 @@ if getattr(sys, 'frozen', False):
     ROOT = os.path.dirname(os.path.abspath(sys.executable))
 sys.path.insert(0, ROOT)
 
+# ---------------------------------------------------------------------------
+# 启动自检日志（★ 专门写到一个【纯英文】的固定位置）
+#
+# ⚠️ 为什么要单独一份：打包后的 exe 在**中文路径**下会【静默卡死】——
+#    连 `窗口壳.log` 都没写出来（说明挂在很前面），而 `--noconsole` 又看不到任何报错。
+#    这份日志写在 %TEMP% 下（纯英文），保证"无论 exe 放在哪都写得出来"，
+#    用来定位它到底卡在哪一步。出问题时第一件事就是看它。
+# ---------------------------------------------------------------------------
+BOOTLOG = os.path.join(os.environ.get('TEMP', ROOT), 'mijinglu_boot.log')
+
+
+def boot(msg):
+    try:
+        with open(BOOTLOG, 'a', encoding='utf-8') as f:
+            f.write('%s %s\n' % (time.strftime('%H:%M:%S'), msg))
+    except OSError:
+        pass
+
+
 TITLE = '秘境录'
 BAR = 26                       # 顶部自定义标题栏高度（px）
 GAME_W, GAME_H = 420, 760      # 游戏的设计尺寸（与 index.html 的 #win 一致）
@@ -308,21 +327,39 @@ def main():
     keep_console = '--keep-console' in sys.argv
     selftest = '--selftest' in sys.argv        # 进程内自检，见 _selftest()
 
+    try:
+        open(BOOTLOG, 'w', encoding='utf-8').close()      # 每次启动重开一份
+    except OSError:
+        pass
+    boot('--- 启动 --- frozen=%s' % getattr(sys, 'frozen', False))
+    boot('sys.executable = %s' % sys.executable)
+    boot('ROOT = %s' % ROOT)
+    boot('cwd = %s' % os.getcwd())
+    boot('TEMP = %s' % os.environ.get('TEMP'))
+    boot('argv = %s' % sys.argv)
+
     # ---- 起本地服务（复用 _launcher，不重复造一遍）----
+    boot('导入 _launcher ...')
     import _launcher as L
     from http.server import ThreadingHTTPServer
+    boot('  _launcher OK · 它的 ROOT = %s' % L.ROOT)
     port = L.pick_port()
     url = 'http://127.0.0.1:%d/index.html' % port
+    boot('起 http 服务（端口 %d，根目录 %s）...' % (port, L.ROOT))
     srv = ThreadingHTTPServer(('127.0.0.1', port), L.Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    boot('  http 服务 OK')
 
     # ---- 没有 pywebview 就退回 --app 窗口（不要让用户卡住）----
+    boot('导入 webview ...')
     try:
         import webview
     except ImportError:
+        boot('  没有 pywebview ⇒ 退回 --app')
         log('没装 pywebview ⇒ 退回 Edge --app 窗口（老板键/无边框这一版用不了）')
         log('想要无边框 + 老板键，装一次就行：  pip install pywebview')
         return L.main()
+    boot('  webview OK')
 
     sh = Shell()
     api = type('Api', (), {
@@ -332,12 +369,14 @@ def main():
         'quit': lambda s: sh.quit(),
     })()
 
+    boot('create_window ...')
     sh.win = webview.create_window(
         TITLE, url, js_api=api,
         width=GAME_W, height=GAME_H + BAR,          # ⚠️ +BAR 见 INJECT_JS 上方说明
         frameless=True, easy_drag=False,            # ⚠️ easy_drag 会吃掉所有点击
         resizable=False, background_color='#0f1319',
     )
+    boot('  create_window OK')
 
     def on_loaded():
         try:
@@ -350,7 +389,11 @@ def main():
 
     sh.win.events.loaded += on_loaded
 
-    def boot():
+    # ⚠️ 注意这个函数**不能叫 `boot`** —— 模块级那个 `boot()` 是启动追踪日志，
+    #    同名的话在 `main()` 里会被这个局部定义【遮蔽】⇒ 前面所有 boot(...) 调用
+    #    直接抛 UnboundLocalError，而 `--noconsole` 打包版会把 traceback 吞掉
+    #    ⇒ 表现成"exe 静默卡死、连日志都不写"。实际踩过一次（排查了半天）。
+    def hook_window():
         sh.hwnd = find_hwnd(TITLE)
         if not sh.hwnd:
             log('⚠️ 没找到窗口句柄 ⇒ 老板键/置顶不可用（窗口本身还能用）')
@@ -368,7 +411,7 @@ def main():
             log('控制台已隐藏（--keep-console 可保留）' if hide_console() else '没有控制台窗口')
         log('就绪：%s' % url)
 
-    threading.Thread(target=boot, daemon=True).start()
+    threading.Thread(target=hook_window, daemon=True).start()
 
     log('=' * 56)
     log('  秘境录 · 桌面窗口壳（无边框 + 老板键）')
@@ -377,11 +420,14 @@ def main():
     log('    Ctrl+Alt+Q  退出')
     log('  存档：%s' % L.SAVE)
     log('=' * 56)
+    boot('webview.start() ...')
     try:
         webview.start(gui='edgechromium')
     except Exception:
+        boot('webview.start 抛错:\n' + traceback.format_exc())
         log('窗口壳启动失败 ⇒ 退回 --app 窗口:\n' + traceback.format_exc())
         return L.main()
+    boot('窗口已关闭，正常退出')
     log('窗口已关闭。')
 
 

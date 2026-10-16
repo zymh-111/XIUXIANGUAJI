@@ -79,7 +79,7 @@ copy(SRC + '/_game.js', PKG + '/_game.js');
 //   ⚠️ 加了新文件就要加进这里，不然发布包里没有（漏一次就是"启动.bat 点了没反应"）
 //   R73：加了 `_shell.py`（桌面窗口壳：真无边框 + 老板键 + 置顶）。
 //        它 import `_launcher` 复用本地服务 ⇒ 两个都要在。
-for (const _lf of ['启动.bat', '_launcher.py', '_shell.py']) {
+for (const _lf of ['启动.bat', '_launcher.py', '_shell.py', '玩之前看这里.txt']) {
   if (fs.existsSync(SRC + '/' + _lf)) { copy(SRC + '/' + _lf, PKG + '/' + _lf); console.log('  ✅ 启动器已打包：' + _lf); }
   else console.log('  ⚠️ 缺文件（发布包里不会有）：' + _lf);
 }
@@ -155,7 +155,7 @@ console.log('  ' + (missing.length ? '❌ 缺失资源：' + missing.join(', ') 
 //   只打印"缺资源"却照样 exit 0 ⇒ **一个坏包看起来像"打包成功"**。
 //   实际踩过一次：发布目录只剩 assets/，index.html 和启动器全没了。
 // ============================================================
-const MUST = ['index.html', '_game.js', '启动.bat', '_launcher.py', '_shell.py'];
+const MUST = ['index.html', '_game.js', '启动.bat', '_launcher.py', '_shell.py', '玩之前看这里.txt'];
 const absent = MUST.filter(f => !fs.existsSync(PKG + '/' + f));
 if (absent.length || bad.length || missing.length) {
   console.log('');
