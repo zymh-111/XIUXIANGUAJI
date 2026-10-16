@@ -3450,7 +3450,8 @@ chk("★ 天赋影响修炼速度", (function () {
   Object.assign(A.TAL, fan); const a = A.talSpeedMul();
   Object.assign(A.TAL, yao); const b = A.talSpeedMul();
   Object.assign(A.TAL, A.TALENTS.find(x => x.id === "ping"));
-  return a === 0.90 && b === 1.35;
+  // ★ R57：talSpeedMul 现在还乘【天赋条目】的系数 ⇒ 比值不变、绝对值不再恒为 speed
+  return a > 0 && Math.abs(a / 0.90 - b / 1.35) < 1e-9;
 })());
 
 // ---- 突破给寿元 ----
@@ -4300,6 +4301,82 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
   const d = A.LINGGEN.find(g => g.id === 'dan');
   return d.qi === 1.40 && d.thresh === 0.95;
 })());
+
+// ============================================================================
+// ★ R59：图标接入校验
+//   图标最容易犯的错：① 数据里加了新条目、映射漏配 ⇒ 那一格永远空白
+//                     ② 映射配了、文件没生成 ⇒ 界面上是个破图
+//   这两类必须靠测试抓（肉眼看不出"少了一个"）。见 `图标与宗门图_清单与做法.md`。
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  // 一对图（1x + 2x）都得在盘上
+  const pair = rel => fsx.existsSync(ROOT + rel + '.webp') && fsx.existsSync(ROOT + rel + '@2x.webp');
+
+  // ① 九座设施：fac id → FAC_ICON → 文件
+  const missFac = A.FACILITIES.filter(f => !A.FAC_ICON[f.id]).map(f => f.id);
+  chk('★ 图标·九座设施都有映射', missFac.length === 0,
+    missFac.length ? '缺映射: ' + missFac.join(',') : A.FACILITIES.length + ' 座');
+  const missFacFile = A.FACILITIES
+    .filter(f => A.FAC_ICON[f.id] && !pair('assets/宗门/设施_' + A.FAC_ICON[f.id]))
+    .map(f => f.id);
+  chk('★ 图标·设施图文件都在盘上（含 @2x）', missFacFile.length === 0,
+    missFacFile.length ? '缺文件: ' + missFacFile.join(',') : 'OK');
+
+  // ② 武器 5 把（空手 fist 不算）
+  const wpMiss = A.WEAPONS.filter(w => !A.WEAPON_ICON[w.id]).map(w => w.id);
+  chk('★ 图标·五类武器都有映射', wpMiss.length === 0,
+    wpMiss.length ? '缺: ' + wpMiss.join(',') : A.WEAPONS.length + ' 类');
+  const wpFile = A.WEAPONS
+    .filter(w => A.WEAPON_ICON[w.id] && !pair('assets/器物/器_' + A.WEAPON_ICON[w.id]))
+    .map(w => w.id);
+  chk('★ 图标·武器图文件都在盘上', wpFile.length === 0,
+    wpFile.length ? '缺文件: ' + wpFile.join(',') : 'OK');
+
+  // ③ 五行 5 张
+  const wxFile = A.WUXING.filter(e => !pair('assets/五行/五行_' + e));
+  chk('★ 图标·五行图 5 张齐全', wxFile.length === 0,
+    wxFile.length ? '缺: ' + wxFile.join(',') : A.WUXING.join(''));
+
+  // ④ 法宝 6 件（按数据里的 name 找图 —— 改名字必须同步改图名）
+  const fbFile = A.FABAO.filter(f => !pair('assets/法宝/法宝_' + f.name)).map(f => f.name);
+  chk('★ 图标·法宝图 6 件齐全', fbFile.length === 0,
+    fbFile.length ? '缺: ' + fbFile.join(',') : A.FABAO.length + ' 件');
+
+  // ⑤ 功法 5 类型（覆盖 18 条功法）
+  const gfFile = A.GF_TYPES.filter(t => !pair('assets/功法/功法_' + t));
+  chk('★ 图标·功法类型图 5 张齐全', gfFile.length === 0,
+    gfFile.length ? '缺: ' + gfFile.join(',') : A.GF_TYPES.join(''));
+
+  // ⑥ ico() 必须拼出 srcset（漏了 @2x 高分屏就糊）
+  chk('★ ico() 带 srcset @2x', (function () {
+    const h = A.ico('wx', '金', 'ico14');
+    return /class="ico ico14"/.test(h) &&
+      /src="assets\/五行\/五行_金\.webp"/.test(h) &&
+      /srcset="assets\/五行\/五行_金@2x\.webp 2x"/.test(h);
+  })(), A.ico('wx', '金', 'ico14'));
+  chk('★ ico() 无图时返回空串（不倒出一个破图）',
+    A.ico('wp', undefined) === '' && A.ico('xx', '金') === '' && A.ico('wx', '') === '');
+
+  // ⑦ 五处接入点必须真的用了 ico()（防止以后重构把图标刷掉）
+  const J59 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  chk('★ 接入·弟子属性面板（秘境 + 五行 行）',
+    /ico\('wx', zbNow\(\)\.wx/.test(J59) &&
+    /ico\('wx', st\.wuxing/.test(J59) && /ico\('wp', WEAPON_ICON\[st\.weapon\.id\], 'ico14'\)/.test(J59));
+  // 灵根行【不放】逐元素图标：五灵根时 5 张 12px 图会把整行挤换行（实测），
+  // 且灵根名里已经逐字列出五行 ⇒ 冗余。这里反向断言，防止以后又加回去。
+  chk('★ 接入·灵根行保持纯文字（不放逐元素图标）',
+    !/lgOf\(\)\.els\.map\(function \(e\) \{ return ico/.test(J59));
+  chk('★ 接入·功法类型行', /ico\('gf', t, 'ico16'\)/.test(J59));
+  chk('★ 接入·法宝（已装 + 切换列表都要有）',
+    (J59.match(/ico\("fb", eqF\.name, "ico20"\)/) ? 1 : 0) +
+    (J59.match(/ico\("fb", f\.name, "ico20"\)/) ? 1 : 0) === 2);
+  chk('★ 接入·设施页标题（#facName 用 innerHTML 拼图，不是 textContent）',
+    /nm\.innerHTML = \(_fi/.test(J59) && !/nm\.textContent = FAC_TITLE/.test(J59));
+  chk('★ 接入·宗门大殿面板（arch 分支曾漏图）',
+    /const aico = FAC_ICON\[b\.fac\]/.test(J59));
+})();
 
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);

@@ -148,7 +148,7 @@
   #battleWrap{position:absolute;inset:0;z-index:4}
   #reachRing{position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);
     border-radius:50%;z-index:2;pointer-events:none;border:1px solid #5aa9e64d}
-  /* ★ 主角 = 当前前线弟子（立绘换成 <img>），尺寸随场景加高一起放大
+  /* ★ 主角 = 当前历练弟子（立绘换成 <img>），尺寸随场景加高一起放大
      旧版是 34×46 的纯 CSS 小人；现在用 72×72 的弟子头像 */
   #hero{position:absolute;left:50%;top:56%;width:72px;height:72px;
     transform:translate(-50%,-50%);z-index:5;pointer-events:none;
@@ -266,7 +266,8 @@
   #hud .hud-disc .tal{flex:0 0 auto;color:#c9a86e;font-size:10px}   /* Round 39：滚动交给父层 .scroll（原来双滚动）*/
   #hud .stat{display:flex;justify-content:space-between;align-items:baseline;
     padding:7px 0;border-top:1px solid var(--line2);font-size:12px}
-  #hud .stat .k{color:var(--dim);letter-spacing:2px;font-size:11px}
+  #hud .stat .k{color:var(--dim);letter-spacing:2px;font-size:11px;
+    flex:0 0 auto;white-space:nowrap}   /* ★ R59：.v 侧加了图标后，标签不许被挤换行 */
   #hud .stat .v{color:var(--bright);font-variant-numeric:tabular-nums;letter-spacing:1px}
   #hud .stat .v.gold{color:var(--gold)} #hud .stat .v.low{color:var(--red)}
   #hud .stat .v small{color:#6d675b;font-size:10.5px;margin-left:5px;letter-spacing:0}
@@ -478,6 +479,20 @@
   #archiveBox .arc-item .b i{font-style:normal;color:var(--dim2)}
   #archiveBox .arc-item .b b{color:var(--gold);font-weight:400}
   #archiveBox .arc-empty{font-size:10px;color:#5d574c;padding:8px 0}
+  /* ★ Round 53：生平卷（三幕 + 墓志）/ 宗门本纪 */
+  .bio-act{font-size:10.5px;color:var(--txt);line-height:1.75;margin:2px 0;text-indent:0}
+  .bio-act span{color:var(--gold);font-size:9.5px;letter-spacing:2px;margin-right:6px}
+  .bio-act i{font-style:italic;color:var(--dim2)}
+  .bio-epi{font-size:10.5px;color:#c8b08a;line-height:1.75;margin:6px 0 2px;text-indent:0;
+    padding-left:8px;border-left:2px solid #c9a22755}
+  .sect-vol{padding:2px 0 8px}
+  .arc-item .g em{display:block;font-style:normal;font-size:9.5px;color:var(--dim2);letter-spacing:0}
+  .arc-item.bio-in{border-left:2px solid #6f9a6f;padding-left:8px}
+  .arc-item.bio-dead{border-left:2px solid #a8594f;padding-left:8px}
+  .arc-item.bio-hand{border-left:2px solid #8a8f96;padding-left:8px}
+  .arc-item.bio-asc{border-left:2px solid #d9b95c;padding-left:8px}
+  .bio-raw{margin:4px 0 10px}
+  .bio-raw summary{font-size:9.5px;color:#5d574c;cursor:pointer;letter-spacing:1px}
 
   .sect-banner{position:relative;isolation:isolate;margin:14px 18px 0;height:156px;
     border-radius:3px;overflow:hidden;background:#0a0b0c;flex:0 0 auto}
@@ -599,10 +614,25 @@
   .lc b{font-variant-numeric:tabular-nums;font-weight:400}
   .lc b.gold{color:var(--gold)} .lc b.ok{color:var(--green)} .lc b.bad{color:var(--red)}
   .lc .hint{font-size:9.5px;color:var(--dim2)}
+  /* ============ 通用行内图标（Round 59 · 图标接入）============
+     源图：assets/{宗门,器物,五行,法宝,功法}/*.webp（28px + 56px@2x，透明底）
+     生成管线：_tools/icon_slice.py（四宫格 → 去背 → 归一 → 缩尺寸）
+     这里只负责「行内小图标」；宗门设施面板那颗 26px 的见 .bldg-panel .bh img。
+     都用 srcset 挂 @2x ⇒ 高分屏取 56px 那张，边缘不糊。 */
+  .ico{display:inline-block;object-fit:contain;vertical-align:-0.2em;
+    filter:drop-shadow(0 1px 1.5px #000000aa)}
+  .ico12{width:12px;height:12px}
+  .ico14{width:14px;height:14px}
+  .ico16{width:16px;height:16px}
+  .ico20{width:20px;height:20px}
+  /* 设施页标题里那颗（#facName 的 innerHTML 由 openFacility 拼） */
+  .fac-hd-ico{width:22px;height:22px;object-fit:contain;vertical-align:middle;
+    margin-right:4px;margin-top:-2px;filter:drop-shadow(0 1px 2px #000000aa)}
   .gf-row{display:flex;gap:3px;align-items:center;font-size:10px;padding:3px 0}
-  .gf-row .tp{width:24px;color:var(--dim2);flex:0 0 auto;font-size:9.5px}
+  .gf-row .tp{width:44px;color:var(--dim2);flex:0 0 auto;font-size:9.5px;
+    display:flex;align-items:center;gap:3px}
   .gf-row select{flex:1;font-size:10px;padding:1px 2px;min-width:0}
-  .gf-stack{font-size:9.5px;color:var(--gold);padding-left:27px}
+  .gf-stack{font-size:9.5px;color:var(--gold);padding-left:47px}
   .prio{display:inline-flex;align-items:center;gap:1px;font-size:9.5px;color:#9aa5b8;
     background:#161c26;border:1px solid #ffffff12;border-radius:3px;
     padding:0 3px;margin:1px 2px 1px 0}
@@ -837,7 +867,12 @@
   .rp-elders-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:6px}
   .rp-el{font-size:10.5px;color:#9a9284;line-height:1.85;margin:3px 0}
   .rp-el b{color:var(--paper);font-weight:400;letter-spacing:.5px}
+  .rp-el-quiet{color:#5d574c;font-style:italic}
   .cr-handover{color:#c8b08a}
+  .rp-offline{font-size:11px;color:#9fb0c8;margin:0 0 10px;padding:6px 9px;text-indent:0;
+    background:#ffffff0a;border-radius:4px;line-height:1.7;letter-spacing:.3px}
+  .rp-offline b{color:var(--paper);font-weight:400}
+  .arc-ep{color:#c9a227}
   #btnCloseRp{float:right;flex:0 0 auto;width:auto;padding:2px 10px;font-size:11px}
 
   /* 报错 */
@@ -1139,17 +1174,20 @@
         </div>
 </div>
 
-<!-- ★★ Round 50：议事堂 —— 内容待定
-     下一轮做【BD 打法倾向】（偏攻/偏守/偏速/均衡）+ 派遣历练 -->
+<!-- ★★ Round 54：议事堂 —— BD 打法倾向（R180 定案） -->
 <div data-fac="hall" style="display:none">
         <div class="sec">
           <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
-            议事堂</div>
-          <div style="font-size:10px;color:var(--dim2);line-height:1.8">
-            此处将用来设定弟子的 <b>打法倾向</b>（偏攻 / 偏守 / 偏速 / 均衡），<br>
-            并决定 <b>派哪一位弟子出去历练</b>。<br>
-            <span style="color:var(--dim2)">（内容设计中，暂未开放）</span>
+            打法倾向 · <span id="biasNow" style="color:var(--gold)"></span></div>
+          <div id="biasBox"></div>
+          <div style="font-size:10px;color:var(--dim2);line-height:1.8;margin-top:8px">
+            定个方向，弟子按这个方向配装。<br>
+            行为（打多深、几时撤）仍在 <b>山门 · 训话</b> 上定 —— 两者独立。
           </div>
+          <!-- ★ 派遣历练（R55）：不点人，给【依据】 -->
+          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin:14px 0 6px">
+            派遣历练 · <span style="color:var(--dim2);font-size:10px">按依据从新招里派</span></div>
+          <div id="dispatchBox"></div>
         </div>
 </div>
 
