@@ -5206,6 +5206,152 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
     ks71.map(k => k + '=' + V[k]).join(' '));
 })();
 
+// ============================================================================
+// ★ R72：道具位（B13）—— 消耗品
+//   立项时一直答不上来的那个问题是「道具和法宝到底差在哪」，所以先钉住分界线：
+//     法宝 = 永久底牌（每局 1 次、条件型、花本源、爆发）
+//     道具 = 可耗补给（有数量、节拍型、花数量、小额）
+//   风险点：① 效果偷偷加了伤害 ⇒ 挤压 §35 的乘区预算（余量只有 1.0%）
+//          ② 节拍用了 GF.swings 而不是 GF.swingW ⇒ 随 CADENCE 漂（R61 踩过）
+//          ③ 数量能扣成负数 / 0 了还给效果（"带了空瓶子"）
+//          ④ 数量表没进存档 ⇒ 攒的道具一刷新全没
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J72 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const H72 = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+
+  // ① 表齐 + 字段完整
+  chk('★ 道具·数据表齐（每件都有 id/名/五行/节拍/效果/说明）',
+    A.ITEMS.length >= 4 && A.ITEMS.every(x => x.id && x.name && x.wx && x.per > 0 &&
+      x.kind && x.desc && A.WX_ALL.includes(x.wx)),
+    A.ITEMS.map(x => x.name + '(' + x.per + ')').join(' · '));
+  chk('★ 道具·2 个位与 ITEM_SLOTS 一致',
+    A.ITEM_SLOTS === 2 && /const ITEM_SLOTS = 2;/.test(J72),
+    'ITEM_SLOTS = ' + A.ITEM_SLOTS);
+
+  // ② ★★ 硬约束：道具效果一律不碰伤害 ⇒ 不挤 §35 的乘区预算
+  //    （§35.3 三区之积 ×1.684 ≤ 上界 ×1.70，余量只有 1.0%）
+  const kinds = A.ITEMS.map(x => x.kind);
+  chk('★ 道具·效果一律不是伤害类（§35 乘区余量只剩 1.0%，不能再塞）',
+    kinds.every(k => ['qi', 'mats', 'heal', 'luck'].includes(k)) &&
+    !/\b(dmg|atk|crit)\b/.test(kinds.join(',')) &&
+    !/ITEMS[\s\S]{0,400}?(dmgMul|st\.atk\s*\*)/.test(J72));
+  chk('★ 道具·没有偷偷写进六乘区（只借道 drop 轴，掉落不是伤害预算）',
+    /m\.drop = \(m\.drop \|\| 1\) \* itemDropMul\(\);/.test(J72) &&
+    !/m\.(atk|dmg|state|time|syn|crit)[\s\S]{0,40}itemDropMul/.test(J72));
+
+  // ③ 节拍必须走【加权出手数】GF.swingW，不许用 GF.swings
+  chk('★ 道具·节拍走 GF.swingW（用 swings 会随 CADENCE 漂）',
+    /const w = GF\.swingW \|\| 0;/.test(J72) &&
+    /if \(w - GF\._itLast\[id\] < it\.per\) continue;/.test(J72) &&
+    !/GF\.swings[^\n]{0,60}it\.per/.test(J72));
+  // 与功法 cd:'swing' 同一口径（cdN 也按 swingW 比）—— 两者不能各算一套
+  chk('★ 道具·节拍口径与功法 cdN 一致（都按 swingW 比）',
+    /\(GF\.swingW - last\) \/ g\.cdN/.test(J72) &&
+    /w - GF\._itLast\[id\] < it\.per/.test(J72));
+
+  // ④ 行为：吃一颗 —— 数量 -1、灵气按 it.n 上涨
+  (function () {
+    A.GF.swingW = 0; A.GF._itLast = {};
+    A.IT.eq = ['i_qi']; A.IT.buf = {};
+    G.itemBag = { i_qi: 3 };
+    A.GF.swingW = (A.ITEM_BY_ID.i_qi.per - 1);
+    const qi0 = G.qiTotal | 0;
+    A.itemOnSwing();
+    chk('★ 道具·行为：不到节拍不吃（swingW 差 1 也不吃）',
+      G.itemBag.i_qi === 3 && (G.qiTotal | 0) === qi0);
+    A.GF.swingW = A.ITEM_BY_ID.i_qi.per;
+    A.itemOnSwing();
+    // ⚠️ 灵气那半必须用**区间**而不是等号：`gainQi()` 叠了 6 个乘区
+    //    （传道 / 功法 / 宗门传功阁 / 灵根 / 道伤 / 天赋），其中【灵根与天赋是开局随机生成的】
+    //    ⇒ 同一句 gainQi(20) 实测能落在 +18~+23。钉死 == n 会间歇性红（第一版就这样）。
+    //    确定性的是【数量 -1】，随机的是【乘区堆出来的量】—— 断言要按这个分。
+    const gain = (G.qiTotal | 0) - qi0;
+    chk('★ 道具·行为：到节拍吃一颗（数量 -1、灵气按乘区放大后到手）',
+      G.itemBag.i_qi === 2 && gain > 0 && gain >= A.ITEM_BY_ID.i_qi.n * 0.5,
+      '数量 ' + G.itemBag.i_qi + ' · 灵气 +' + gain + '（n=' + A.ITEM_BY_ID.i_qi.n +
+      '，乘区堆出来 = ×' + (gain / A.ITEM_BY_ID.i_qi.n).toFixed(2) + '）');
+  })();
+
+  // ⑤ 行为：吃空了就停用 —— 不扣成负数、也不给效果
+  (function () {
+    A.GF.swingW = 0; A.GF._itLast = {};
+    A.IT.eq = ['i_qi']; A.IT.buf = {};
+    G.itemBag = { i_qi: 0 };
+    A.GF.swingW = 9999;
+    const qi0 = G.qiTotal | 0;
+    A.itemOnSwing();
+    chk('★ 道具·行为：数量为 0 ⇒ 停用（不扣成负数、不给效果）',
+      G.itemBag.i_qi === 0 && (G.qiTotal | 0) === qi0,
+      '数量 ' + G.itemBag.i_qi + ' · 灵气增 ' + ((G.qiTotal | 0) - qi0));
+  })();
+
+  // ⑥ 行为：槽位上限 2（装第 3 种挤掉最早的，与 fbEquip 同一套手感）
+  (function () {
+    A.IT.eq = [];
+    const ids = A.ITEMS.map(x => x.id);
+    for (const id of ids.slice(0, 3)) A.itemEquip(id);
+    chk('★ 道具·行为：2 个位上限（装第 3 种挤掉最早的）',
+      A.IT.eq.length === 2 && A.IT.eq[0] === ids[1] && A.IT.eq[1] === ids[2],
+      A.IT.eq.join(' → '));
+    // 再点一次 = 卸下
+    A.itemEquip(ids[2]);
+    chk('★ 道具·行为：点已装的那件 = 卸下', A.IT.eq.length === 1 && A.IT.eq[0] === ids[1], A.IT.eq.join(','));
+    A.IT.eq = [];
+  })();
+
+  // ⑦ 行为：寻宝符的掉落加成（没装 = 1，叠层后 > 1）
+  (function () {
+    A.IT.buf = {};
+    const m0 = A.itemDropMul();
+    A.IT.buf.i_luck = 3;
+    const m3 = A.itemDropMul();
+    const it = A.ITEM_BY_ID.i_luck;
+    A.IT.buf.i_luck = (it.stack || 3) + 10;      // 超上限（模拟手改 / 异常）
+    const mOver = A.itemDropMul();
+    chk('★ 道具·行为：寻宝符的掉落权重（没装 = ×1，装 3 层 > ×1）',
+      m0 === 1 && m3 > 1.3 && m3 < 1.5,
+      '×' + m0 + ' → ×' + m3.toFixed(2));
+    chk('★ 道具·寻宝符的层数有上限（叠层写入前先 min 夹取）',
+      /IT\.buf\.i_luck = Math\.min\(it\.stack \|\| 3, \(IT\.buf\.i_luck \|\| 0\) \+ 1\)/.test(J72),
+      '超上限时算出 ×' + mOver.toFixed(2) + '（函数本身不夹取，靠写入端夹）');
+    A.IT.buf = {};
+  })();
+
+  // ⑧ 掉落率量级：必须比装备稀（道具是"补给品"），但也不能稀到用不起
+  const pv = A.ITEM_PER_KILL;
+  chk('★ 道具·掉落率比装备稀但仍在"用得起来"的量级',
+    pv > 0 && pv < 1 / 6 && pv > 1 / 120,
+    '1/' + Math.round(1 / pv) + ' 击杀（装备 1/6 · 功法 1/260 · 法宝 1/400）');
+  chk('★ 道具·每种有存量上限（防无限堆积把界面数字撑爆）',
+    typeof A.ITEM_MAX === 'number' && A.ITEM_MAX > 0 && A.ITEM_MAX <= 999 &&
+    /if \(cur >= ITEM_MAX\) return;/.test(J72), 'ITEM_MAX = ' + A.ITEM_MAX);
+
+  // ⑨ 存档：数量表 + 装的那 2 个位都要进，且读回来要夹取
+  chk('★ 道具·数量表与装备位进了存档',
+    /itemBag: G\.itemBag, itemEq: IT\.eq,/.test(J72));
+  chk('★ 道具·读档夹取（手改成 1e9 或塞了不存在的 id 都不会爆）',
+    /if \(!ITEM_BY_ID\[k\]\) continue;/.test(J72) &&
+    /G\.itemBag\[k\] = Math\.min\(ITEM_MAX, n\);/.test(J72) &&
+    /\.filter\(x => ITEM_BY_ID\[x\]\)\.slice\(0, ITEM_SLOTS\)/.test(J72));
+
+  // ⑩ 界面：不再是「设计待定」占位，且数量单独刷（不重建面板）
+  chk('★ 道具·界面已不是「设计待定」占位',
+    !/道具位 □□ （设计待定）/.test(J72) && /itemPanelHTML\(\)/.test(J72) &&
+    /refreshItemCounts\(fbb\._itemBox\)/.test(J72));
+  chk('★ 道具·数量不写进面板 HTML（否则每次消耗都会重建 ⇒ 展开的列表被收起）',
+    /data-itn="/.test(J72) && /el\.textContent = '×' \+ n;/.test(J72) &&
+    /\.fb-row \.nm \.itn\{/.test(H72) && /\.itn\.empty/.test(H72));
+
+  // ⑪ 音效：服丹有映射 + 有配置（漏配置会被通用断言抓，这里显式钉一条）
+  chk('★ 道具·服丹音效有映射且有节流配置',
+    Array.isArray(A.SFX_FILES.item) && !!A.SFX_CFG.item &&
+    A.SFX_CFG.item.gap > 0 && A.SFX_CFG.item.v > 0 && A.SFX_CFG.item.v < 0.4,
+    'v=' + A.SFX_CFG.item.v + ' gap=' + A.SFX_CFG.item.gap);
+})();
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));

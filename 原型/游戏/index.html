@@ -916,6 +916,12 @@
   .fb-row .nm.on{background:#1a2230;border-color:var(--gold)}
   .fb-row .nm .wx{font-size:9.5px;margin-left:3px}
   .fb-stack{font-size:9.5px;color:var(--gold);padding-left:3px}
+  /* ★ R72：道具位（消耗品）—— 重点是让【数量】一眼可读，它才是玩家真正在管理的东西 */
+  .fb-item-box{margin-top:4px;padding-top:4px;border-top:1px dashed #ffffff1a}
+  .fb-row .nm .itn{font-style:normal;margin-left:4px;color:#d9c48a;font-weight:600}
+  /* 吃空了要看得出来 —— 否则玩家只会觉得"这符没效果" */
+  .fb-row .nm .itn.empty{color:#7a5b52}
+  .fb-row .nm .itn.empty:after{content:" 已空";font-weight:400;font-size:9px}
   .lg-rule{display:flex;gap:3px;align-items:center;font-size:10px;padding:3px 0}
   .lg-rule select{flex:1;font-size:10px;min-width:0}
 

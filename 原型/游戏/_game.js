@@ -2143,6 +2143,10 @@ function traitAxes() {
     const n = c[ax] || 0;
     if (n >= 2) { const ctr = TRAIT_COUNTER[ax]; m[ctr] = (m[ctr] || 1) * Math.pow(1 - TRAIT_STACK_PEN, n - 1); }
   }
+  // ★ R72：道具（寻宝符）也走这一套乘区 —— 从**这里**注入，所有 `traitMul('drop')`
+  //   的调用点自动生效，不用去改每一个掉落分支（漏改一处就是"符没效果"）。
+  //   ⚠️ 只加 drop 轴：道具一律不做伤害，见 ITEMS 上方的说明。
+  m.drop = (m.drop || 1) * itemDropMul();
   return { c: c, m: m };
 }
 function traitMul(ax) { return traitAxes().m[ax] || 1; }
@@ -2391,6 +2395,8 @@ const SFX_FILES = {
   dodge:       ['cloth', 'cloth-heavy'],
   hurt:        ['giant3', 'ogre2', 'giant4'],
   qi:          ['bubble', 'bubble2', 'bubble3'],
+  // ★ R72：服丹（道具消耗）—— 用 bottle/bubble 这类"瓶/泡"的音，与"灵气上涨"区分开
+  item:        ['bottle', 'bubble'],
   // —— 敌人死亡：按【形态】分组（见 MOB_KINDS 的 form 字段），而不是按具体名字 ——
   kill_heavy:  ['ogre1', 'ogre2', 'ogre3', 'ogre4', 'ogre5'],
   kill_fast:   ['bite-small', 'bite-small2', 'bite-small3'],
@@ -2424,6 +2430,9 @@ const SFX_CFG = {
   dodge:       { v: 0.22, gap: 200, p: 1.00 },
   hurt:        { v: 0.30, gap: 260, p: 1.00 },
   qi:          { v: 0.22, gap: 400, p: 1.00 },
+  // ★ R72：服丹 —— 一局吃 6~7 颗（约每 20 真实秒一次），比 qi 频繁，
+  //   所以音量略低 + 留一点间隔与概率，别变成"哒哒哒"
+  item:        { v: 0.20, gap: 250, p: 0.85 },
   kill_heavy:  { v: 0.22, gap: 110, p: 0.55 },
   kill_fast:   { v: 0.17, gap: 110, p: 0.50 },
   kill_std:    { v: 0.19, gap: 110, p: 0.50 },
@@ -5280,6 +5289,9 @@ function saveGame() {
       items: z.items, zones: z.zones, bag: G.bag.map(serItem),
       // ★ 功法学会表 / 法宝拥有表（Round 12：改为掉落进背包 ⇒ 必须存）
       gfKnown: GF_KNOWN, gfEq: GF.eq, fbOwned: FB_OWNED, fbEq: FB.eq,
+      // ★ R72：道具（消耗品）—— 存的是【数量表】而不是"拥有与否"，
+      //   外加装着的 2 个位。漏了这段就是"攒的道具一刷新全没了"。
+      itemBag: G.itemBag, itemEq: IT.eq, itemDropped: G.itemDropped, itemUsed: G.itemUsed,
       gfPrio: GF.prio, gfLock: GF.gfLock,
       // ★★ Round 33 修复（审计发现）：ROSTER（多弟子名册）原来【完全没进存档】
       //   ⇒ 刷新即丢：后勤弟子、在册人数、分派规则、前线归属全部消失
@@ -5393,6 +5405,19 @@ function loadGame() {
     PVP.lastLog = d.pvpLog || [];
     G.lastKillRate = d.killRate || 0;
     G.lastPressure = d.pressure != null ? d.pressure : null;
+    // ★ R72：道具数量表 + 装着的 2 个位（⚠️ 数量要逐项校验：存档可能被手改过，
+    //   或来自还没实装道具的旧档 ⇒ 必须夹到 [0, ITEM_MAX] 并且只认表里存在的 id）
+    G.itemBag = {};
+    const _ib = d.itemBag || {};
+    for (const k of Object.keys(_ib)) {
+      if (!ITEM_BY_ID[k]) continue;
+      const n = Math.floor(Number(_ib[k]) || 0);
+      if (n > 0) G.itemBag[k] = Math.min(ITEM_MAX, n);
+    }
+    IT.eq = (Array.isArray(d.itemEq) ? d.itemEq : []).filter(x => ITEM_BY_ID[x]).slice(0, ITEM_SLOTS);
+    IT.buf = {};
+    G.itemDropped = d.itemDropped | 0;
+    G.itemUsed = d.itemUsed | 0;
     G._savedAt = d.at || Date.now();
     return true;
   } catch (e) { console.warn('读档失败', e); return false; }
@@ -5789,6 +5814,25 @@ function rollFabaoDrop() {
   try { autoPickSpecs(); } catch (e) {}     // 槽满时自动挑最合适的
   G.fx.push({ x: G.heroX, y: G.heroY - 0.20, txt: "法宝 " + f.name, cls: "crit", life: 1 });
 }
+/** ★ R72：道具掉落 —— 消耗品，所以是【数量】而不是"拥有"。
+ *
+ *  节奏（实测标定，一局 419 击杀）：1/34 ⇒ 一局约 12 颗。
+ *  对照：装备 1/6（一局 75 件）、功法 1/260、法宝 1/400
+ *  ⇒ 道具比装备稀 5.7 倍 —— "补给品"该有的密度：常见但不泛滥。
+ *
+ *  ⚠️ 刻意**不写日志、不发事件**：一局 12 次，写进「录」页会把角色生平淹没
+ *     （这正是 R24 处理普通装备掉落时定下的口径）。只在战场上飘个名字 + 道具位数字变化。
+ */
+function rollItemDrop() {
+  if (Math.random() >= ITEM_PER_KILL) return;
+  const it = ITEMS[Math.floor(Math.random() * ITEMS.length)];
+  const cur = G.itemBag[it.id] || 0;
+  if (cur >= ITEM_MAX) return;            // 满了就不再捡（否则界面上的数字没有意义）
+  G.itemBag[it.id] = cur + 1;
+  G.itemDropped = (G.itemDropped || 0) + 1;
+  G.fx.push({ x: G.heroX, y: G.heroY - 0.16, txt: '◈ ' + it.name, cls: 'dodge', life: 1 });
+}
+
 function rollGongfaDrop() {
   if (Math.random() >= GF_DROP_PER_KILL) return;
   // 池子 = 还没学会 且 背包里还没有的
@@ -6471,7 +6515,150 @@ const FABAO_BY_ID = {};
 FABAO.forEach(f => FABAO_BY_ID[f.id] = f);
 // ★ 槽位（用户决策）：1 个法宝 + 2 个道具位
 const FABAO_SLOTS = 1;      // 法宝只能装 1 个
-const ITEM_SLOTS = 2;       // 剩余 2 个框留给【道具】（设计待定）
+const ITEM_SLOTS = 2;       // ★ R72：道具 2 个位（= 最多带 2 种，各自记数量）
+
+// ============================================================
+// ★ R72：道具 = 消耗品（B13 收口）
+// ------------------------------------------------------------
+// 用户决策：**道具 = 消耗品（有数量）**，"2 个位"= 最多带 2 种，各自记数量。
+//
+// ★★ 与【法宝】的分界线（立项时要回答的那个问题，之前一直答不上来所以拖着）：
+//   法宝 = 【永久拥有的底牌】：每局每件只催动 **1 次**，条件是**局势**
+//          （怪数 / 累计击杀 / 精英出现 / 血低），花的是【本源】，效果是**爆发**。
+//   道具 = 【可耗尽的补给】：有**数量**、用一颗少一颗，条件是**节拍**（每 N 次出手），
+//          花的是**数量**，效果是**小额资源**。
+//   一句话：**法宝是"危机时的一张牌"，道具是"日常一直在烧的补给"。**
+//
+// ⚠️ **为什么效果一律不做伤害**：§35 的六乘区总预算余量只剩 **1.0%**
+//   （同调 ×1.22 · 时序 ×1.15 · 状态 ×1.20 ⇒ 积 ×1.684 ≤ 上界 ×1.70），
+//   而状态乘区已被「词缀 + 功法」占满。道具再加伤害只能去**偷**词缀/功法的收益，
+//   且玩家看不出来 —— 那是错的解法。⇒ 道具一律作用在**不占伤害预算**的量上：
+//   修为 / 本源 / 生命 / 掉落。这样它也天然不与装备、功法、法宝抢地盘。
+//
+// ⚠️ 触发一律走 `GF.swingW`（加权出手数），与功法主动技 / 法宝木灵回春同一口径。
+//   用 `GF.swings` 会让节拍随 `P.CADENCE` 变化而漂（R61 踩过，有断言盯着）。
+//
+// 📐 配平（实测标定 · `_tools/item_balance.js`）
+//   ⚠️⚠️ **量纲（第一版算错了，多吃 3 倍）**：`GF.swingW` 是【加权出手数】，
+//      每次出手 `+P.CADENCE(3)` ⇒ 一局 **≈1170** 个 swingW 单位，**不是 390 次出手**。
+//      所以 `per` 要按 1170 比，不是按出手次数比。（与功法 `cd:'swing'` 同一口径：
+//      `g_lei` 的 `cdN:12` 就写成"每 12 次出手"，两者比的是同一个数。）
+//   节拍 每 300 swingW ⇒ 装着的每种一局吃 **3.9 次**，两种共 7.8 次
+//   掉率 1/27 击杀   ⇒ 一局掉 **15.5 颗**，摊到 4 种、你只装 2 种 ⇒ 可用 7.75 颗
+//   ⇒ **基本持平**：平时够用，打完两三局才见底
+//   参考：装备 1/6 击杀（一局 75 件）⇒ 道具比装备稀 **4.5 倍**，像"补给品"
+const ITEMS = [
+  { id: 'i_qi', name: '引灵丹', wx: '木', per: 300, kind: 'qi', n: 20,
+    desc: '每 300 次出手服 1 颗：灵气 +20（修为）' },
+  // ⚠️ 这里原本是「聚元丹（本源 +12）」——**实测发现它是废件，已换掉**：
+  //   本源一局进 ~674（ORIGIN_PER_KILL=1 × 700 杀），而**唯一**的支出是法宝催动
+  //   （cost 15~45，且一局只催动 1 次）⇒ 每局有 93% 的本源在局末被清零扔掉。
+  //   ⇒ 本源根本不稀缺，"再给本源"没有任何意义。
+  //   （顺带说明 §8.4 的 A15「该不该烧法宝是否真取舍」目前**不成立**：永远烧得起。）
+  //   换成【宗门素材】—— 它是真闸门：铸造 canForge / 传功阁 trainTotalCost /
+  //   宗门建设都会检查，还会明确报"素材不足"。
+  { id: 'i_mats', name: '聚宝丹', wx: '金', per: 300, kind: 'mats', n: 6,
+    desc: '每 300 次出手服 1 颗：宗门素材 +6（铸造 / 传功阁 / 建设都要它）' },
+  { id: 'i_heal', name: '金创药', wx: '水', per: 300, kind: 'heal', n: 0.10,
+    desc: '每 300 次出手服 1 颗：回复 10% 生命' },
+  { id: 'i_luck', name: '寻宝符', wx: '土', per: 300, kind: 'luck', n: 0.12, stack: 5,
+    desc: '每 300 次出手服 1 张：本局掉落权重 +12%（最多叠 5 层，每局重置）' },
+];
+const ITEM_BY_ID = {};
+ITEMS.forEach(x => ITEM_BY_ID[x.id] = x);
+const ITEM_PER_KILL = 1 / 27;   // 掉落率（见上方配平表）
+const ITEM_MAX = 99;            // 每种最多存多少（防无限堆积把界面数字撑爆）
+
+// 状态：数量表放 G（要进存档），装的 2 个位 + 本局临时层数放 IT
+const IT = { eq: [], buf: {} };
+/** 这个道具还够不够吃一颗。 */
+function itemHas(id, need) { return (G.itemBag && (G.itemBag[id] || 0)) >= (need || 1); }
+/** 装 / 卸（槽满则挤掉最早的那个，与 fbEquip 同一套手感）。 */
+function itemEquip(id) {
+  if (!ITEM_BY_ID[id]) return false;
+  if (IT.eq.includes(id)) { IT.eq = IT.eq.filter(x => x !== id); return true; }
+  if (IT.eq.length >= ITEM_SLOTS) IT.eq.shift();
+  IT.eq.push(id);
+  return true;
+}
+/** 本局重置：临时层数清空（道具**数量**是跨局的，不清）。 */
+function itemResetRun() { IT.buf = {}; }
+/** ★ 寻宝符给掉落权重乘区 —— 从 `traitAxes()` 的 drop 轴注入，所有走
+ *  `traitMul('drop')` 的地方自动生效（目前是 rollDrop），不用改每个调用点。 */
+function itemDropMul() { return 1 + (IT.buf.i_luck || 0) * ITEM_BY_ID.i_luck.n; }
+
+/** ★ R72：每 N 次出手吃一颗道具（走加权出手数 GF.swingW）。
+ *
+ *  ⚠️ 设计上的两个"不做"：
+ *    ① **数量为 0 就是停用**（不报错、不静默给效果）—— "带了个空瓶子"应该看得见；
+ *    ② **不提供"手动使用"**：挂机场景玩家不在场，一切自动化。玩家管的是
+ *       "带哪 2 种"和"存量够不够"，不是"什么时候点"。
+ */
+function itemOnSwing() {
+  if (!IT.eq.length) return;
+  const w = GF.swingW || 0;
+  for (const id of IT.eq) {
+    const it = ITEM_BY_ID[id];
+    if (!it) continue;
+    if (GF._itLast[id] === undefined) GF._itLast[id] = 0;
+    if (w - GF._itLast[id] < it.per) continue;      // 还没到节拍
+    if (!itemHas(id)) continue;                     // ★ 吃空了 ⇒ 停用（不推进节拍，攒够了一到就吃）
+    GF._itLast[id] = w;
+    G.itemBag[id] -= 1;
+    G.itemUsed = (G.itemUsed || 0) + 1;
+    if (it.kind === 'qi')      { gainQi(it.n); G.fx.push({ x: G.heroX, y: G.heroY - 0.10, txt: '✦ +' + it.n + ' 灵气', cls: 'dodge', life: 1 }); }
+    else if (it.kind === 'mats')   { SECT_RES.materials += it.n; G.fx.push({ x: G.heroX, y: G.heroY - 0.10, txt: '✦ +' + it.n + ' 素材', cls: 'crit', life: 1 }); }
+    else if (it.kind === 'heal')   { const st = playerStats(); G.hp = Math.min(st.hp, G.hp + st.hp * it.n); G.fx.push({ x: G.heroX, y: G.heroY - 0.10, txt: '✦ 回春', cls: 'dodge', life: 1 }); }
+    else if (it.kind === 'luck')   { IT.buf.i_luck = Math.min(it.stack || 3, (IT.buf.i_luck || 0) + 1); G.fx.push({ x: G.heroX, y: G.heroY - 0.10, txt: '✦ 寻宝 ×' + IT.buf.i_luck, cls: 'crit', life: 1 }); }
+    sfx('item', 0.9);
+  }
+}
+
+/** ★ R72：道具面板的 HTML（与法宝面板同构：装着的那几个 + 一个可切换的 details）。
+ *
+ *  ⚠️ **数量故意不写进这段 HTML**：一局要吃 6~7 颗，数量一直在变；
+ *     写进去就会让 `setDedup` 每次变化都重建整块面板 ⇒ **展开的「更换道具」会被收起**。
+ *     这里只把「装了哪几种 / 库里有哪些」定下来当签名，数量由 `refreshItemCounts()` 每帧填。
+ *     （与 R66 进度条同一条经验：**结构变了才重建，每帧只改文本/宽度**。）
+ *  ⚠️ 「可换的」列出**所有未装的道具（含 ×0）**，而不是"有库存的"——
+ *     否则某种吃空 / 补货都会改变签名 ⇒ 又把 details 收起。×0 只标灰、不禁点（点了装上就是空的）。
+ */
+function itemPanelHTML() {
+  const rows = IT.eq.map(function (id) {
+    const it = ITEM_BY_ID[id];
+    if (!it) return '';
+    return '<div class="fb-row"><span class="nm on" data-itemid="' + id + '" title="' +
+      it.desc + '（点击卸下）">' + it.name +
+      '<span class="wx" style="color:' + (WX_COLOR[it.wx] || '#888') + '">' + it.wx + '</span>' +
+      '<i class="itn" data-itn="' + id + '">×0</i>' +
+      '<span style="color:#5d574c"> · 每 ' + it.per + ' 次出手</span></span></div>';
+  }).join('') || '<div style="color:#5d574c;font-size:10px">未装备道具（从下面选）</div>';
+  const others = ITEMS.filter(x => !IT.eq.includes(x.id));
+  const sw = others.length
+    ? '<details class="fb-swap"><summary>更换道具（另有 ' + others.length + ' 种）</summary>' +
+      others.map(function (x) {
+        return '<div class="fb-row"><span class="nm" data-itemid="' + x.id + '" title="' +
+          x.desc + '（点击装上）">' + x.name +
+          '<span class="wx" style="color:' + (WX_COLOR[x.wx] || '#888') + '">' + x.wx + '</span>' +
+          '<i class="itn" data-itn="' + x.id + '">×0</i>' +
+          '<span style="color:#5d574c"> · ' + x.desc.replace(/^每 \d+ 次出手服 \d+ [颗张]：/, '') + '</span></span></div>';
+      }).join('') + '</details>'
+    : '';
+  return '<div class="fb-stack" style="color:#66708a;font-size:10px">道具 · 限 ' + ITEM_SLOTS +
+    ' 种 · 消耗品（击杀掉落，用完就停）</div>' + rows + sw;
+}
+
+/** 每帧只刷数量（结构不动）—— 数量 ≤0 时标红提示"已空"。 */
+function refreshItemCounts(root) {
+  if (!root || typeof root.querySelectorAll !== 'function') return;
+  root.querySelectorAll('[data-itn]').forEach(function (el) {
+    const id = el.getAttribute ? el.getAttribute('data-itn') : null;
+    if (!id) return;
+    const n = (G.itemBag && G.itemBag[id]) || 0;
+    el.textContent = '×' + n;
+    if (el.classList) el.classList.toggle('empty', n <= 0);
+  });
+}
 
 // ★ 已拥有的法宝（掉落获得；用户要求：法宝也是掉落）
 const FB_OWNED = {};
@@ -6884,6 +7071,7 @@ const G = {
   // 装备：分区 → 占位网格
   zones: {},        // zone -> { w, h, cells: [[itemId|null]] }
   bag: [],          // 未装备的掉落
+  itemBag: {},      // ★ R72：道具数量表（道具是消耗品 ⇒ 存"数量"而不是"拥有与否"）
   // ★ 掉落过滤（装备与掉落.md §7.2 第 1 层）
   filterQ: 0,        // 品质 < 此值的掉落自动分解（默认 0 = 全留）
   onlyUpgrade: false,// 只显示"有提升"的
@@ -7641,6 +7829,10 @@ function startRun() {
   GIFT_CONSUME_WARD = giftOn('ward');
   gfResetRun();   // ★ 功法：清空本局层数（焚心诀/追风步/魂力）
   fbResetRun();   // ★ 法宝：每局每件只能催动 1 次
+  // ★ R72：道具 —— 只清【本局临时层数】（寻宝符的层数）与出手节拍游标。
+  //   ⚠️ **数量不清**：道具是跨局的消耗品，数量就是玩家攒的东西。
+  itemResetRun();
+  GF._itLast = {};
   const st = playerStats();
   G.hp = st.hp; G.hpMax = st.hp;
   G.running = true; G.phase = 'fight';
@@ -7842,6 +8034,10 @@ function step(st, dt) {
     // ★ 功法一次出手结算（周期型/释放型）
     //   冲突仲裁：同刻度最多 1 个"占出手"效果（裂空斩优先于天雷引）
     const gfw = gfOnSwing();
+    // ★ R72：道具也在同一刻度结算（都是"每 N 次出手"的节拍型机制，
+    //   放在一起才能保证两者看到的 `GF.swingW` 是同一个值）。
+    //   ⚠️ 必须调在 gfOnSwing() **之后** —— 由它先把 GF.swingW 推进到本次出手。
+    itemOnSwing();
     // 心法/秘术的立即效果
     if (gfw.heal > 0 && G.hp > 0) {
       skillVfx(gfw.firedName || '回春', st.wuxing, 'ring');   // ★ R62
@@ -7998,6 +8194,7 @@ function step(st, dt) {
         }
         rollGongfaDrop();   // ★ 功法掉落 → 背包（用户要求：手动装）
         rollFabaoDrop();    // ★ 法宝掉落 → 背包
+        rollItemDrop();     // ★ R72：道具掉落 → 数量表（消耗品，比装备/功法都频繁）
         gainQi(dead && dead.kind === 'elite' ? P.QI_PER_ELITE : P.QI_PER_KILL);
         G.field.splice(k, 1);
         // ★ 实时掉落：杀掉就有机会掉（挂机刷宝的核心反馈）
@@ -10000,14 +10197,25 @@ function render() {
             });
           });
         }
-        // 「道具位」占位（内容固定 ⇒ 只写一次）
-        if (!fbb._itemSlots) {
-          fbb._itemSlots = document.createElement('div');
-          fbb._itemSlots.className = 'fb-stack fb-item-slots';
-          fbb._itemSlots.style.color = '#4a5568';
-          fbb._itemSlots.textContent = '道具位 □□ （设计待定）';
-          fbb.appendChild(fbb._itemSlots);
+        // ★ R72：道具位（2 个）—— 消耗品，所以显示的是【数量】（不再是「设计待定」的空框）
+        //   ⚠️ 同样走 setDedup + 重挂事件：每帧 innerHTML 会把展开的 <details> 收起、
+        //      把点击目标销毁（R61/R65 各踩过一次）。数量单独刷。
+        if (!fbb._itemBox) {
+          const _ib = document.createElement('div');
+          _ib.className = 'fb-item-box';
+          fbb.appendChild(_ib);
+          fbb._itemBox = _ib;
         }
+        if (setDedup(fbb._itemBox, itemPanelHTML())) {
+          fbb._itemBox.querySelectorAll('.nm[data-itemid]').forEach(function (el) {
+            el.addEventListener('click', function () {
+              itemEquip(el.getAttribute('data-itemid'));
+              log('道具变更：' + (IT.eq.join('、') || '空'), 'sys');
+              render();
+            });
+          });
+        }
+        refreshItemCounts(fbb._itemBox);
       }
     }
   }
@@ -10513,6 +10721,9 @@ globalThis.__api = {
   TD_THRESH, TD_MUL, tdValue, tdMul, tdScoreFor, slotWuxing,
   FABAO, FABAO_BY_ID, FABAO_SLOTS, FB, fbEquip, fbResetRun, fbTriggered,
   AFFIXES, AFFIX_BY_ID, AFFIX_COUNT, AFFIX_QLV, softCapMul, SOFT_BUDGET_RATE, ITEM_SLOTS,
+  // ★ R72：道具（消耗品）—— 供 _smoke.js 校验「数量会减 / 空了不触发 / 走 swingW / 存档往返」
+  ITEMS, ITEM_BY_ID, ITEM_PER_KILL, ITEM_MAX, IT, itemHas, itemEquip, itemOnSwing, itemResetRun,
+  itemDropMul, itemPanelHTML, refreshItemCounts, rollItemDrop,
   SIGNATURES, SIGNATURE_BY_ID, SIGN_SAME_BONUS,
   AFFIX_WX_BONUS, affixPctOf, affixNegPct, affixHas, negHas, rollSignature, equippedSignatures, activeSignature, AFFIX_ILVL_RATE, affixValue, rollAffixes, affixMul, affixZones, AFFIX_ZONE_CAP, affixLabel, affixTitle,
   get GIFTS_ACTIVE() { return GIFTS_ACTIVE; },

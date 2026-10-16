@@ -12,14 +12,24 @@ const fs = require('fs');
 const path = require('path');
 
 // ---- 最小 DOM 桩（与 _smoke.js 同思路，够 pace 用）----
+// ⚠️ R71 补了两处漏实现 —— 这类"桩跟不上代码"的错**只会让探针崩在跑动中**，
+//    症状是一段 Node 堆栈（而不是一条断言红），很容易被当成"工具坏了"就绕过去：
+//    ① `children`：`renderSkillBar()`（R66 加的）读 `box.children` ⇒ 原来桩没这个字段，
+//       拿到 undefined ⇒ `kids.length` 直接 TypeError。**跑任何一局都会崩。**
+//    ② `cloneNode`：闪避残影（R65 加的）要用它 ⇒ **跑满一局必然触发闪避**，一样崩。
+//    ⇒ 加新机制之后，除了 _smoke.js，**也要记得让 _tools/ 下的桩跟上**。
 const mkEl = () => ({
   style: { setProperty() {}, getPropertyValue() { return ''; }, removeProperty() {} },
-  dataset: {},
+  dataset: {}, children: [], parentNode: null,
   classList: { _s: new Set(), add() {}, remove() {}, contains() { return false }, toggle() {} },
-  appendChild(c) { return c }, removeChild() {}, addEventListener() {},
-  insertAdjacentHTML() { return this }, replaceChildren() {},
+  appendChild(c) { this.children.push(c); if (c) c.parentNode = this; return c },
+  removeChild(c) { const i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1); if (c) c.parentNode = null; return c },
+  remove() { if (this.parentNode) this.parentNode.removeChild(this) },
+  cloneNode() { const c = mkEl(); c._html = this._html; return c },
+  addEventListener() {},
+  insertAdjacentHTML() { return this }, replaceChildren() { this.children.length = 0 },
   querySelector: () => mkEl(), querySelectorAll: () => [],
-  get innerHTML() { return '' }, set innerHTML(v) {}, set textContent(v) {}, textContent: '',
+  get innerHTML() { return this._html || '' }, set innerHTML(v) { this._html = v }, set textContent(v) {}, textContent: '',
 });
 global.document = {
   querySelector: () => mkEl(), querySelectorAll: () => [],
