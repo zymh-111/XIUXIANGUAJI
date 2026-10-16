@@ -274,6 +274,20 @@ const P = {
   SPAWN_BURST: 2.0,        // 起步 = 峰值/2（ramp 期间场上约为峰值的一半）
   MOB_HP_BASE: 107, ACT_FREQ_BASE: 3.0, ACT_FREQ_REALM: 1.20,
   AOE_BASE: 3,
+  // ★★ R61：出手节拍拉长倍数（用户："杀怪显示的慢一些，近战至少得看出来砍死怪物"）
+  //
+  //   问题（实测）：出手 4.60 次/秒 ⇒ 间隔 **217ms**，而"看清一次打击过程"需要 ≥250ms；
+  //   再叠 AOE 6 个目标同帧结算 ⇒ 过程被压成 1 帧，玩家只看到怪"凭空少了几只"。
+  //
+  //   做法：出手间隔 ×CADENCE，**每刀伤害同时 ×CADENCE** ⇒
+  //     · 单位时间输出（DPS）**完全不变** · 一局击杀总数与收益**不变** · 配平不用重做
+  //     · 变的是"节拍"：原来 217ms 一刀，现在 434ms 一刀、但那一刀重一倍
+  //
+  //   ⚠️ 连带影响（按【出手次数】计的机制）必须等比换算，否则语义会漂：
+  //     · 功法主动技 `cd:'swing'`（10/10/12/15/20）· 法宝「木灵回春」每 25 次出手
+  //       ⇒ 统一改用【加权出手数】`GF.swingW`（每次出手 +CADENCE），阈值一个字都不用改
+  //     · 功法「凌波微步」闪避后 N 次出手提速 ⇒ 同样按加权单位递减
+  CADENCE: 2,
   THRESHOLD_R: 10, SURVIVE_SECONDS: 25, OVERLOAD_ASSUMED: 10,
 
   // ★ 距离 / 威胁圈（用户提案 + 二次修正）
@@ -2374,6 +2388,107 @@ const SFX_FORM = {
   '磨': 'kill_grind', '秒': 'kill_sec', '精英': 'kill_elite', 'Boss': 'kill_boss',
 };
 const SFX_CORE = ['ui', 'ui_tab', 'swing', 'hit', 'kill_std'];   // 开机预热的几组
+
+// ============================================================
+// ★ R61：战斗表现层（VFX）
+// ------------------------------------------------------------
+// 分工：**数值层瞬时结算（配平一个字没动），表现层负责让玩家看得见过程。**
+//
+// 为什么需要这一层（实测）：
+//   出手 4.68 次/秒（间隔 214ms）+ AOE 最多同时结算 11 个目标 ⇒
+//   "打→命中→死" 全在同一帧完成，玩家只看到怪"凭空少了几只"。
+//   拉长节拍（P.CADENCE）把间隔抬到 522ms，再用这里的时间轴把过程摊开。
+//
+// 时间轴（近战 / 远程两套，这是"手感身份"的来源）：
+//   近战  起手 → 挥出弧光 → **立即命中** → 怪碎裂消散
+//   远程  起手 → 放出弹丸 → **飞行 ~210ms** → 命中（此时才跳伤害数字/命中音）→ 碎裂
+//   ⚠️ 远程的"命中时刻"靠 delay 实现，所以伤害飘字与命中音都必须可延迟（pushDmgFx / sfxDelay）
+// ============================================================
+const VFX = {
+  PROJ_SPEED: 1.1,     // 弹道速度（归一化坐标/秒）。弓 reach 0.23 ⇒ 约 210ms 飞完
+  STAGGER: 0.055,      // 同一次出手多目标时，飘字逐个错开的间隔（秒）
+  ARC_DUR: 0.20,       // 近战弧光持续
+  DIE_DUR: 0.26,       // 死亡消散持续（怪物从场上消失后，DOM 还留这么久做碎裂）
+};
+
+const SFX_Q = [];
+/** 音效延后播（远程命中音用）。用游戏时钟 G.t 计时，与暂停/快进天然一致。 */
+function sfxDelay(key, volMul, delay) {
+  if (!SFX.on) return;
+  if (!delay || delay <= 0) { sfx(key, volMul); return; }
+  SFX_Q.push({ at: G.t + delay, key: key, v: volMul });
+}
+
+/** 伤害飘字（可延后）。远程要等弹道飞到才跳字 —— 数值早就算完了，这里只拖表现。 */
+function pushDmgFx(x, y, txt, cls, wx, delay) {
+  const o = { x: x, y: y, txt: txt, cls: cls, wx: wx || null, life: 1 };
+  if (!delay || delay <= 0) { G.fx.push(o); return; }
+  G.dmgq.push({ at: G.t + delay, o: o });
+}
+
+/** 每帧推进表现层：到点的飘字/音效放出来，过期的特效清掉。 */
+function vfxTick() {
+  // ① 延后的伤害飘字（远程要等弹道飞到）
+  for (let i = G.dmgq.length - 1; i >= 0; i--) {
+    if (G.t >= G.dmgq[i].at) { G.fx.push(G.dmgq[i].o); G.dmgq.splice(i, 1); }
+  }
+  // ② 延后的命中音（同上）
+  for (let i = SFX_Q.length - 1; i >= 0; i--) {
+    if (G.t >= SFX_Q[i].at) { sfx(SFX_Q[i].key, SFX_Q[i].v); SFX_Q.splice(i, 1); }
+  }
+  // ③ 特效事件按各自寿命回收（弧光 ARC_DUR；弹道 = 飞行时间 + 命中闪光 0.25s）
+  for (let i = G.vfxq.length - 1; i >= 0; i--) {
+    const v = G.vfxq[i];
+    const life = (v.k === 'arc' ? VFX.ARC_DUR : v.delay + 0.25);
+    if (G.t - v.t0 > life + 0.05) G.vfxq.splice(i, 1);
+  }
+}
+
+/** 渲染战斗特效（近战弧光 / 远程弹道）。
+ *  坐标与怪物同一套（`x*100%`）⇒ 弹道落点天然对准怪。
+ *  弹道用 left/top 的 CSS transition 飞（分辨率无关，不需要换算像素）。 */
+function vfxRender(arena) {
+  if (!arena) return;
+  if (!arena._vfx) arena._vfx = {};
+  const box = arena._vfx;
+  const live = new Set();
+  for (const v of G.vfxq) {
+    if (!v._id) v._id = 'v' + (UID++);
+    live.add(v._id);
+    let el = box[v._id];
+    if (el) continue;                         // 已建过 ⇒ 交给 CSS 自己跑
+    el = document.createElement('div');
+    el.className = 'vfx ' + (v.k === 'arc' ? 'vfx-arc' : 'vfx-proj vfx-' + v.kind);
+    const ang = Math.atan2(v.y1 - v.y0, v.x1 - v.x0);
+    el.style.left = (v.x0 * 100) + '%';
+    el.style.top = (v.y0 * 100) + '%';
+    el.style.setProperty('--ang', ang + 'rad');
+    if (v.k === 'arc') {
+      // 弧光：朝目标方向张开；张开的尺度跟距离成正比（贴脸短、稍远长）
+      const reach = Math.min(0.28, Math.hypot(v.x1 - v.x0, v.y1 - v.y0) + 0.11);
+      el.style.setProperty('--sz', (reach * 100) + '%');
+    } else {
+      el.style.setProperty('--fly', v.delay + 's');
+      el.style.transform = 'rotate(' + ang + 'rad)';
+    }
+    arena.appendChild(el);
+    box[v._id] = el;
+    if (v.k === 'proj') {
+      // ⚠️ 必须强制一次回流，否则"起点→终点"在同一帧内设置 ⇒ 无过渡、瞬移
+      void el.offsetWidth;
+      el.style.transition = 'left ' + v.delay + 's linear, top ' + v.delay + 's linear';
+      el.style.left = (v.x1 * 100) + '%';
+      el.style.top = (v.y1 * 100) + '%';
+    }
+  }
+  for (const id of Object.keys(box)) {
+    if (live.has(id)) continue;
+    const el = box[id];
+    el.remove ? el.remove() : (arena.removeChild && arena.removeChild(el));
+    delete box[id];
+  }
+}
+
 
 function sfxOn() { return SFX.on; }
 
@@ -4968,7 +5083,7 @@ function gfEquip(id, manual) {
 }
 // 本局开始：清空运行时层数
 function gfResetRun() {
-  GF.swings = 0; GF.killStack = 0; GF.speedStack = 0; GF.soul = 0;
+  GF.swings = 0; GF.swingW = 0; GF.killStack = 0; GF.speedStack = 0; GF.soul = 0;
   GF.idleT = 0; GF.holdT = 0; GF.lingboT = 0;
   // ★ 冷却初始化：设为【当前时刻】
   //   ⚠️ 原来是空对象 ⇒ 首次检查视为"从未用过" ⇒ 【第 1 次出手就放技能】
@@ -5172,7 +5287,7 @@ function gfReady(g) {
     //    而 0 是假值 ⇒ 会走兜底 -1e9 ⇒ (0 − (−1e9)) = 1e9 ⇒ 永远就绪
     const last = GF.lastSwing[g.id];
     if (last === undefined) return false;              // 从未初始化 ⇒ 不就绪
-    return (GF.swings - last) >= g.cdN;
+    return (GF.swingW - last) >= g.cdN;   // ★ R61：加权出手数（节拍无关）
   }
   if (g.cd === 'sec') {
     const lastS = GF.lastSec[g.id];
@@ -5184,7 +5299,7 @@ function gfReady(g) {
 }
 function gfMarkUsed(g) {
   GF.fired[g.id] = (GF.fired[g.id] || 0) + 1;   // ★ 释放计数
-  if (g.cd === 'swing') GF.lastSwing[g.id] = GF.swings;
+  if (g.cd === 'swing') GF.lastSwing[g.id] = GF.swingW;   // ★ R61：加权出手数
   else if (g.cd === 'sec') GF.lastSec[g.id] = G.t || 0;
   else if (g.cd === 'run') GF.usedRun[g.id] = 1;
 }
@@ -5192,6 +5307,12 @@ function gfMarkUsed(g) {
 // 一次出手结算：按优先级取【第一个就绪】的主动技能
 function gfOnSwing() {
   GF.swings++;
+  // ★ R61：加权出手数（每次出手 +CADENCE）—— 所有按【出手次数】计的阈值都改用它，
+  //   这样节拍拉长后『每 N 次出手』的等效时长自动不变，不需要逐个改功法的 cdN
+  GF.swingW = (GF.swingW || 0) + P.CADENCE;
+  // ★ R61 顺带修：凌波微步的『闪避后 3 次出手提速』**从来没有被递减过** ⇒
+  //   实际成了一次触发、永久生效。这里补上递减（按加权单位，等效时长与旧版一致）
+  if (GF.lingboT > 0) GF.lingboT -= P.CADENCE;
   // ★ 缩地成寸：必暴窗口递减（本次出手消耗 1 次）
   if (GF.critWindow > 0) GF.critWindow--;
   const out = { burst: null, qi: 0, heal: 0, extraTargets: 0, fired: null,
@@ -6181,6 +6302,9 @@ const G = {
   field: [], actAcc: 0, spawnAcc: 0, overloadT: 0,
   deathT: null, peakField: 0, downgraded: 0,
   fx: [], shake: 0, hurtAcc: 0, threats: 0,
+  // ★ R61：表现层队列（数值瞬时结算，这两个只管"让玩家看见过程"）
+  vfxq: [],           // 战斗特效事件：arc 近战弧光 / proj 弹道
+  dmgq: [],           // 延后出现的伤害飘字（远程要等弹道飞到）
   heroX: 0.5, heroY: 0.56, wanderT: 0, wanderTarget: null,
   dodgeAcc: 0, dodgeFlash: 0, dashT: 0, crowdAvoid: 0,
   lastPressure: null, // 上一局的【承压强度】（威胁圈内怪数 ÷ 阈值），驱动避怪权重
@@ -6577,7 +6701,8 @@ function playerStats() {
   //   后又"修"成 afxNegFreq / az.ti ⇒ az.ti 被【抵消】⇒ 时序词缀成了死数据。
   //   正确：az.ti 由 actFreq 表达式乘一次，这里只放负面系数。
   const _afxNegFreq = 1 - affixNegPct('A24') / 100;
-  const actFreq = P.ACT_FREQ_BASE * Math.pow(P.ACT_FREQ_REALM, realm()) * (1 + zoneMod.freq) * gfMods().freq * az.ti * _lingbo * _afxNegFreq;   // az.ti = 时序词缀 · _afxNegFreq = A24 滞涩
+  // ★ R61：÷CADENCE ⇒ 出手间隔拉长（每刀伤害在 baseDmg 处 ×CADENCE，DPS 不变）
+  const actFreq = P.ACT_FREQ_BASE * Math.pow(P.ACT_FREQ_REALM, realm()) * (1 + zoneMod.freq) * gfMods().freq * az.ti * _lingbo * _afxNegFreq / P.CADENCE;   // az.ti = 时序词缀 · _afxNegFreq = A24 滞涩
   // AOE = 武器基础 + 清场加成 + 品质
   const qBonus = wIt ? Math.floor(wIt.q / 2) : 0;      // 品质给 +0~+2
   const aoe = P.AOE_BASE - 3 + wDef.aoe + Math.floor(bonus.清场 / 200) + qBonus;
@@ -6955,6 +7080,7 @@ function startRun() {
   // ★★ Round 34：每局摇一次门规遵守率（整局一致 —— 否则 doctrineScore 排序自相矛盾）
   try { ruleRollReset("run"); } catch (e) { }
   G.field = []; G.actAcc = 0; G.spawnAcc = 0; G.overloadT = 0;
+  G.vfxq.length = 0; G.dmgq.length = 0; SFX_Q.length = 0;   // ★ R61：清掉上一局残留的特效/延迟
   G.deathT = null; G.peakField = 0; G.downgraded = 0;
   G.origin = 0;
   G.heroX = 0.5; G.heroY = 0.56; G.wanderT = 0; G.wanderTarget = null;
@@ -6998,7 +7124,8 @@ function step(st, dt) {
   const mdef = P.DEF_ANCHOR;
   const dmul = dmgMul(mdef);
   // ★ 五行相性（玩家主属性 vs 具体怪物的属性，逐只判定）
-  const baseDmg = st.atk * dmul;
+  // ★ R61：每刀伤害 ×CADENCE —— 与出手频率 ÷CADENCE 抵消，**单位时间输出完全不变**
+  const baseDmg = st.atk * dmul * P.CADENCE;
   const myEl = st.wuxing;
 
   // 出怪：★ 从外圈随机方向出生，之后每帧向中央的玩家逼近
@@ -7102,7 +7229,7 @@ function step(st, dt) {
       const ctx = {
         threats: G.threats || 0, hpPct: G.hp / Math.max(1, st.hp),
         eliteAlive: G.field.filter(e => e.kind === 'elite').length,
-        kills: G.kills, swings: GF.swings,
+        kills: G.kills, swings: GF.swingW,   // ★ R61：加权出手数 ⇒ 木灵回春『每 25 次』等效时长不变
       };
       // ⚠️ 原来在这里取快照，导致同刻度多件法宝同时触发会把本源扣成负数
       //    改为每次催动前【实时读 G.origin】
@@ -7169,11 +7296,39 @@ function step(st, dt) {
     // ★ 金钟罩 / 凝神归元：给护盾（护盾吸收伤害，见受击结算）
     if (gfw.shield > 0) { G.shield = Math.max(G.shield || 0, (st.hp || 0) * gfw.shield); G.shieldT = gfw.shieldT; }
     sfx('swing', 1 + Math.min(0.5, aoeN * 0.04));   // ★ R60：出手（打的目标越多越响一点）
+    // ★★ R61：出手的【表现分流】—— 近战出弧光，远程出弹道
+    //
+    //   设计依据（用户："近战武器至少得看出来看到你砍死怪物，远程的话要有弹道"）：
+    //     近战 = 立即命中（无飞行时间）⇒ 手感"贴脸、干脆"
+    //     远程 = 有飞行时间 ⇒ 手感"拉开距离"，且天然把"出手"和"命中"分成两个瞬间，
+    //            玩家的因果链变成「拉弓 → 箭飞 → 怪中箭」，可读性最高
+    //   武器 → 手感映射（纯表现，不影响任何数值）：
+    //     剑/刀/枪 → arc 弧光；弓 → arrow 箭矢；杖 → orb 法球
+    //   弹道飞行时长 = 距离 ÷ VFX.PROJ_SPEED（实测弓 reach 0.23 ⇒ 约 210ms，看得见但不拖）
+    const _wid = st.weapon.id;
+    const _proj = (_wid === 'bow') ? 'arrow' : (_wid === 'staff' ? 'orb' : null);
+    const _hitN = Math.min(aoeN, cand.length);
+    if (_proj) {
+      for (let k = 0; k < _hitN; k++) {
+        const e = cand[k].e;
+        G.vfxq.push({
+          k: 'proj', kind: _proj, x0: G.heroX, y0: G.heroY, x1: e.x, y1: e.y,
+          t0: G.t, delay: Math.hypot(e.x - G.heroX, e.y - G.heroY) / VFX.PROJ_SPEED,
+        });
+      }
+    } else if (_hitN > 0) {
+      // 近战：一次弧光盖住本次所有目标（朝最优先的那个）
+      G.vfxq.push({
+        k: 'arc', x0: G.heroX, y0: G.heroY, x1: cand[0].e.x, y1: cand[0].e.y,
+        t0: G.t, delay: 0, n: _hitN,
+      });
+    }
     for (let k = 0; k < aoeN && k < cand.length; k++) {
       const e = cand[k].e;
       if (Math.random() < st.missRate) {
-        G.fx.push({ x: e.x, y: e.y, txt: 'MISS', cls: 'miss', life: 1 });
-        sfx('miss');                                 // ★ R60
+        pushDmgFx(e.x, e.y, 'MISS', 'miss', null,
+          (_proj ? Math.hypot(e.x - G.heroX, e.y - G.heroY) / VFX.PROJ_SPEED : 0) + k * VFX.STAGGER);
+        sfxDelay('miss', 1, _proj ? 0.06 : 0);       // ★ R60/R61
         continue;
       }
       // ★ 属性同调乘区：基础攻击之后、随机浮动之前
@@ -7193,9 +7348,13 @@ function step(st, dt) {
       const cls = (isCrit && wxKe > 1) ? 'crit ke'
         : isCrit ? 'crit' : (wxKe > 1 ? 'dmg ke' : 'dmg');
       // ★ R60：命中音。暴击单独一个更亮的音（相克再响一点）
-      sfx(isCrit ? 'crit' : 'hit', wxKe > 1 ? 1.25 : 1);
-      G.fx.push({ x: e.x, y: e.y, txt: Math.round(d) + (isCrit ? '!' : ''),
-        cls, wx: wxKe > 1 ? myEl : null, life: 1 });
+      //   ⚠️ R61：远程的命中音也要等弹道飞到 —— 否则「咻」和「咚」同时响，听起来是没飞
+      const _fly = _proj ? (Math.hypot(e.x - G.heroX, e.y - G.heroY) / VFX.PROJ_SPEED) : 0;
+      sfxDelay(isCrit ? 'crit' : 'hit', wxKe > 1 ? 1.25 : 1, _fly);
+      // ★ R61：飘字错开 —— 同一次出手打多个目标时，逐个错开 STAGGER 出现，
+      //   否则 5 个数字同帧糊在一起（实测单刀最多结算 5 个目标）
+      pushDmgFx(e.x, e.y, Math.round(d) + (isCrit ? '!' : ''), cls,
+        wxKe > 1 ? myEl : null, _fly + k * VFX.STAGGER);
     }
     for (let k = G.field.length - 1; k >= 0; k--) {
       if (G.field[k].hp <= 0) {
@@ -7326,6 +7485,7 @@ function step(st, dt) {
   for (let i = G.fx.length - 1; i >= 0; i--) { G.fx[i].life -= dt * 1.8; if (G.fx[i].life <= 0) G.fx.splice(i, 1); }
   if (G.shake > 0) G.shake -= dt;
   if (G.fx.length > 24) G.fx.splice(0, G.fx.length - 24);
+  vfxTick();      // ★ R61：推进表现层（延后的飘字/命中音到点放出来）
 
   // ★★ Round 30 修复（用户报："第一代弟子背包一堆装备，不装身上直接死了"）
   //   ⚠️ 原来 assembleBest() **只在 endRun 里调用** ⇒ 弟子【整局裸奔】！
@@ -7878,8 +8038,10 @@ function render() {
     const _fdDot = _fd ? (WX_COLOR[WUXING[(_fd.id || 0) % WUXING.length]] || '#888') : '#888';
     $('#hud').innerHTML =
       '<div class="hud-disc">' +
-        '<span class="av"><img src="assets/弟子/弟子_' + _fdAv + '.png" ' +
-          'srcset="assets/弟子/弟子_' + _fdAv + '@2x.png 2x" alt="" draggable="false"></span>' +
+        // 🐞 R61 修：这里原来拼的是 `.png` / `@2x.png`，而 assets/弟子/ 里全是 **.webp**
+        //   ⇒ HUD 上的弟子头像一直是浏览器的"破图"占位
+        '<span class="av"><img src="assets/弟子/弟子_' + _fdAv + '.webp" ' +
+          'srcset="assets/弟子/弟子_' + _fdAv + '@2x.webp 2x" alt="" draggable="false"></span>' +
         '<span class="nm">' + (_fd ? _fd.name : '（无人历练）') + '</span>' +
         '<span class="lg" title="' + (_fd ? (_fd.linggenName || '') : '') + '">' +
           '<i style="background:' + _fdDot + '"></i>' + _fdLg + '</span>' +
@@ -8103,9 +8265,25 @@ function render() {
     if (bar) bar.style.width = Math.max(0, e.hp / e.maxHp * 100) + '%';
   }
   // 清理已死/离场的
+  // ★★ R61：不立即删 —— 先打 .dying 让怪【碎裂消散】，VFX.DIE_DUR 之后才真正移除。
+  //   这是"看不出砍死怪物"最关键的一处：原来怪是"凭空消失"的，玩家只看到数量少了。
+  //   注意：行为层完全没改（怪在 field 里已经被删掉了，这里拖的只是 DOM 的存在时间）。
   for (const id of Object.keys(mobs)) {
-    if (!seen.has(id)) { mobs[id].remove ? mobs[id].remove() : arena.removeChild && arena.removeChild(mobs[id]); delete mobs[id]; }
+    if (seen.has(id)) continue;
+    const el = mobs[id];
+    if (!el._dying) {
+      el._dying = Date.now();
+      if (el.classList && el.classList.add) el.classList.add('dying');
+    }
+    if (Date.now() - el._dying >= VFX.DIE_DUR * 1000) {
+      el.remove ? el.remove() : arena.removeChild && arena.removeChild(el);
+      delete mobs[id];
+    }
   }
+
+  // ★★ R61：近战弧光 / 远程弹道
+  //   坐标与怪物同一套（`x*100%`）· 全部走 CSS 动画，不占 JS 主循环
+  vfxRender(arena);
 
   // ★ 飘字
   if (!arena._fx) arena._fx = {};
@@ -8587,11 +8765,26 @@ function render() {
           sn.textContent = pr.name + ' · 换装门槛 ×' + (1 + speechMargin()).toFixed(2);
         }
         // ★ 议事堂 · 打法倾向（R180/R54）
+        //   🐞 R61 修两个问题（用户报"标题写偏攻、高亮的却是均衡"）：
+        //     ① 原来每帧无条件 `bb.innerHTML = hb` ⇒ 战斗中每秒重建 60 次。
+        //        真实鼠标"按下→抬起"只要跨过一次重建，浏览器就把 click 派发到
+        //        【公共祖先 #biasBox】，按钮上的监听器永远收不到 ⇒ 点了没反应 / 看着状态不一致。
+        //        ⇒ 改用 setDedup（内容没变就不碰 DOM），并把监听器改成【容器委托一次】，
+        //          这样即使将来内容变了重建，事件也不会丢。
+        //     ② 标题（#biasNow）与高亮必须来自同一个值 —— 现在共用 curBias。
         const bb = document.getElementById('biasBox');
         const bn = document.getElementById('biasNow');
         const curBias = BIAS[SECT_DOCTRINE.bias] || BIAS.bal;
         if (bn) bn.textContent = curBias.name;
         if (bb) {
+          if (!bb._delegated) {
+            bb._delegated = true;
+            bb.addEventListener('click', function (ev) {
+              const t = ev.target && ev.target.closest ? ev.target.closest('button[data-bias]') : null;
+              if (!t) return;
+              if (setBias(t.getAttribute('data-bias'))) render();
+            });
+          }
           let hb = '<div class="sp-row">';
           for (const k of Object.keys(BIAS)) {
             hb += '<button data-bias="' + k + '" class="' + (SECT_DOCTRINE.bias === k ? 'on' : '') +
@@ -8599,13 +8792,7 @@ function render() {
           }
           hb += '</div><div style="font-size:10px;color:var(--dim2);margin-top:6px;line-height:1.7">' +
             curBias.desc + '</div>';
-          bb.innerHTML = hb;
-          bb.querySelectorAll('button[data-bias]').forEach(function (b) {
-            if (b._bound) return; b._bound = true;
-            b.addEventListener('click', function () {
-              if (setBias(b.getAttribute('data-bias'))) render();
-            });
-          });
+          setDedup(bb, hb);
         }
         // ★ 议事堂 · 派遣历练（R55）：不点具体某人（名字是随机生成的，点了没意义）
         //   ⇒ 给【依据】，由游戏从最新一批新招弟子里挑

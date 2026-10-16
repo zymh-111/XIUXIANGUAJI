@@ -16,7 +16,9 @@ const path = require('path');
 // ---------- 最小 DOM 桩 ----------
 function makeEl() {
   const el = {
-    _html: '', style: {}, dataset: {}, children: [], parentNode: null,
+    // ★ R61：补 setProperty —— CSS 变量（--ang/--fly/--sz）走的是它，桩漏了会 TypeError
+    _html: '', style: { setProperty() {}, getPropertyValue() { return ''; }, removeProperty() {} },
+    dataset: {}, children: [], parentNode: null,
     classList: {
       _s: new Set(),
       add(...c) { c.forEach(x => this._s.add(x)); },
@@ -1292,9 +1294,13 @@ chk("身法·追风步：6 层时出手 ×1.24（兜底已在 0 层基准里）"
 
 // ---- 周期型触发 ----
 A.GF.eq = {}; A.gfEquip("g_zhan"); A.GF.swings = 0;
+// ★ R61：cdN 计的是【加权出手数】（每次出手 +P.CADENCE）⇒ 与出手节拍无关。
+//   30 次出手 = 加权 60 ⇒ 触发于加权 10/20/30/40/50/60 = 6 次（等效时长与旧版一致）。
+const _CAD = A.P.CADENCE;
 let bursts = 0;
 for (let i = 0; i < 30; i++) { if (A.gfOnSwing().burst) bursts++; }
-chk("攻伐·裂空斩：每 10 次出手触发（30 次 ⇒ 3 次）", bursts === 3, bursts + " 次");
+chk("攻伐·裂空斩：每 10【加权】次出手触发（30 次出手 = 加权 60 ⇒ 6 次）",
+  bursts === 30 * _CAD / 10, bursts + " 次");
 A.GF.eq = {}; A.gfEquip("g_zhan"); A.gfEquip("g_lei");   // 同类互斥 ⇒ 只剩 g_lei
 A.GF.swings = 0;
 let nm = null;
@@ -1861,14 +1867,20 @@ chk("保命类用 sec 节拍（受 CDR 影响）",
 
 // ---- 冷却按出手数 ----
 gfSetup(["g_zhan"]);
+// ★ R61：记录释放时的【加权出手数】—— cdN 与节拍解耦，这样断言才测到真意图
+const fireAtW = [];
 const fireAt = [];
-for (let i = 1; i <= 30; i++) { const r = A.gfOnSwing(); if (r.fired) fireAt.push(i); }
-console.log("     裂空斩(每10次) 在第 " + fireAt.join(",") + " 次释放");
-chk("★ 冷却按出手数驱动（第 10/20/30 次）", fireAt.join(",") === "10,20,30", fireAt.join(","));
+for (let i = 1; i <= 30; i++) { const r = A.gfOnSwing(); if (r.fired) { fireAt.push(i); fireAtW.push(Math.round(A.GF.swingW)); } }
+console.log("     裂空斩(cdN=10 加权) 出手# " + fireAt.join(",") + " / 加权 " + fireAtW.join(","));
+// 30 次出手 = 加权 60 ⇒ cdN=10 在加权 10/20/30/40/50/60 各触发一次
+chk("★ 冷却按【加权出手数】驱动（30 次出手 ⇒ 加权 10,20,…,60）",
+  fireAtW.join(",") === "10,20,30,40,50,60", fireAtW.join(","));
 gfSetup(["g_lei"]);
-const fireAt2 = [];
-for (let i = 1; i <= 25; i++) { const r = A.gfOnSwing(); if (r.fired) fireAt2.push(i); }
-chk("天雷引按自身 cdN=12 驱动", fireAt2.join(",") === "12,24", fireAt2.join(","));
+const fireAtW2 = [];
+for (let i = 1; i <= 25; i++) { const r = A.gfOnSwing(); if (r.fired) fireAtW2.push(Math.round(A.GF.swingW)); }
+// 25 次出手 = 加权 50 ⇒ cdN=12 在 12/24/36/48
+chk("天雷引按自身 cdN=12 驱动（加权 12,24,36,48）",
+  fireAtW2.join(",") === "12,24,36,48", fireAtW2.join(","));
 
 // ---- 同刻最多 1 个主动 ----
 gfSetup(["x_qingxin", "h_huichun", "m_juxian"]);
@@ -1907,9 +1919,10 @@ chk("★ 低血时释放", lo30.fired === "x_qingxin", "低血 fired=" + lo30.fi
 // ---- CDR 只作用于 sec ----
 gfSetup(["g_zhan"]);
 G.cdr = 0.40;
-const fireAt3 = [];
-for (let i = 1; i <= 30; i++) { const r = A.gfOnSwing(); if (r.fired) fireAt3.push(i); }
-chk("★ CDR 不影响 swing 节拍", fireAt3.join(",") === "10,20,30", fireAt3.join(","));
+const fireAtW3 = [];
+for (let i = 1; i <= 30; i++) { const r = A.gfOnSwing(); if (r.fired) fireAtW3.push(Math.round(A.GF.swingW)); }
+chk("★ CDR 不影响 swing 节拍（按加权出手数 10,…,60）",
+  fireAtW3.join(",") === "10,20,30,40,50,60", fireAtW3.join(","));
 G.cdr = 0;
 
 // ---- 冷却不被"0 是假值"漏判（回归）----
@@ -1953,8 +1966,9 @@ chk("万剑归宗是纯主动（sec 节拍，长冷却）",
 // ---- 缩地成寸：必暴 + 多打 ----
 gfSetup(["s_suodi"]);
 const suodiFire = [];
-for (let i = 1; i <= 25; i++) { const r = A.gfOnSwing(); if (r.fired) suodiFire.push(i); }
-chk("缩地成寸按 cdN=10 驱动", suodiFire.join(",") === "10,20", suodiFire.join(","));
+for (let i = 1; i <= 25; i++) { const r = A.gfOnSwing(); if (r.fired) suodiFire.push(Math.round(A.GF.swingW)); }
+chk("缩地成寸按 cdN=10 驱动（加权 10,20,30,40,50）",
+  suodiFire.join(",") === "10,20,30,40,50", suodiFire.join(","));
 gfSetup(["s_suodi"]);
 let sres = null;
 for (let i = 1; i <= 10; i++) { const r = A.gfOnSwing(); if (r.fired) sres = r; }
@@ -4107,7 +4121,10 @@ hdr('测试 51：「境」页布局（Round 39 用户报：看不到底部导航
 //         ⇒ 内容算下来 ~796px，溢出 148px
 //         ⇒ 溢出部分把底部 .nav 直接顶出可视区，而不是滚动
 const _idx = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
-const _jing = _idx.slice(_idx.indexOf('data-v="jing"'), _idx.indexOf('data-v="zhuang"'));
+// ⚠️ R61 修：原结束锚点是 'data-v="zhuang"' —— 装页在 Round 40 就删了，
+//   indexOf 恒为 -1 ⇒ slice(x, -1) 靠"恰好切掉最后 1 个字符"侥幸没崩。
+//   换成真实存在的下一页标记。
+const _jing = _idx.slice(_idx.indexOf('data-v="jing"'), _idx.indexOf('data-v="zong"'));
 chk('★ 「境」页有 .scroll 包裹（导航才不会被顶出去）', /class="scroll"/.test(_jing));
 chk('★ .scroll 在主体内容之前（qiWrap/hud/btns 都在里面）', (function () {
   // ⚠️ Round 40：btnDisciple 已删除（境页不再放弟子名册）⇒ 换锚点
@@ -4124,7 +4141,10 @@ chk('★ 底部导航键位齐全', (function () {
   // ⚠️ 必须截到 【本页 nav 的闭合 </div>】为止 ——
   //    否则 nav 片段会越过页边界，把下一页的 nav 也抓进来（曾得到 4 个）
   let nav = _jing.slice(_jing.indexOf('class="nav"'));
-  nav = nav.slice(0, nav.indexOf('</div>\n  </div>') + 6);
+  // ⚠️ R61 修：原来按字面 '\n' 换行切 —— 文件换行符一变（LF↔CRLF）就失配，
+  //   slice(0, -1+6) 把 nav 截成 5 个字符 ⇒ 取到空数组。改成切到下一个页面注释。
+  const _navCut = nav.indexOf('<!--');
+  nav = nav.slice(0, _navCut > 0 ? _navCut : nav.length);
   _navGot = [...nav.matchAll(/data-go="([a-z]+)"/g)].map(m => m[1]);
   return _navGot.length === 2 && _navGot.indexOf('jing') >= 0 && _navGot.indexOf('zong') >= 0;
 })(), 'nav = [' + (_navGot || []).join(',') + ']');
@@ -4460,6 +4480,59 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
   // ⑦ 素材量对得上（转码管线没漏文件）
   chk('★ 音效·素材齐（113 个 mp3）', files.filter(f => f.endsWith('.mp3')).length === 113,
     files.filter(f => f.endsWith('.mp3')).length + ' 个 mp3');
+})();
+
+// ============================================================================
+// ★ R61：出手节拍（P.CADENCE）与战斗表现层
+//   这一改动的风险点是"数值被悄悄改掉"（节拍拉长 ⇒ DPS 变），
+//   以及"表现层接了一半"（弧光/弹道/消散 只写了一半，跑起来没效果）。
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J61 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const H61 = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+
+  chk('★ 节拍·CADENCE 存在且 >=1', typeof A.P.CADENCE === 'number' && A.P.CADENCE >= 1,
+    'CADENCE = ' + A.P.CADENCE);
+
+  // ① 加权出手计数：swingW 必须正好是 swings × CADENCE（阈值换算的基石）
+  A.GF.swings = 0; A.GF.swingW = 0;
+  for (let i = 0; i < 7; i++) A.gfOnSwing();
+  chk('★ 节拍·加权出手数 swingW = swings × CADENCE',
+    A.GF.swingW === A.GF.swings * A.P.CADENCE,
+    A.GF.swings + ' 次出手 ⇒ swingW ' + A.GF.swingW);
+
+  // ② 出手频率确实被 CADENCE 除过（否则节拍没生效）
+  const st61 = A.playerStats();
+  const raw61 = A.P.ACT_FREQ_BASE * Math.pow(A.P.ACT_FREQ_REALM, A.realm());
+  chk('★ 节拍·出手频率已按 CADENCE 拉长（间隔 ≥250ms）',
+    st61.actFreq < raw61 && (1000 / st61.actFreq) >= 250,
+    'actFreq ' + st61.actFreq.toFixed(2) + '/s ⇒ 间隔 ' + (1000 / st61.actFreq).toFixed(0) + 'ms');
+
+  // ③ 远程/近战分流：近战出弧光、弓出箭、杖出法球
+  chk('★ 表现·武器分流（近战→弧光 / 弓→箭 / 杖→法球）',
+    /_wid === 'bow'\) \? 'arrow'/.test(J61) && /_wid === 'staff' \? 'orb'/.test(J61) &&
+    /G\.vfxq\.push\(\{\s*\n?\s*k: 'arc'/.test(J61));
+
+  // ④ 远程的"命中时刻"必须可延迟（否则弹道和命中同时发生，等于没飞）
+  chk('★ 表现·伤害飘字与命中音都可延迟',
+    /function pushDmgFx/.test(J61) && /function sfxDelay/.test(J61) &&
+    /pushDmgFx\(e\.x, e\.y/.test(J61) && /sfxDelay\(isCrit/.test(J61));
+
+  // ⑤ 表现层必须在 tick 里被推进、在 render 里被渲染
+  chk('★ 表现·vfxTick 在 tick 里 / vfxRender 在 render 里',
+    /vfxTick\(\);\s*\/\/ ★ R61/.test(J61) && /vfxRender\(arena\);/.test(J61));
+
+  // ⑥ 死亡消散：怪不能再"凭空消失"（那是用户报的核心观感问题）
+  chk('★ 表现·怪物死亡有消散（.dying + 延后移除）',
+    /classList\.add\('dying'\)/.test(J61) && /VFX\.DIE_DUR \* 1000/.test(J61) &&
+    /\.mob\.dying\{/.test(H61) && /@keyframes mobDie/.test(H61));
+
+  // ⑦ CSS 特效三件套齐（少一个就是"写了 JS 但看不见"）
+  chk('★ 表现·CSS 特效齐全（弧光/箭/法球）',
+    /\.vfx-arc\{/.test(H61) && /@keyframes vfxArc/.test(H61) &&
+    /\.vfx-arrow\{/.test(H61) && /\.vfx-orb\{/.test(H61));
 })();
 
 console.log('\n' + '='.repeat(84));

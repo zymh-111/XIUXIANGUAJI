@@ -164,6 +164,14 @@
   #hero{position:absolute;left:50%;top:56%;width:72px;height:72px;
     transform:translate(-50%,-50%);z-index:5;pointer-events:none;
     transition:left .18s linear, top .18s linear}
+  /* ★★ R61：接地阴影 —— 用户报"人不在场景内"，主因就是【脚下没有任何接触点】。
+     注意：img 上原有的 drop-shadow 是"贴着人物轮廓的投影"，那是【浮】的证据不是落地的证据；
+     真正让人"踩在地上"的是一块被压扁的椭圆软阴影（和角色的呼吸/攻击动画解耦，不跟着动）。 */
+  #hero::before{content:'';position:absolute;left:50%;bottom:4px;
+    width:78%;height:15px;transform:translateX(-50%);
+    background:radial-gradient(ellipse at 50% 50%,
+      #000000a8 0%, #00000066 42%, #00000022 66%, #00000000 78%);
+    z-index:-1;pointer-events:none}
   #hero img{width:100%;height:100%;display:block;
     /* ★ 与名册头像同一套风格对齐（提亮 + 轻暖化） */
     filter:brightness(1.25) sepia(.10) brightness(1.05)
@@ -229,6 +237,54 @@
   .mob.elite.nosprite{border-radius:5px;border:1px solid #ffc84a;
     background:radial-gradient(circle at 35% 32%,#ffdf90,#c9871b)}
   .mob.hit{filter:brightness(2.6)}
+
+  /* ============ 战斗特效（Round 61）============
+     问题：出手 4.68 次/秒 + 一次结算最多 11 个目标 ⇒ 过程压成 1 帧，
+     玩家只看到怪"凭空少了几只"。这里让「打 → 命中 → 死」摊开成可见的时间轴。
+     全部走 CSS 动画，不进 JS 主循环；坐标与怪物同一套（x*100%）。 */
+  .vfx{position:absolute;pointer-events:none;z-index:6}
+
+  /* 近战弧光：朝目标张开的月牙（不是实心扇形 —— 那看着像手电筒不像刀光）
+     做法：conic-gradient 切出角度范围 + radial-gradient 遮罩只留一圈 ⇒ 细月牙 */
+  .vfx-arc{width:var(--sz,26%);aspect-ratio:1;margin:-0.5px 0 0 -0.5px;
+    transform-origin:0 50%;
+    background:conic-gradient(from -30deg,
+      rgba(255,255,255,0) 0deg, rgba(255,255,255,.35) 14deg,
+      rgba(226,242,255,.92) 30deg, rgba(255,255,255,.30) 46deg,
+      rgba(255,255,255,0) 62deg);
+    /* ⚠️ 内半径太小 ⇒ 变成实心楔子（像手电筒）；太大 ⇒ 细到看不见。
+       实测 54→82% 这档：能看清是"一道月牙"、又不至于糊。 */
+    -webkit-mask:radial-gradient(circle at 0 50%,
+      transparent 0 52%, #000 66%, #000 80%, transparent 88%);
+    mask:radial-gradient(circle at 0 50%,
+      transparent 0 52%, #000 66%, #000 80%, transparent 88%);
+    filter:blur(0.5px);
+    animation:vfxArc .2s ease-out forwards}
+  @keyframes vfxArc{
+    0%  {opacity:0;  transform:rotate(var(--ang)) scale(.55)}
+    22% {opacity:1}
+    100%{opacity:0;  transform:rotate(var(--ang)) scale(1.18)}
+  }
+
+  /* 远程弹道：箭 = 细长光刺；法球 = 发光圆点拖尾 */
+  .vfx-proj{margin:0;transform-origin:50% 50%;z-index:7}
+  .vfx-arrow{width:16px;height:2px;margin:-1px 0 0 -8px;border-radius:1px;
+    transform-origin:50% 50%;
+    background:linear-gradient(90deg,rgba(255,240,200,0),#fff6d8 62%,#ffffff);
+    box-shadow:0 0 5px #ffe9a8cc}
+  .vfx-orb{width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;
+    background:radial-gradient(circle at 40% 35%,#ffffff,#9fd8ff 45%,#3f86d8);
+    box-shadow:0 0 8px #7ec4ffcc,0 0 16px #3f86d855}
+
+  /* 死亡消散：怪不再"凭空消失"，而是被打碎、淡出、缩下去 */
+  .mob.dying{animation:mobDie .26s ease-out forwards;z-index:2}
+  @keyframes mobDie{
+    0%  {opacity:1;filter:brightness(2.6)}
+    28% {opacity:1;transform:translate(-50%,-50%) scale(1.16);
+         filter:brightness(3) saturate(.5)}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(.5) rotate(10deg);
+         filter:brightness(1.5) saturate(.2)}
+  }
   .mob .hpbar{position:absolute;left:50%;top:-6px;transform:translateX(-50%);
     width:90%;height:2px;background:#00000090;overflow:hidden}
   .mob .hpbar i{display:block;height:100%;width:100%;background:#ffffffcc}
