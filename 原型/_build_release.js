@@ -29,7 +29,31 @@ const stamp = Math.floor(srcMtime.getTime() / 1000);
 console.log('=== 打包 秘境录 ' + ver + ' ===');
 
 // 清空并重建
-fs.rmSync(PKG, { recursive: true, force: true });
+//
+// ⚠️ R73：这一步**失败过，而且失败得很危险**——`rmSync` 有可能挂在半路
+//   （本机就见过一次：删除被一个"移入回收站"的垫片接管，`ETIMEDOUT` 直接抛错）。
+//   结果是【发布目录被删掉一半、脚本当场退出】⇒ 目录里只剩 assets，
+//   index.html / _game.js / 启动器全没了。**如果没注意就把它发出去，就是个坏包。**
+//   ⇒ 两道保险：① 删除失败不再直接抛，改成逐项删；② 最后断言关键文件真的在。
+function wipeDir(p) {
+  try {
+    fs.rmSync(p, { recursive: true, force: true });
+    return true;
+  } catch (e) {
+    console.log('  ⚠️ 整目录删除失败（' + e.message + '）⇒ 改成逐项删');
+    try {
+      for (const f of fs.readdirSync(p)) {
+        try { fs.rmSync(p + '/' + f, { recursive: true, force: true }); }
+        catch (e2) { console.log('  ⚠️ 删不掉：' + f + '（' + e2.message + '）'); }
+      }
+      return true;
+    } catch (e2) {
+      console.log('  ❌ 清空失败：' + e2.message);
+      return false;
+    }
+  }
+}
+if (!wipeDir(PKG)) process.exit(1);
 mk(PKG);
 mk(PKG + '/assets');
 
@@ -49,12 +73,15 @@ fs.writeFileSync(PKG + '/index.html', h, 'utf8');
 // ---- ② _game.js ----
 copy(SRC + '/_game.js', PKG + '/_game.js');
 
-// ---- ②之二 本地启动器（R69）----
+// ---- ②之二 本地启动器（R69 / R73）----
 //   用户："存档不要存在浏览器上面"。而双击 index.html（file://）下浏览器
 //   【禁止静默写文件】，必须有个能写盘的通道 ⇒ 启动器起本地服务 + 无边框窗口。
 //   ⚠️ 加了新文件就要加进这里，不然发布包里没有（漏一次就是"启动.bat 点了没反应"）
-for (const _lf of ['启动.bat', '_launcher.py']) {
+//   R73：加了 `_shell.py`（桌面窗口壳：真无边框 + 老板键 + 置顶）。
+//        它 import `_launcher` 复用本地服务 ⇒ 两个都要在。
+for (const _lf of ['启动.bat', '_launcher.py', '_shell.py']) {
   if (fs.existsSync(SRC + '/' + _lf)) { copy(SRC + '/' + _lf, PKG + '/' + _lf); console.log('  ✅ 启动器已打包：' + _lf); }
+  else console.log('  ⚠️ 缺文件（发布包里不会有）：' + _lf);
 }
 
 // ---- ③ 背景图（拷进来，因为它是画面的一部分）----
@@ -121,3 +148,20 @@ for (const f of files) {
 }
 const missing = imgs.filter(u => !fs.existsSync(PKG + '/' + u.split('?')[0]));
 console.log('  ' + (missing.length ? '❌ 缺失资源：' + missing.join(', ') : '✅ 引用资源齐全 (' + imgs.length + ' 个)'));
+
+// ============================================================
+// ★ R73：最后一道保险 —— 关键文件必须真的在，否则以【非 0 退出码】报错。
+//   为什么加：清空步骤可能半途失败（见上方 wipeDir 的说明），而上面那些检查
+//   只打印"缺资源"却照样 exit 0 ⇒ **一个坏包看起来像"打包成功"**。
+//   实际踩过一次：发布目录只剩 assets/，index.html 和启动器全没了。
+// ============================================================
+const MUST = ['index.html', '_game.js', '启动.bat', '_launcher.py', '_shell.py'];
+const absent = MUST.filter(f => !fs.existsSync(PKG + '/' + f));
+if (absent.length || bad.length || missing.length) {
+  console.log('');
+  console.log('  ❌ 发布包不完整 —— 不要发出去！');
+  if (absent.length) console.log('     缺关键文件：' + absent.join('、'));
+  process.exit(1);
+}
+console.log('');
+console.log('  ✅ 发布包完整：' + files.length + ' 个文件 · ' + Math.round(total / 1024) + ' KB');

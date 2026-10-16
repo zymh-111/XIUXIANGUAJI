@@ -1,0 +1,21 @@
+# Git 换行符规则
+#
+# ⚠️ 为什么必须有这个文件（R73 查出）：
+#   本仓库的 `core.autocrlf = input` —— 它会在**提交时**把 CRLF 规范成 LF，
+#   但**检出时不还原**。于是 `原型/游戏/启动.bat` 在库里存的是 LF，
+#   任何人 clone 下来拿到的都是 LF 批处理。
+#
+#   而项目的纪律里明确写着：**`启动.bat` 必须是 CRLF** ——
+#   LF 的批处理在 Windows 上会出怪问题（标签跳转错位、`if` 块解析异常等）。
+#   ⇒ 用 .gitattributes 把批处理钉死成 CRLF，不受 core.autocrlf 影响。
+#
+# 只做必要的两件事，其余交给 core.autocrlf：
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# 二进制素材：别让 git 去猜、也别做换行转换（换了就损坏）
+*.webp binary
+*.png  binary
+*.jpg  binary
+*.mp3  binary
+*.exe  binary

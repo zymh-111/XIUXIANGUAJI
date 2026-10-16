@@ -27,6 +27,9 @@ import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+# ⚠️ 打包成 exe 后 `__file__` 是临时解包目录 ⇒ 改认 exe 自己所在的位置（游戏文件在它旁边）
+if getattr(sys, 'frozen', False):
+    ROOT = os.path.dirname(os.path.abspath(sys.executable))
 SAVE = os.path.join(ROOT, '存档.json')
 BACKUP = os.path.join(ROOT, '存档.bak.json')
 

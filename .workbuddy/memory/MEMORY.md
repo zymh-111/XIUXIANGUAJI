@@ -101,6 +101,33 @@
 - 美术：ComfyUI（云端）/ LiblibAI / 元宝（免费，推荐）；`美术资源/` 已收 8600+ 素材
 - 发布：v3（发给朋友，1.6MB）· v4 完整版（含字体，37MB）
 
+## 桌面窗口壳 / 打包（R73 收口，改启动方式前必看）
+- **`_shell.py` = 桌面窗口壳**（pywebview / WebView2）：`frameless=True` **真无边框** +
+  老板键 `Ctrl+Alt+H`（`ShowWindow SW_HIDE`，连任务栏一起消失）+ 置顶 `Ctrl+Alt+P` + 退出 `Ctrl+Alt+Q`
+  · 拖动走 `WM_NCLBUTTONDOWN + HTCAPTION`（让系统跑移动窗口的模态循环）
+  · 缺 pywebview ⇒ **自动退回** `_launcher.py` 的 Edge `--app` 窗口
+  · 自检：`python _shell.py --selftest`（进程内验无边框/注入/隐藏/是否还在打）
+- **`启动.bat` 默认走窗口壳**；`原型/打包exe.bat` = 一键打 exe
+- **单文件 exe 已跑通**：`秘境录.exe` **12.6 MB**，**不需 Python / 浏览器**（发布包里）
+  ⚠️ 打包后 `__file__` 是 `_MEIPASS`（临时解包目录）⇒ `ROOT` 必须改认 `sys.executable`
+- ⚠️⚠️ **`easy_drag=True` 会吃掉页面所有点击**（它插的是全局 `mousedown` 监听）⇒ 必须关掉
+- ⚠️ **ctypes 调 `SetWindowPos` 必须声明 `argtypes`**：`HWND_TOPMOST = -1` 不声明会按 32 位传
+  ⇒ 无效句柄、**静默失败**（实测返回 0）
+- ⚠️ **`ShowWindow(SW_HIDE)` 不改变 `document.visibilityState`**（实测仍 `visible`）
+  ⇒ 隐藏**不触发**"离开结算"；但**隐藏期间照样全速跑**（实测 6 秒 +12 击杀）⇒ 对摸鱼是好事
+- ⚠️ **全局热键先到先得**：`RegisterHotKey` 返回 0 就是被占了（本机 `Ctrl+Alt+T` 被占）
+  ⇒ 配一串候选键，并回报真正生效的那个
+- ⚠️⚠️ **`.gitattributes` 必须有**：`core.autocrlf=input` 会把 `启动.bat` 在库里存成 **LF**，
+  而 LF 批处理在 Windows 上会出怪问题 ⇒ 用 `*.bat text eol=crlf` 钉死
+
+## ⚠️ 构建 / 打包的坑（会静默产出坏包）
+- ⚠️ **`node 原型/_build_release.js | head -N` 会把打包脚本杀在半路**：
+  `head` 提前关管道 ⇒ **SIGPIPE** ⇒ 脚本死在"拷完 assets、还没写 index.html"的时候
+  ⇒ **发布目录只剩 assets/**。**打包脚本不要接 `head`**（要截断就 `> 日志` 再读）
+- ⚠️ 清空发布目录那步本身也可能失败（删除被"移入回收站"的垫片接管 ⇒ ETIMEDOUT）
+  ⇒ R73 已加固：删失败改逐项删 + **结尾断言关键文件都在，否则非 0 退出**
+  （原来只打印"缺资源"却仍 exit 0 ⇒ **坏包看起来像"打包成功"**）
+
 ## 战斗表现层（R61 收口，改战斗观感前必看）
 - **节拍**：`P.CADENCE = 2` —— 出手间隔 ×2 且【每刀伤害 ×2】⇒ **DPS 与一局收益不变**。
   ⚠️ 按【出手次数】计的机制一律用 **`GF.swingW`（加权出手数，每次 +CADENCE）**，别用 `GF.swings`：
