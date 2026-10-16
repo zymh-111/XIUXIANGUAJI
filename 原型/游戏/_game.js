@@ -2409,7 +2409,50 @@ const VFX = {
   STAGGER: 0.055,      // 同一次出手多目标时，飘字逐个错开的间隔（秒）
   ARC_DUR: 0.20,       // 近战弧光持续
   DIE_DUR: 0.26,       // 死亡消散持续（怪物从场上消失后，DOM 还留这么久做碎裂）
+  SKILL_DUR: 0.62,     // 法宝/功法特效持续
+  // ---- 顿帧（hitstop）----
+  //   ⚠️ 只冻【表现层】，绝不冻数值：冻游戏时钟会改 DPS 与一局时长 ⇒ 破坏配平。
+  //   实现：G.freezeUntil 是一段【真实时间】，期间 render() 不写 mob 坐标（位置不跳变）、
+  //        并给 #battleWrap 挂 .freeze 暂停关键帧动画。
+  HIT_CRIT: 55,        // 暴击
+  HIT_ELITE: 90,       // 精英击杀
+  HIT_SKILL: 110,      // 法宝催动 / 功法主动技
+  HIT_BIG: 150,        // Boss 现身 / Boss 倒地 / 突破（一局没几次，要"砸"出来）
 };
+
+// 法宝/功法的特效原型：不给 6 件法宝各画一套（又慢又乱），
+// 而是【三类原型 × 五行色】。玩家靠"色 + 形状 + 名字横幅"识别发生了什么。
+const SKILL_ARCH = {
+  rays:  { cls: 'vfx-rays',  big: false },   // 放射光线：攻击型
+  ring:  { cls: 'vfx-ring',  big: false },   // 扩散圆环：护体 / 治疗 / 回气
+  flash: { cls: 'vfx-flash', big: true },    // 全屏闪 + 大环：底牌级
+};
+// 法宝 id → 特效原型
+const FABAO_ARCH = {
+  f_zhuxian: 'rays',   // 诛仙剑阵：全场 ×4，攻击型
+  f_huoyu:   'rays',   // 焚天火狱：全场 ×3.5
+  f_binghen: 'rays',   // 寒冰封界：全场 ×2
+  f_jinwu:   'flash',  // 金乌焚世：全场 ×6 ⇒ 底牌，给最大的
+  f_huguo:   'ring',   // 玄龟护国：回血 45% ⇒ 护罩
+  f_muhun:   'ring',   // 木灵回春：回血 + 灵气
+};
+
+/** 法宝/功法特效 + 名字横幅。数值层不管它，这里只负责"让玩家看见发生了什么"。 */
+function skillVfx(name, wx, arch, opts) {
+  if (!G.vfxq) return;
+  const a = SKILL_ARCH[arch] ? arch : 'ring';
+  G.vfxq.push({
+    k: 'skill', arch: a, name: name, wx: wx || null,
+    x0: G.heroX, y0: G.heroY, t0: G.t, delay: 0,
+    big: !!(SKILL_ARCH[a].big || (opts && opts.big)),
+  });
+}
+/** 顿帧：只冻表现（不改数值）。见 VFX.HIT_* 的说明。 */
+function hitstop(ms) {
+  if (!ms) return;
+  const until = Date.now() + ms;
+  if (until > (G.freezeUntil || 0)) G.freezeUntil = until;
+}
 
 const SFX_Q = [];
 /** 音效延后播（远程命中音用）。用游戏时钟 G.t 计时，与暂停/快进天然一致。 */
@@ -2439,7 +2482,8 @@ function vfxTick() {
   // ③ 特效事件按各自寿命回收（弧光 ARC_DUR；弹道 = 飞行时间 + 命中闪光 0.25s）
   for (let i = G.vfxq.length - 1; i >= 0; i--) {
     const v = G.vfxq[i];
-    const life = (v.k === 'arc' ? VFX.ARC_DUR : v.delay + 0.25);
+    const life = v.k === 'arc' ? VFX.ARC_DUR
+      : (v.k === 'skill' ? VFX.SKILL_DUR : v.delay + 0.25);
     if (G.t - v.t0 > life + 0.05) G.vfxq.splice(i, 1);
   }
 }
@@ -2458,8 +2502,27 @@ function vfxRender(arena) {
     let el = box[v._id];
     if (el) continue;                         // 已建过 ⇒ 交给 CSS 自己跑
     el = document.createElement('div');
-    el.className = 'vfx ' + (v.k === 'arc' ? 'vfx-arc' : 'vfx-proj vfx-' + v.kind);
     const ang = Math.atan2(v.y1 - v.y0, v.x1 - v.x0);
+    // ★ R62：法宝 / 功法 / 突破的特效（三类原型 × 五行色）—— 带一个名字横幅
+    if (v.k === 'skill') {
+      const c = WX_COLOR[v.wx] || '#c9a227';
+      el.className = 'vfx vfx-skill ' + (SKILL_ARCH[v.arch] || SKILL_ARCH.ring).cls +
+        (v.big ? ' big' : '');
+      el.style.setProperty('--wx', c);
+      el.style.left = (v.x0 * 100) + '%';
+      el.style.top = (v.y0 * 100) + '%';
+      if (v.name) {
+        const nb = document.createElement('span');
+        nb.className = 'vfx-name';
+        nb.textContent = v.name;
+        nb.style.setProperty('--wx', c);
+        el.appendChild(nb);
+      }
+      arena.appendChild(el);
+      box[v._id] = el;
+      continue;
+    }
+    el.className = 'vfx ' + (v.k === 'arc' ? 'vfx-arc' : 'vfx-proj vfx-' + v.kind);
     el.style.left = (v.x0 * 100) + '%';
     el.style.top = (v.y0 * 100) + '%';
     el.style.setProperty('--ang', ang + 'rad');
@@ -5315,7 +5378,7 @@ function gfOnSwing() {
   if (GF.lingboT > 0) GF.lingboT -= P.CADENCE;
   // ★ 缩地成寸：必暴窗口递减（本次出手消耗 1 次）
   if (GF.critWindow > 0) GF.critWindow--;
-  const out = { burst: null, qi: 0, heal: 0, extraTargets: 0, fired: null,
+  const out = { burst: null, qi: 0, heal: 0, extraTargets: 0, fired: null, firedName: null,
     guarCrit: 0, shield: 0, shieldT: 0, shieldCut: 0 };
   const st = G._lastSt || {};
   const threats = G.threats || 0;
@@ -5355,6 +5418,8 @@ function gfOnSwing() {
     // ★ 缩地成寸：必暴窗口立即生效（写在触发处，不是 step 里）
     if (out.guarCrit > 0) GF.critWindow = out.guarCrit;
     out.fired = id;
+    // ★ R62：特效需要名字（不只是 id）—— 释放时给玩家看的是"裂空斩"不是"g_zhan"
+    try { out.firedName = (GF_BY_ID[id] || {}).name || id; } catch (e) { out.firedName = id; }
     break;   // ★ 同一刻度最多 1 个主动技能
   }
   return out;
@@ -7055,6 +7120,9 @@ G.tier++;
         ' · 小怪同步变强 ×' + P.DIFF_MOBHP_RATE.toFixed(2) + '）', 'break');
       G.fx.push({ x: G.heroX, y: G.heroY - 0.08, txt: '突破！', cls: 'break', life: 1 });
       sfx('break');                        // ★ R60：境界台阶 —— 这是玩家最想听到的声音
+      // ★ R62：突破是"变强时刻"，给最大的定格 + 全屏金环
+      hitstop(VFX.HIT_BIG);
+      skillVfx('突破 · ' + P.REALMS[after], '金', 'flash', { big: true });
       breakoutFlash = 1.2;
     } else {
       log('修为精进：' + P.REALMS[after] + ' 第 ' + (G.tier % P.REALM_PER_TIER + 1) +
@@ -7156,6 +7224,7 @@ function step(st, dt) {
       G.bossIntro = 1.2;                 // 出场演出倒计时（秒）
       try { log('★ 【Boss 现身】' + (rollBossKind().name || '') + ' —— 小怪尽散', 'break'); } catch (e) { }
       sfx('boss_spawn');                            // ★ R60：全场最响的一个音
+      hitstop(VFX.HIT_BIG);                         // ★ R62：Boss 现身定格
       ev('boss_spawn', 10, {});
     }
     // ★ 敌人分类（Round 14/15）：五行 × 形态；精英也有五行（用户要求）
@@ -7261,6 +7330,9 @@ function step(st, dt) {
         }
         ev('fabao', 6, { name: f.name });
         G.fx.push({ x: G.heroX, y: G.heroY - 0.16, txt: '✦ ' + f.name, cls: 'crit', life: 1 });
+        // ★ R62：法宝特效（三类原型 × 五行色）+ 名字横幅 + 顿帧
+        skillVfx(f.name, f.wx, FABAO_ARCH[f.id] || 'rays');
+        hitstop(VFX.HIT_SKILL);
         log('✦ 法宝催动：' + f.name + '（耗本源 ' + f.cost + '）', 'break');
       }
     }
@@ -7269,11 +7341,13 @@ function step(st, dt) {
     const gfw = gfOnSwing();
     // 心法/秘术的立即效果
     if (gfw.heal > 0 && G.hp > 0) {
+      skillVfx(gfw.firedName || '回春', st.wuxing, 'ring');   // ★ R62
       const stH = playerStats();
       G.hp = Math.min(stH.hp, G.hp + stH.hp * gfw.heal);
       G.fx.push({ x: G.heroX, y: G.heroY - 0.06, txt: '回春', cls: 'dodge', life: 1 });
     }
     if (gfw.qi > 0) {
+      skillVfx(gfw.firedName || '吐纳', st.wuxing, 'ring');   // ★ R62
       gainQi(gfw.qi);
       G.fx.push({ x: G.heroX, y: G.heroY - 0.04, txt: '+' + gfw.qi + ' 灵气', cls: 'dodge', life: 1 });
     }
@@ -7290,11 +7364,16 @@ function step(st, dt) {
     if (gfw.burst) {
       aoeN = st.aoe + gfw.burst.extra;
       dmgMul2 = gfw.burst.mul;
+      skillVfx(gfw.burst.name, st.wuxing, 'rays');   // ★ R62：攻伐/秘术释放型
+      hitstop(VFX.HIT_SKILL);
       G.fx.push({ x: G.heroX, y: G.heroY - 0.12, txt: gfw.burst.name, cls: 'crit', life: 1 });
     }
     aoeN += gfw.extraTargets;
     // ★ 金钟罩 / 凝神归元：给护盾（护盾吸收伤害，见受击结算）
-    if (gfw.shield > 0) { G.shield = Math.max(G.shield || 0, (st.hp || 0) * gfw.shield); G.shieldT = gfw.shieldT; }
+    if (gfw.shield > 0) {
+      G.shield = Math.max(G.shield || 0, (st.hp || 0) * gfw.shield); G.shieldT = gfw.shieldT;
+      skillVfx('护体', st.wuxing, 'ring');   // ★ R62：金钟罩 / 凝神归元
+    }
     sfx('swing', 1 + Math.min(0.5, aoeN * 0.04));   // ★ R60：出手（打的目标越多越响一点）
     // ★★ R61：出手的【表现分流】—— 近战出弧光，远程出弹道
     //
@@ -7351,6 +7430,7 @@ function step(st, dt) {
       //   ⚠️ R61：远程的命中音也要等弹道飞到 —— 否则「咻」和「咚」同时响，听起来是没飞
       const _fly = _proj ? (Math.hypot(e.x - G.heroX, e.y - G.heroY) / VFX.PROJ_SPEED) : 0;
       sfxDelay(isCrit ? 'crit' : 'hit', wxKe > 1 ? 1.25 : 1, _fly);
+      if (isCrit) hitstop(VFX.HIT_CRIT);   // ★ R62：暴击顿帧（远程要等弹道飞到才顿）
       // ★ R61：飘字错开 —— 同一次出手打多个目标时，逐个错开 STAGGER 出现，
       //   否则 5 个数字同帧糊在一起（实测单刀最多结算 5 个目标）
       pushDmgFx(e.x, e.y, Math.round(d) + (isCrit ? '!' : ''), cls,
@@ -7362,8 +7442,10 @@ function step(st, dt) {
           G.elites++;
           G.fx.push({ x: G.field[k].x, y: G.field[k].y, txt: '精英击杀', cls: 'crit', life: 1 });
           sfx('kill_elite');                        // ★ R60：精英死亡，值得听见
+          hitstop(VFX.HIT_ELITE);                   // ★ R62
         } else if (G.field[k].kind === 'boss') {
           sfx('kill_boss');                         // ★ R60：Boss 倒下
+          hitstop(VFX.HIT_BIG);                     // ★ R62：一局只有一次，砸出来
         } else {
           // ★ R60：小怪死亡音按【形态】分组（重装/迅捷/标准/磨/秒）——
           //   全库 54 个敌人音，按形态分才既有变化又不杂乱
@@ -8199,6 +8281,14 @@ function render() {
   const rrM = $('#reachRing');
   if (rrM) { rrM.style.left = (G.heroX * 100) + '%'; rrM.style.top = (G.heroY * 100) + '%'; }
 
+  // ★★ R62：顿帧（hitstop）—— 只冻【表现】，数值照旧跑
+  //   冻游戏时钟会改 DPS 与一局时长 ⇒ 破坏配平，所以 G.freezeUntil 是一段真实时间。
+  //   冻结期间：① 不写 mob 的 left/top（位置不跳变）② #battleWrap 挂 .freeze 暂停关键帧动画
+  const _frozen = Date.now() < (G.freezeUntil || 0);
+  {
+    const wrap = document.getElementById('battleWrap');
+    if (wrap && wrap.classList) wrap.classList.toggle('freeze', _frozen);
+  }
   // ★ 敌人：复用 DOM 元素（这样 CSS transition 才能做出"移动"效果）
   const arena = $('#arena');
   if (!arena._mobs) arena._mobs = {};
@@ -8222,8 +8312,10 @@ function render() {
       arena.appendChild(el);
       mobs[e._id] = el;
     }
-    el.style.left = (e.x * 100) + '%';
-    el.style.top = (e.y * 100) + '%';
+    if (!_frozen) {                       // ★ R62：顿帧期间不写坐标 ⇒ 位置停住、解冻后不跳变
+      el.style.left = (e.x * 100) + '%';
+      el.style.top = (e.y * 100) + '%';
+    }
     el.style.opacity = 0.5 + 0.5 * Math.max(0, e.hp / e.maxHp);
     el.classList.toggle('hit', e.hit > 0);
     // ★ 妖怪贴图（Round 38）：有图的用图，没图的（域外天魔）退回五行色块
@@ -8283,7 +8375,8 @@ function render() {
 
   // ★★ R61：近战弧光 / 远程弹道
   //   坐标与怪物同一套（`x*100%`）· 全部走 CSS 动画，不占 JS 主循环
-  vfxRender(arena);
+  // ★ R62：顿帧期间不渲染新特效（否则"生出来就冻住"，解冻才动，看着像卡帧）
+  if (!_frozen) vfxRender(arena);
 
   // ★ 飘字
   if (!arena._fx) arena._fx = {};
@@ -9845,4 +9938,6 @@ globalThis.__api = {
   FAC_ICON, ICO_DIR, WEAPON_ICON, ico, TRAIT_RAR, TRAITS, TRAIT_BY_ID, rollTraits,
   // ★ R60：音效（供 _smoke.js 校验「映射不漏 + 文件在盘上 + 默认关闭 + 节流生效」）
   SFX, SFX_FILES, SFX_CFG, SFX_FORM, SFX_CORE, SFX_STORE_KEY, sfx, sfxSet, sfxOn, sfxWarm,
+  // ★ R62：战斗表现层（特效原型 / 顿帧），供 _smoke.js 校验"没漏配、没冻数值"
+  VFX, SKILL_ARCH, FABAO_ARCH, skillVfx, hitstop,
 };

@@ -4535,6 +4535,76 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
     /\.vfx-arrow\{/.test(H61) && /\.vfx-orb\{/.test(H61));
 })();
 
+// ============================================================================
+// ★ R62：法宝/功法特效 + 顿帧
+//   风险点：① 某件法宝漏配特效原型 ⇒ 那件催动时"什么都没发生"（静默失败）
+//          ② 顿帧去冻【游戏时钟】⇒ 悄悄改掉 DPS 与一局时长，破坏配平（最危险）
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const J62 = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const H62 = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+
+  // ① 三类特效原型齐
+  chk('★ 特效·三类原型齐（ring / rays / flash）',
+    ['ring', 'rays', 'flash'].every(k => A.SKILL_ARCH[k] && A.SKILL_ARCH[k].cls),
+    Object.keys(A.SKILL_ARCH).join('/'));
+
+  // ② 每件法宝都配了原型（漏一个 = 那件催动时没任何视觉反馈）
+  const missArch = A.FABAO.filter(f => !A.FABAO_ARCH[f.id]).map(f => f.name);
+  chk('★ 特效·6 件法宝都有特效原型', missArch.length === 0,
+    missArch.length ? '缺: ' + missArch.join(',') : A.FABAO.length + ' 件');
+
+  // ③ 功法四个效果分支都挂了特效（回血/回气/爆发/护盾）
+  chk('★ 特效·功法四类效果都挂特效（回血/回气/爆发/护盾）',
+    (J62.match(/skillVfx\(/g) || []).length >= 5 &&
+    /if \(gfw\.burst\)[\s\S]{0,220}?skillVfx\(gfw\.burst\.name/.test(J62) &&
+    /if \(gfw\.shield > 0\)[\s\S]{0,220}?skillVfx\(/.test(J62));
+
+  // ④ ★★ 硬约束：顿帧**绝不能**冻游戏时钟（冻了会改 DPS 与一局时长 ⇒ 破坏配平）
+  //    ⚠️ 只统计【代码行】—— 注释里提到 G.freezeUntil 不算（第一次写就误报在注释上）
+  const fzCode = J62.split('\n')
+    .map((l, i) => ({ l: l, i: i + 1 }))
+    .filter(x => /freezeUntil/.test(x.l) && !/^\s*(\/\/|\*|\/\*)/.test(x.l));
+  const okFz = x =>
+    /G\.freezeUntil/.test(x.l) &&                              // 只允许读写这一个字段
+    (/const until = Date.now\(\) \+ ms/.test(x.l) ||            // hitstop 里算截止时刻
+     /if \(until > \(G\.freezeUntil/.test(x.l) ||              // hitstop 里写
+     /_frozen = Date\.now\(\) < \(G\.freezeUntil/.test(x.l));   // render 里读
+  const badFz = fzCode.filter(x => !okFz(x));
+  chk('★ 顿帧·只冻表现、绝不冻游戏时钟', badFz.length === 0 && fzCode.length <= 3,
+    badFz.length ? '可疑: 行 ' + badFz.map(x => x.i).join(',') :
+      fzCode.length + ' 处（hitstop 写 / render 读）');
+  chk('★ 顿帧·tick 里没有对 G.t / dt 的冻结写法',
+    !/G\.t\s*[-+]?=\s*0[\s\S]{0,40}freeze/.test(J62) && !/dt\s*\*=\s*0/.test(J62));
+
+  // ⑤ 冻结期间的表现处理：不写坐标、不建新特效
+  chk('★ 顿帧·冻结时不写 mob 坐标 / 不建新特效',
+    /if \(!_frozen\) \{\s*\/\/ ★ R62[\s\S]{0,120}?el\.style\.left/.test(J62) &&
+    /if \(!_frozen\) vfxRender\(arena\);/.test(J62));
+
+  // ⑥ CSS 与 class 齐（少一个就是"写了 JS 但看不见"）
+  chk('★ 特效·CSS 齐（环形/射线/全屏闪/名字横幅/冻结暂停）',
+    /\.vfx-ring::before/.test(H62) && /@keyframes vfxRing/.test(H62) &&
+    /\.vfx-rays::before/.test(H62) && /@keyframes vfxRays/.test(H62) &&
+    /\.vfx-flash::after/.test(H62) && /\.vfx-name\{/.test(H62) &&
+    /#battleWrap\.freeze .mob/.test(H62) && /animation-play-state:paused/.test(H62));
+
+  // ⑦ 顿帧四档齐全且有梯度（普通事件短、里程碑长）
+  const V = A.VFX;
+  chk('★ 顿帧·四档有梯度（暴击 < 精英 < 技能 < 里程碑）',
+    V.HIT_CRIT < V.HIT_ELITE && V.HIT_ELITE <= V.HIT_SKILL && V.HIT_SKILL < V.HIT_BIG,
+    [V.HIT_CRIT, V.HIT_ELITE, V.HIT_SKILL, V.HIT_BIG].join(' / ') + ' ms');
+
+  // ⑧ 功法释放要有名字（特效横幅靠它；只有 id 玩家看不懂）
+  A.GF.eq = {}; A.gfEquip('g_zhan'); A.GF.swings = 0; A.GF.swingW = 0;
+  let nm = null;
+  for (let i = 0; i < 30 && !nm; i++) { const r = A.gfOnSwing(); if (r.fired) nm = r.firedName; }
+  chk('★ 特效·功法释放带名字（横幅用）', !!nm && nm !== 'g_zhan', 'firedName = ' + nm);
+  A.GF.eq = {};
+})();
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));
