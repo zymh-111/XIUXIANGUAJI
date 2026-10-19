@@ -231,8 +231,12 @@
      同 R14 那次"重写 HTML 把这段写残了、宽高 0 ⇒ 完全看不见怪"是同一个坑，两次了。 */
   #arena{position:absolute;inset:0}
   .mob{position:absolute;width:16px;height:16px;border-radius:50%;
-    transform:translate(-50%,-50%);
-    transition:left .28s linear, top .28s linear, opacity .15s;z-index:3}
+    /* ★ R77：击退偏移由 CSS 变量注入（--kbx/--kby 由渲染层写）
+       ⚠️ 这是【纯表现】：怪真正的逻辑坐标 e.x/e.y 一个都没动。
+       transition 让"被打飞 → 滑回来"自己完成，不需要 JS 逐帧插值。 */
+    transform:translate(calc(-50% + var(--kbx,0px)), calc(-50% + var(--kby,0px)));
+    transition:left .28s linear, top .28s linear, opacity .15s,
+      transform .17s cubic-bezier(.2,.9,.3,1);z-index:3}
   /* 贴图层：有 sprite 时用它，没有则退回纯色块（兜底样式在上面被覆盖） */
   .mob .sprite{position:absolute;inset:0;background-repeat:no-repeat;
     background-position:center;background-size:contain;
@@ -396,24 +400,41 @@
   .vfx-skill{left:0;top:0;width:0;height:0;z-index:8}
   .vfx-skill.big{z-index:9}
 
-  /* 环形扩散：一个从中心向外推的圆环 */
-  .vfx-ring::before,.vfx-flash::before{
+  /* ==========================================================================
+     ★★ R77：六种「视觉签名」—— 每个功法有自己的形状，不再全是"一圈光"
+     每种都按【起手 0-90ms → 命中 90-340ms → 余韵 →900ms】编排：
+       ::before = 命中主特效（快、亮、结束得早）
+       ::after  = 起手/余韵（延迟一点出现，负责"还有残留"）
+     ⚠️ 这一段全是形状与时长，不参与任何数值。
+     ========================================================================== */
+
+  /* ① 切痕 slash —— 一道锐利亮线横着扫过（剑 / 枪：直线穿透） */
+  .vfx-slash::before{
     content:'';position:absolute;left:0;top:0;
-    width:130px;height:130px;margin:-65px 0 0 -65px;border-radius:50%;
-    border:2px solid var(--wx,#c9a227);
-    box-shadow:0 0 12px var(--wx,#c9a227),inset 0 0 14px var(--wx,#c9a227);
-    animation:vfxRing .9s cubic-bezier(.12,.85,.25,1) forwards}
-  .vfx-flash::before{width:280px;height:280px;margin:-140px 0 0 -140px;border-width:3px;
-    animation:vfxRing .9s cubic-bezier(.12,.85,.25,1) forwards}
-  @keyframes vfxRing{
-    0%  {opacity:0;transform:scale(.14)}
-    14% {opacity:1}
-    62% {opacity:.8}
-    100%{opacity:0;transform:scale(1.7)}
+    width:240px;height:5px;margin:-2.5px 0 0 -120px;border-radius:3px;
+    background:linear-gradient(90deg,transparent,var(--wx,#dfe9ff) 18%,
+      #fff 50%,var(--wx,#dfe9ff) 82%,transparent);
+    box-shadow:0 0 14px var(--wx,#dfe9ff),0 0 34px var(--wx,#dfe9ff) inset;
+    animation:vfxSlash .58s cubic-bezier(.1,.9,.2,1) forwards}
+  .vfx-slash::after{
+    content:'';position:absolute;left:0;top:0;width:150px;height:2px;
+    margin:-1px 0 0 -75px;border-radius:2px;
+    background:linear-gradient(90deg,transparent,#fff,transparent);
+    animation:vfxSlash2 .9s cubic-bezier(.1,.9,.2,1) forwards}
+  @keyframes vfxSlash{
+    0%  {opacity:0;transform:rotate(var(--aim,0deg)) scaleX(.1)}
+    12% {opacity:1;transform:rotate(var(--aim,0deg)) scaleX(1.15)}
+    40% {opacity:.9;transform:rotate(var(--aim,0deg)) scaleX(1.3)}
+    100%{opacity:0;transform:rotate(var(--aim,0deg)) scaleX(1.45)}
+  }
+  @keyframes vfxSlash2{
+    0%,10%{opacity:0;transform:rotate(var(--aim,0deg)) scaleX(.2)}
+    20%{opacity:.85;transform:rotate(var(--aim,0deg)) scaleX(1)}
+    100%{opacity:0;transform:rotate(var(--aim,0deg)) scaleX(1.2) translateY(6px)}
   }
 
-  /* 放射光线：用重复锥形渐变做一圈射线，向外扫 */
-  .vfx-rays::before{
+  /* ② 爆环 burst —— 环从中心炸开（杖 / 群攻） */
+  .vfx-burst::before{
     content:'';position:absolute;left:0;top:0;
     width:190px;height:190px;margin:-95px 0 0 -95px;border-radius:50%;
     background:repeating-conic-gradient(from 0deg,
@@ -421,14 +442,97 @@
     -webkit-mask:radial-gradient(circle,transparent 0 16%,#000 42%,transparent 78%);
     mask:radial-gradient(circle,transparent 0 16%,#000 42%,transparent 78%);
     animation:vfxRays .9s cubic-bezier(.12,.85,.25,1) forwards}
+  .vfx-burst::after{
+    content:'';position:absolute;left:0;top:0;
+    width:150px;height:150px;margin:-75px 0 0 -75px;border-radius:50%;
+    border:2px solid var(--wx,#c9a227);
+    box-shadow:0 0 14px var(--wx,#c9a227);
+    animation:vfxRing .9s cubic-bezier(.12,.85,.25,1) forwards;
+    animation-delay:60ms}
   @keyframes vfxRays{
     0%  {opacity:0;transform:scale(.3) rotate(-16deg)}
     18% {opacity:1}
     60% {opacity:.75}
     100%{opacity:0;transform:scale(1.5) rotate(18deg)}
   }
+  @keyframes vfxRing{
+    0%  {opacity:0;transform:scale(.14)}
+    14% {opacity:1}
+    62% {opacity:.8}
+    100%{opacity:0;transform:scale(1.7)}
+  }
 
-  /* 全屏闪：底牌级才用（一局没几次，敢给大的） */
+  /* ③ 残影 trail —— 三个渐隐分身往后拖（疾风 / 连击） */
+  .vfx-trail::before,.vfx-trail::after{
+    content:'';position:absolute;left:0;top:0;
+    width:46px;height:62px;margin:-31px 0 0 -23px;border-radius:45% 45% 40% 40%;
+    background:radial-gradient(ellipse at 50% 40%,var(--wx,#8fe3ff) 0%,transparent 72%);
+    filter:blur(2px);opacity:0}
+  .vfx-trail::before{animation:vfxTrailA .62s ease-out forwards}
+  .vfx-trail::after{animation:vfxTrailB .62s ease-out forwards;animation-delay:70ms}
+  @keyframes vfxTrailA{
+    0%  {opacity:.85;transform:translate(0,0) scale(1)}
+    100%{opacity:0;transform:translate(-30px,10px) scale(.8)}
+  }
+  @keyframes vfxTrailB{
+    0%  {opacity:.7;transform:translate(0,0) scale(.9)}
+    100%{opacity:0;transform:translate(26px,-8px) scale(.7)}
+  }
+
+  /* ④ 上升光点 rise —— 光从脚下往上飘（治疗 / 回气） */
+  .vfx-rise::before{
+    content:'';position:absolute;left:0;top:0;
+    width:34px;height:96px;margin:0 0 0 -17px;
+    background:linear-gradient(to top,transparent,var(--wx,#8fe3a0) 60%,#fff);
+    filter:blur(1.5px);
+    animation:vfxRise .95s cubic-bezier(.15,.9,.3,1) forwards}
+  .vfx-rise::after{
+    content:'';position:absolute;left:0;top:0;
+    width:6px;height:6px;border-radius:50%;background:#fff;
+    box-shadow:0 0 10px var(--wx,#8fe3a0),18px -6px 0 -1px var(--wx,#8fe3a0),
+      -16px 4px 0 -1px var(--wx,#8fe3a0),8px 10px 0 -2px var(--wx,#8fe3a0);
+    animation:vfxRiseDots 1s ease-out forwards}
+  @keyframes vfxRise{
+    0%  {opacity:0;transform:translateY(14px) scaleY(.4)}
+    20% {opacity:.9;transform:translateY(0) scaleY(1)}
+    100%{opacity:0;transform:translateY(-54px) scaleY(1.15)}
+  }
+  @keyframes vfxRiseDots{
+    0%  {opacity:0;transform:translateY(18px)}
+    25% {opacity:1}
+    100%{opacity:0;transform:translateY(-62px)}
+  }
+
+  /* ⑤ 球壳 shell —— 半透明球从内向外撑开（护体 / 减伤） */
+  .vfx-shell::before{
+    content:'';position:absolute;left:0;top:0;
+    width:132px;height:132px;margin:-66px 0 0 -66px;border-radius:50%;
+    border:2px solid var(--wx,#c9a227);
+    background:radial-gradient(circle,transparent 52%,var(--wx,#c9a227) 74%,transparent 82%);
+    box-shadow:0 0 18px var(--wx,#c9a227),inset 0 0 22px var(--wx,#c9a227);
+    animation:vfxShell .82s cubic-bezier(.2,.9,.3,1) forwards}
+  .vfx-shell::after{
+    content:'';position:absolute;left:0;top:0;
+    width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;
+    border:1px dashed var(--wx,#c9a227);opacity:.6;
+    animation:vfxShellIn .7s cubic-bezier(.2,.9,.3,1) forwards}
+  @keyframes vfxShell{
+    0%  {opacity:0;transform:scale(.72)}
+    26% {opacity:1;transform:scale(1.02)}
+    100%{opacity:0;transform:scale(1.16)}
+  }
+  @keyframes vfxShellIn{
+    0%  {opacity:.7;transform:scale(1.45) rotate(0deg)}
+    100%{opacity:0;transform:scale(.9) rotate(90deg)}
+  }
+
+  /* ⑥ 全闪 flash —— 底牌级才用（一局没几次，敢给大的） */
+  .vfx-flash::before{
+    content:'';position:absolute;left:0;top:0;
+    width:280px;height:280px;margin:-140px 0 0 -140px;border-radius:50%;
+    border:3px solid var(--wx,#ffe9a8);
+    box-shadow:0 0 26px var(--wx,#ffe9a8),inset 0 0 30px var(--wx,#ffe9a8);
+    animation:vfxRing .9s cubic-bezier(.12,.85,.25,1) forwards}
   .vfx-flash::after{
     content:'';position:fixed;left:0;right:0;top:0;bottom:0;
     background:radial-gradient(circle at 50% 45%,var(--wx,#ffe9a8) 0%,
@@ -1378,6 +1482,12 @@
             <span id="fsLbl" class="v">100%</span>
             <button id="fsPlus">A＋</button>
             <span class="k" style="margin-left:8px">（整体缩放）</span>
+          </div>
+          <!-- ★ R77：震屏开关 —— 挂机要长时间盯着，嫌晃的人可以关掉 -->
+          <div class="fs-row" style="margin-top:6px">
+            <span class="k">震屏</span>
+            <button id="shakeBtn">开</button>
+            <span class="k" style="margin-left:8px">（放技能时的画面抖动）</span>
           </div>
         </div>
 

@@ -2542,6 +2542,26 @@ const VFX = {
   HIT_ELITE: 90,       // 精英击杀
   HIT_SKILL: 110,      // 法宝催动 / 功法主动技
   HIT_BIG: 150,        // Boss 现身 / Boss 倒地 / 突破（一局没几次，要"砸"出来）
+  // ================= ★★ R77：功法表现力（用户："数值不动只改表现"）=================
+  //
+  //  诊断（实测）：不是"特效不够大"，是"**信号没传到被打的东西上**"。
+  //  怪只会闪白 120ms，不位移；特效永远以主角为圆心；顿帧统一 110ms
+  //  ⇒ 小技能和底牌"重量"一样 ⇒ 再大也只是背景装饰。
+  //
+  //  ⚠️ 下面全部是【时长 / 像素 / 颜色】，**没有任何伤害·血量·冷却**。
+  //     唯一要小心的是击退：它只写 `e._kbx/_kby`（渲染偏移），**绝不改 `e.x/e.y`**
+  //     —— 改了会通过 `distToHero()` 影响命中与刷怪，那就不是"只改表现"了。
+  KB_MS: 170,              // 击退动作时长（真实 ms）—— 短促才有"被砸出去"的力
+  KB_PX: 3,                // 普通命中推多远（像素）
+  KB_PX_SKILL: 7,          // 功法/暴击/法宝推多远
+  KB_PX_BIG: 11,           // 底牌级
+  SHAKE_MS: 150,           // 屏幕震动时长（真实 ms）
+  SHAKE_PX: [0, 2, 4, 6],  // 震动幅度档位：0=不抖 · 1=小技能 · 2=爆发 · 3=底牌
+  // ---- 顿帧分级（原来统一 HIT_SKILL=110 ⇒ 大小技能一样重）----
+  HIT_SKILL_S: 70,     // 小技能（护体 / 回气 / 治疗类）
+  HIT_SKILL_M: 130,    // 攻伐爆发（裂空斩 / 天雷引 / 万剑归宗）
+  HIT_SKILL_L: 180,    // 底牌级（全屏闪那种）
+  SKILL_MAX: 4,        // 同时存在的技能特效上限（三段节拍后元素数翻倍，必须限量）
 };
 
 // ============================================================
@@ -2665,36 +2685,145 @@ function hitCandidates(st) {
 
 // 法宝/功法的特效原型：不给 6 件法宝各画一套（又慢又乱），
 // 而是【三类原型 × 五行色】。玩家靠"色 + 形状 + 名字横幅"识别发生了什么。
+// ★★ R77：功法/法宝的「视觉签名」从 3 种扩到 6 种
+//
+//   原来只有 rays / ring / flash，而功法有 21 个 ⇒ 玩家分不清放的是哪个。
+//   现在按【作用方式】分家，每种签名有独立的动画形状（纯 CSS，见 index.html）：
+//     slash 切痕   —— 一道锐利亮线扫过：剑 / 枪（直线穿透）
+//     burst 爆环   —— 一个环从中心炸开：杖 / 群攻
+//     trail 残影   —— 主角留下渐隐分身：疾风 / 连击
+//     rise  光点   —— 光点从脚下往上飘：治疗 / 回气
+//     shell 球壳   —— 半透明球从内向外推开：护体 / 减伤
+//     flash 全闪   —— 定格 + 全屏闪：底牌级（一局没几次，敢给大的）
+//   `tier` 决定顿帧与震屏强度（1 小 · 2 中 · 3 底牌）
+//   ⚠️ rays / ring 保留成别名 ⇒ 老的调用点不会一夜之间失效
 const SKILL_ARCH = {
-  rays:  { cls: 'vfx-rays',  big: false },   // 放射光线：攻击型
-  ring:  { cls: 'vfx-ring',  big: false },   // 扩散圆环：护体 / 治疗 / 回气
-  flash: { cls: 'vfx-flash', big: true },    // 全屏闪 + 大环：底牌级
+  slash: { cls: 'vfx-slash', tier: 2, big: false },
+  burst: { cls: 'vfx-burst', tier: 2, big: false },
+  trail: { cls: 'vfx-trail', tier: 1, big: false },
+  rise:  { cls: 'vfx-rise',  tier: 1, big: false },
+  shell: { cls: 'vfx-shell', tier: 1, big: false },
+  flash: { cls: 'vfx-flash', tier: 3, big: true },
+  rays:  { cls: 'vfx-burst', tier: 2, big: false },   // 旧名别名（R62 那批）
+  ring:  { cls: 'vfx-shell', tier: 1, big: false },   // 旧名别名
 };
 // 法宝 id → 特效原型
 const FABAO_ARCH = {
-  f_zhuxian: 'rays',   // 诛仙剑阵：全场 ×4，攻击型
-  f_huoyu:   'rays',   // 焚天火狱：全场 ×3.5
-  f_binghen: 'rays',   // 寒冰封界：全场 ×2
+  f_zhuxian: 'slash',  // 诛仙剑阵：全场 ×4 ⇒ 剑阵，切痕
+  f_huoyu:   'burst',  // 焚天火狱：全场 ×3.5 ⇒ 爆环
+  f_binghen: 'burst',  // 寒冰封界：全场 ×2 ⇒ 爆环
   f_jinwu:   'flash',  // 金乌焚世：全场 ×6 ⇒ 底牌，给最大的
-  f_huguo:   'ring',   // 玄龟护国：回血 45% ⇒ 护罩
-  f_muhun:   'ring',   // 木灵回春：回血 + 灵气
+  f_huguo:   'shell',  // 玄龟护国：回血 45% ⇒ 球壳
+  f_muhun:   'rise',   // 木灵回春：回血 + 灵气 ⇒ 上升光点
 };
 
-/** 法宝/功法特效 + 名字横幅。数值层不管它，这里只负责"让玩家看见发生了什么"。 */
+/** ★★ R77：21(实为 18) 个功法 → 视觉签名。
+ *  ⚠️ 这张表是**按 desc 语义归类**的（我归的，可能不合你的直觉）：
+ *     攻伐=slash/burst/flash（打出去）· 护体=shell/rise（护自己）· 身法=trail（速度感）
+ *     心法/秘术 按其实际效果走（回气→burst · 回血→rise · 减伤→shell）
+ *     ⇒ 改名或新增功法时**记得同步这里**，否则会退回 fallback（burst）。
+ */
+const SKILL_SIG = {
+  // 心法
+  '凝神归元': 'shell',   // 回血 + 减伤 ⇒ 护体
+  '焚心诀': 'burst',     // 击杀累积攻击 ⇒ 越打越猛（爆发感）
+  '吐纳术': 'burst',     // 停手后下一击 ×1.6 多打 2 个 ⇒ 蓄力爆发
+  '清心咒': 'trail',     // 闪避 +18% ⇒ 身法/残影
+  // 身法
+  '追风步': 'trail',     // 出手频率
+  '凌波微步': 'trail',   // 闪避后提速
+  '缩地成寸': 'slash',   // 必暴窗口 ⇒ 一剑
+  // 攻伐
+  '万剑归宗': 'flash',   // 底牌级：全屏定格闪
+  '裂空斩': 'slash',
+  '天雷引': 'burst',
+  '破军式': 'slash',
+  // 护体
+  '金钟罩': 'shell',
+  '金刚体': 'shell',
+  '回春术': 'rise',      // 回血 ⇒ 上升光点（是最容易被一眼认出的那个）
+  '龟息功': 'shell',
+  // 秘术
+  '魂力积蕴': 'burst',
+  '炼气化神': 'burst',
+  '聚灵阵': 'rise',
+};
+function sigOf(name, fb) { return SKILL_SIG[name] || fb || 'burst'; }
+
+/** ★ R77：怪群重心方向（度）。给"切痕"这类有朝向的特效用 ——
+ *  让玩家看出"这一下是朝哪打的"，而不是四面均匀地亮。 */
+function crowdAim() {
+  const f = G.field || [];
+  if (!f.length) return 0;
+  let sx = 0, sy = 0;
+  for (const e of f) { sx += e.x; sy += e.y; }
+  const cx = sx / f.length - G.heroX;
+  const cy = sy / f.length - G.heroY;
+  if (Math.hypot(cx, cy) < 1e-4) return 0;
+  return Math.atan2(cy, cx) * 180 / Math.PI;
+}
+
+/** 法宝/功法特效 + 名字横幅。这里只负责"让玩家看见发生了什么"。
+ *
+ *  ★ R77：顺手把【顿帧 + 震屏】按签名档位一起做掉 —— 原来统一 110ms，
+ *  导致小技能和底牌"重量"一样。现在 1 档 70ms / 2 档 130ms / 3 档 180ms。
+ *  ⚠️ 顿帧只冻 `G.freezeUntil`（真实时间，只停表现），**绝不冻游戏时钟**（项目铁律）。
+ */
 function skillVfx(name, wx, arch, opts) {
   if (!G.vfxq) return;
-  const a = SKILL_ARCH[arch] ? arch : 'ring';
+  const a = SKILL_ARCH[arch] ? arch : 'shell';
+  const def = SKILL_ARCH[a];
+  const tier = Math.max(1, Math.min(3, (opts && opts.tier) || def.tier));
+  const big = !!(def.big || (opts && opts.big));
+
+  // ---- 表现层并发上限：同时存在的技能特效 ≤ 4（超了丢最旧的）----
+  //   ⚠️ 三段节拍会把元素数翻约 3 倍；不限量的话低端机必掉帧。
+  const live = G.vfxq.filter(x => x.k === 'skill');
+  if (live.length >= VFX.SKILL_MAX) G.vfxq.splice(G.vfxq.indexOf(live[0]), 1);
+
   G.vfxq.push({
     k: 'skill', arch: a, name: name, wx: wx || null,
     x0: G.heroX, y0: G.heroY, t0Real: Date.now(), delayMs: 0,
-    big: !!(SKILL_ARCH[a].big || (opts && opts.big)),
+    big: big, tier: tier,
+    // ★ R77：只有"有方向"的签名才带朝向（切痕）；环形/球壳本来就是四面八方
+    aim: (a === 'slash') ? crowdAim() : 0,
   });
+  // 顿帧按档位
+  hitstop(tier >= 3 ? VFX.HIT_SKILL_L : (tier >= 2 ? VFX.HIT_SKILL_M : VFX.HIT_SKILL_S));
+  // 震屏按档位
+  shake(VFX.SHAKE_PX[tier] || 0);
 }
 /** 顿帧：只冻表现（不改数值）。见 VFX.HIT_* 的说明。 */
 function hitstop(ms) {
   if (!ms) return;
   const until = Date.now() + ms;
   if (until > (G.freezeUntil || 0)) G.freezeUntil = until;
+}
+
+/** ★★ R77：击退 —— **纯表现**，只写渲染偏移。
+ *
+ *  ⚠️⚠️ 这里绝对不碰 `e.x / e.y`：那两个是**逻辑坐标**，`distToHero()` 拿它算命中，
+ *     刷怪/追击也拿它算距离 ⇒ 位移真怪会把命中判定、伤害分配、避怪一起改掉，
+ *     那就不是"只改表现"了。这里只写 `e._kbx/_kby`（像素）与 `e._kbT`（剩余秒），
+ *     由渲染层塞进 CSS 变量，改的是**看起来**在哪。
+ *
+ *  @param px 推力（像素）。3=普通命中 · 7=功法/暴击 · 11=底牌
+ */
+function knockback(e, fromX, fromY, px) {
+  if (!e || !px) return;
+  let dx = e.x - fromX;
+  let dy = (e.y - fromY) * 1.9;        // y 在视觉上更"扁"，放大一点才看得出方向
+  const L = Math.hypot(dx, dy) || 1e-6;
+  e._kbx = dx / L * px;
+  e._kby = dy / L * px;
+  e._kbT = VFX.KB_MS / 1000;           // 秒（与 e.hit 同一个衰减口径）
+}
+
+/** ★★ R77：屏幕震动 —— 纯表现。`G.noShake` 是"关闭震动"开关（挂机盯久了会晕）。 */
+function shake(px) {
+  if (!px || G.noShake) return;
+  G.shakeUntil = Date.now() + VFX.SHAKE_MS;
+  G.shakePx = px;
 }
 
 // ★ R71：延后顿帧（远程专用）。
@@ -2929,6 +3058,8 @@ function vfxRender(arena) {
       el.style.setProperty('--wx', c);
       el.style.left = (v.x0 * 100) + '%';
       el.style.top = (v.y0 * 100) + '%';
+      // ★ R77：朝向 —— 有方向的签名（切痕）朝怪群重心，看出"这一下朝哪打的"
+      if (v.aim) el.style.setProperty('--aim', v.aim + 'deg');
       if (v.name) {
         const nb = document.createElement('span');
         nb.className = 'vfx-name';
@@ -8036,6 +8167,7 @@ function step(st, dt) {
     const stop = e.kind === 'elite' ? P.MOB_REACH + 0.055 : P.MOB_REACH;
     if (d > stop) { const sp = 0.062 * dt; e.x += dx / d * sp; e.y += dy / d * sp; }
     if (e.hit > 0) e.hit -= dt;
+    if (e._kbT > 0) e._kbT -= dt;        // ★ R77：击退偏移的衰减（与 e.hit 同口径）
   }
 
   // ★ 出手：AOE 只命中【角色攻击距离内】的目标，优先打最近的
@@ -8119,7 +8251,7 @@ function step(st, dt) {
           G.backlashDown = (G.backlashDown || 0) + 1;   // 本局走火入魔次数（探针用）
           log('💥 走火入魔！反噬积满 ' + FB.backlash + ' 层 —— 本局提前结束，回宗门', 'bad');
           ev('backlash', 9, { n: FB.backlash, name: f.name });
-          skillVfx('走火入魔', '火', 'flash');
+          skillVfx('走火入魔', '火', 'flash', { tier: 3 });
           hitstop(VFX.HIT_BOSS);
           G.fx.push({ x: G.heroX, y: G.heroY - 0.24, txt: '💥 走火入魔', cls: 'crit', life: 2 });
         }
@@ -8134,13 +8266,13 @@ function step(st, dt) {
     itemOnSwing();
     // 心法/秘术的立即效果
     if (gfw.heal > 0 && G.hp > 0) {
-      skillVfx(gfw.firedName || '回春', st.wuxing, 'ring');   // ★ R62
+      skillVfx(gfw.firedName || '回春', st.wuxing, sigOf(gfw.firedName, 'rise'));   // ★ R77
       const stH = playerStats();
       G.hp = Math.min(stH.hp, G.hp + stH.hp * gfw.heal);
       G.fx.push({ x: G.heroX, y: G.heroY - 0.06, txt: '回春', cls: 'dodge', life: 1 });
     }
     if (gfw.qi > 0) {
-      skillVfx(gfw.firedName || '吐纳', st.wuxing, 'ring');   // ★ R62
+      skillVfx(gfw.firedName || '吐纳', st.wuxing, sigOf(gfw.firedName, 'burst'));  // ★ R77
       gainQi(gfw.qi);
       G.fx.push({ x: G.heroX, y: G.heroY - 0.04, txt: '+' + gfw.qi + ' 灵气', cls: 'dodge', life: 1 });
     }
@@ -8157,7 +8289,7 @@ function step(st, dt) {
     if (gfw.burst) {
       aoeN = st.aoe + gfw.burst.extra;
       dmgMul2 = gfw.burst.mul;
-      skillVfx(gfw.burst.name, st.wuxing, 'rays');   // ★ R62：攻伐/秘术释放型
+      skillVfx(gfw.burst.name, st.wuxing, sigOf(gfw.burst.name, 'burst'));   // ★ R77：按功法名分工
       hitstop(VFX.HIT_SKILL);
       G.fx.push({ x: G.heroX, y: G.heroY - 0.12, txt: gfw.burst.name, cls: 'crit', life: 1 });
     }
@@ -8165,7 +8297,7 @@ function step(st, dt) {
     // ★ 金钟罩 / 凝神归元：给护盾（护盾吸收伤害，见受击结算）
     if (gfw.shield > 0) {
       G.shield = Math.max(G.shield || 0, (st.hp || 0) * gfw.shield); G.shieldT = gfw.shieldT;
-      skillVfx('护体', st.wuxing, 'ring');   // ★ R62：金钟罩 / 凝神归元
+      skillVfx('护体', st.wuxing, 'shell');   // ★ R77：护体 ⇒ 球壳
     }
     sfx('swing', 1 + Math.min(0.5, aoeN * 0.04));   // ★ R60：出手（打的目标越多越响一点）
     // ★★ R61：出手的【表现分流】—— 近战出弧光，远程出弹道
@@ -8234,6 +8366,10 @@ function step(st, dt) {
       const isCrit = (GF.critWindow > 0) || (Math.random() < st.crit);
       if (isCrit) d *= 1 + P.HIT.CRIT_DMG_BASE;
       e.hp -= d; e.hit = 0.12;
+      // ★ R77：击退（只写渲染偏移，不动 e.x/e.y —— 见 knockback() 的注释）
+      //   功法爆发（dmgMul2 > 1）和暴击推得更远 ⇒ "这一下更重"能被看见
+      knockback(e, G.heroX, G.heroY,
+        dmgMul2 > 1.05 ? VFX.KB_PX_SKILL : (isCrit ? VFX.KB_PX_SKILL : VFX.KB_PX));
       // ★ 打出属性克制时，伤害数字加特效（玩家自己会判断相克，不需要提示 UI）
       let wxKe = (myEl && e.wx) ? wxMul(myEl, e.wx) : 1;
     // ★ 神话签名：对【本命克制属性】的敌人 +15%
@@ -8895,6 +9031,22 @@ function fsLoad() {
   applyFontScale(v);
 }
 
+// ★★ R77：震屏开关
+//   为什么要它：放技能会抖 2~6px，挂机是"长时间盯着"的场景，有人会觉得晃眼。
+//   ⚠️ 关掉只是不抖，技能的其余表现（六种形状 / 击退 / 顿帧分级）全都还在。
+function setNoShake(off) {
+  G.noShake = !!off;
+  if (G.noShake) { G.shakeUntil = 0; G.shakePx = 0; }   // 立刻停掉正在抖的那一次
+  const b = document.getElementById('shakeBtn');
+  if (b) { b.textContent = G.noShake ? '关' : '开'; b.style.color = G.noShake ? '#8a93a6' : '#c8b08a'; }
+  try { localStorage.setItem('xiuxian_noshake', G.noShake ? '1' : '0'); } catch (e) { }
+}
+function shakeLoad() {
+  let v = false;
+  try { v = localStorage.getItem('xiuxian_noshake') === '1'; } catch (e) { }
+  setNoShake(v);
+}
+
 function log(msg, cls) {
   // ★ Round 24（用户要求）：记录【第几代弟子】，让「录」页能分辨是谁的生平
   //   "这个录记得标出是第几代弟子的记录"
@@ -9222,6 +9374,17 @@ function render() {
     }
     el.style.opacity = 0.5 + 0.5 * Math.max(0, e.hp / e.maxHp);
     el.classList.toggle('hit', e.hit > 0);
+    // ★★ R77：击退的**渲染偏移**（CSS 变量，`.mob` 的 transform 里消费）
+    //   ⚠️ 这里改的是"看起来在哪"，逻辑坐标 e.x/e.y 一个都没动。
+    //      到期后写回 0px，由 `.mob` 的 transform transition 自己滑回去（不闪）。
+    if (e._kbT > 0) {
+      el.style.setProperty('--kbx', (e._kbx || 0).toFixed(1) + 'px');
+      el.style.setProperty('--kby', (e._kby || 0).toFixed(1) + 'px');
+    } else if (e._kbx || e._kby) {
+      e._kbx = 0; e._kby = 0;
+      el.style.setProperty('--kbx', '0px');
+      el.style.setProperty('--kby', '0px');
+    }
     el.classList.toggle('lunge', Date.now() < (e._lungeUntil || 0));   // ★ R210：扑击
     // ★ 妖怪贴图（Round 38）：有图的用图，没图的（域外天魔）退回五行色块
     //   贴图挂 .sprite（::before 会挡住 hpbar，所以用真实子元素更好控制层级）
@@ -9282,6 +9445,25 @@ function render() {
   //   坐标与怪物同一套（`x*100%`）· 全部走 CSS 动画，不占 JS 主循环
   // ★ R62：顿帧期间不渲染新特效（否则"生出来就冻住"，解冻才动，看着像卡帧）
   if (!_frozen) vfxRender(arena);
+
+  // ★★ R77：屏幕震动 —— 直接在 JS 里算偏移，不用 CSS 动画
+  //   为什么不用 keyframes：同一秒里连续放技能时，类名已在身上 ⇒ 动画**不会重启**，
+  //   第二次就没震感了。JS 每帧算一个衰减正弦反而更稳，而且强度可以逐次覆盖。
+  //   ⚠️ 只动 `#arena` 的 transform（纯表现）；`G.noShake` 可一键关掉。
+  {
+    const t = Date.now();
+    if (G.shakeUntil > t) {
+      const k = (G.shakeUntil - t) / VFX.SHAKE_MS;          // 1 → 0
+      const amp = (G.shakePx || 0) * k * k;                 // 二次衰减，收得干净
+      const ph = t / 17;
+      const dx = Math.sin(ph) * amp;
+      const dy = Math.cos(ph * 1.7) * amp * 0.75;
+      if (arena.style) arena.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px)';
+    } else if (arena.style && arena.style.transform) {
+      arena.style.transform = '';
+      G.shakePx = 0;
+    }
+  }
 
   // ★ 飘字
   if (!arena._fx) arena._fx = {};
@@ -10605,7 +10787,9 @@ $('#btnFacBack')?.addEventListener('click', closeFacility);
 // ★★ Round 50：字号调节
 $('#fsMinus')?.addEventListener('click', function () { fsStep(-1); });
 $('#fsPlus')?.addEventListener('click', function () { fsStep(1); });
+$('#shakeBtn')?.addEventListener('click', function () { setNoShake(!G.noShake); });
 try { fsLoad(); } catch (e) { }
+try { shakeLoad(); } catch (e) { }
 
 // 史册 / 生平 切换（原来靠底部「录」页签，现在并进宗页）
 $('#arcTabHis')?.addEventListener('click', function () {
@@ -10867,6 +11051,9 @@ globalThis.__api = {
   gfActiveList, gfPriority, gfMovePrio, gfReady, gfMarkUsed,
   TD_THRESH, TD_MUL, tdValue, tdMul, tdScoreFor, slotWuxing,
   FABAO, FABAO_BY_ID, FABAO_SLOTS, FB, fbEquip, fbResetRun, fbTriggered, fbCdLen,
+  // ★ R77：表现层（功法六种签名 / 朝向 / 击退 / 震屏）—— 探针与测试要用
+  SKILL_ARCH, SKILL_SIG, sigOf, crowdAim, knockback, shake, skillVfx,
+  setNoShake, shakeLoad, applyFontScale,
   AFFIXES, AFFIX_BY_ID, AFFIX_COUNT, AFFIX_QLV, softCapMul, SOFT_BUDGET_RATE, ITEM_SLOTS,
   // ★ R72：道具（消耗品）—— 供 _smoke.js 校验「数量会减 / 空了不触发 / 走 swingW / 存档往返」
   ITEMS, ITEM_BY_ID, ITEM_PER_KILL, ITEM_MAX, IT, itemHas, itemEquip, itemOnSwing, itemResetRun,

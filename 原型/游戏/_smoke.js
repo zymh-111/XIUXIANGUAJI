@@ -4725,10 +4725,16 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
     /if \(!_frozen\) vfxRender\(arena\);/.test(J62));
 
   // ⑥ CSS 与 class 齐（少一个就是"写了 JS 但看不见"）
-  chk('★ 特效·CSS 齐（环形/射线/全屏闪/名字横幅/冻结暂停）',
-    /\.vfx-ring::before/.test(H62) && /@keyframes vfxRing/.test(H62) &&
-    /\.vfx-rays::before/.test(H62) && /@keyframes vfxRays/.test(H62) &&
-    /\.vfx-flash::after/.test(H62) && /\.vfx-name\{/.test(H62) &&
+  // ★ R77：特效从 3 种扩到 6 种，逐个签名都要在（缺一个 = 那个功法看起来"没放"）
+  const SIGS = ['slash', 'burst', 'trail', 'rise', 'shell', 'flash'];
+  const sigMiss = SIGS.filter(s => H62.indexOf('.vfx-' + s + '::') < 0);
+  chk('★ 特效·六种视觉签名的 CSS 都在（缺一个 = 那个功法像没放）',
+    sigMiss.length === 0, sigMiss.length ? '缺: ' + sigMiss.join(', ') : '6/6');
+  chk('★ 特效·关键帧与横幅/冻结暂停齐',
+    /@keyframes vfxRing/.test(H62) && /@keyframes vfxFlash/.test(H62) &&
+    /@keyframes vfxShell/.test(H62) && /@keyframes vfxRise/.test(H62) &&
+    /@keyframes vfxSlash/.test(H62) && /@keyframes vfxTrailA/.test(H62) &&
+    /\.vfx-name\{/.test(H62) &&
     /#battleWrap\.freeze .mob/.test(H62) && /animation-play-state:paused/.test(H62));
 
   // ⑦ 顿帧四档齐全且有梯度（普通事件短、里程碑长）
@@ -4776,12 +4782,28 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
   // ③ ★★ 核心不变量：JS 的元素存活期 ≥ CSS 动画时长
   //    （反了就会"动画播到一半被删"—— 这正是本轮 bug 的形态）
   const cssSec = re => { const m = H63.match(re); return m ? parseFloat(m[1]) * 1000 : null; };
+  // ★ R77：不用正则找时长（转义太容易写错），改成字符串定位
+  const animDur = name => {
+    const k = 'animation:' + name + ' ';
+    const i = H63.indexOf(k);
+    if (i < 0) return null;
+    const rest = H63.slice(i + k.length);
+    const v = parseFloat(rest.slice(0, rest.indexOf('s')));
+    return isFinite(v) ? v * 1000 : null;
+  };
+  // ⚠️ 技能特效在 vfxTick 里的寿命是 **NAME_MS**（1150），不是 SKILL_MS(900)——
+  //    旧版这里写的是 SKILL_MS，只是碰巧 900 ≤ 900 才通过，属于"assertion 写错了但没红"。
+  //    R77 新增的 rise 是 950ms，一改就暴露了 ⇒ 这里改成真正的那个常量。
   const pairs = [
-    ['近战弧光',  cssSec(/\.vfx-arc\{[\s\S]*?animation:vfxArc (\d*\.?\d+)s/), V.ARC_MS],
-    ['死亡消散',  cssSec(/\.mob\.dying\{animation:mobDie (\d*\.?\d+)s/), V.DIE_MS],
-    ['法宝功法环', cssSec(/\.vfx-ring::before[\s\S]*?animation:vfxRing (\d*\.?\d+)s/), V.SKILL_MS],
-    ['放射光线',  cssSec(/\.vfx-rays::before[\s\S]*?animation:vfxRays (\d*\.?\d+)s/), V.SKILL_MS],
-    ['全屏闪',    cssSec(/\.vfx-flash::after[\s\S]*?animation:vfxFlash (\d*\.?\d+)s/), V.SKILL_MS],
+    ['近战弧光', animDur('vfxArc'), V.ARC_MS],
+    ['死亡消散', animDur('mobDie'), V.DIE_MS],
+    ['切痕 slash', animDur('vfxSlash2'), V.NAME_MS],
+    ['爆环 burst 射线', animDur('vfxRays'), V.NAME_MS],
+    ['爆环 内环', animDur('vfxRing'), V.NAME_MS],
+    ['残影 trail', animDur('vfxTrailA'), V.NAME_MS],
+    ['上升 rise 光点', animDur('vfxRiseDots'), V.NAME_MS],
+    ['球壳 shell', animDur('vfxShell'), V.NAME_MS],
+    ['全闪 flash', animDur('vfxFlash'), V.NAME_MS],
   ];
   const bad = pairs.filter(p => p[1] === null || p[2] < p[1]);
   chk('★ 时序·元素存活期 ≥ CSS 动画时长（不然动画被截断）',
@@ -5514,6 +5536,97 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
   chk('★ 界面·字号缩放变量在（--fs，R50 新增的设置项）',
     HTML.indexOf('--fs:1') >= 0 && HTML.indexOf('calc(13px * var(--fs,1))') >= 0);
 })();
+
+// ============================================================================
+// ★ R77：功法表现力（"数值不动只改表现"）—— 边界必须被断言钉住
+//
+//   本轮加了三样会**悄悄越界变成数值改动**的东西：
+//     ① 击退（如果改 e.x/e.y，会通过 distToHero 影响命中与刷怪）
+//     ② 顿帧分级（如果冻游戏时钟，会改 DPS 与一局时长）
+//     ③ 震屏（纯视觉，风险最低）
+//   ⇒ 下面把"边界"逐条钉死，而不是只测"功能有没有"。
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const JR = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const HR = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+  const V = A.VFX;
+
+  // ---- ① 击退必须只写渲染偏移 ----
+  const kbBody = (JR.match(/function knockback\(e, fromX, fromY, px\) \{[\s\S]*?\n\}/) || [''])[0];
+  chk('★★ 击退·只写渲染偏移，绝不改逻辑坐标 e.x/e.y',
+    kbBody.length > 0 &&
+    kbBody.indexOf('e._kbx') >= 0 && kbBody.indexOf('e._kby') >= 0 &&
+    !/\be\.x\s*[-+]?=/.test(kbBody) && !/\be\.y\s*[-+]?=/.test(kbBody),
+    kbBody ? '有 _kbx/_kby，无 e.x/e.y 赋值' : '找不到 knockback()');
+
+  chk('★ 击退·伤害结算处确实调了 knockback（不然等于没接）',
+    /e\.hp -= d; e\.hit = 0\.12;[\s\S]{0,200}?knockback\(e, G\.heroX, G\.heroY/.test(JR));
+
+  chk('★ 击退·偏移有衰减（否则怪会永远蹲在偏出去的位置）',
+    /if \(e\._kbT > 0\) e\._kbT -= dt/.test(JR) && V.KB_MS >= 60 && V.KB_MS <= 400,
+    'KB_MS=' + V.KB_MS);
+
+  chk('★ 击退·CSS 消费了 --kbx/--kby（不然写了没人用）',
+    HR.indexOf('var(--kbx,0px)') >= 0 && HR.indexOf('var(--kby,0px)') >= 0);
+
+  // ---- ② 顿帧分级：必须是小 < 中 < 大，而且不能只有一个值 ----
+  chk('★ 顿帧·三档有梯度（小技能 < 攻伐 < 底牌）',
+    V.HIT_SKILL_S < V.HIT_SKILL_M && V.HIT_SKILL_M < V.HIT_SKILL_L,
+    [V.HIT_SKILL_S, V.HIT_SKILL_M, V.HIT_SKILL_L].join(' / ') + ' ms');
+
+  chk('★★ 顿帧·绝不冻游戏时钟（只冻 G.freezeUntil）',
+    /G\.freezeUntil = until/.test(JR) && !/G\.t\s*\+=.*freeze/.test(JR) && !/freezeUntil[\s\S]{0,40}G\.t\s*=/.test(JR));
+
+  // ---- ③ 震屏档位单调 + 有开关 ----
+  const sp = V.SHAKE_PX;
+  chk('★ 震屏·档位单调递增且从 0 起（0=不抖）',
+    Array.isArray(sp) && sp.length === 4 && sp[0] === 0 &&
+    sp[1] < sp[2] && sp[2] < sp[3] && sp[3] <= 12,
+    sp ? sp.join(' / ') + ' px' : 'SHAKE_PX 缺失');
+
+  chk('★ 震屏·有开关（G.noShake 能整体关掉）',
+    /function setNoShake\(off\)/.test(JR) && /if \(!px \|\| G\.noShake\) return;/.test(JR) &&
+    HR.indexOf('shakeBtn') >= 0);
+
+  // ---- ④ 六种签名 + 18 个功法都要有归属，不许掉 fallback ----
+  const SIG6 = ['slash', 'burst', 'trail', 'rise', 'shell', 'flash'];
+  chk('★ 签名·6 种都在 SKILL_ARCH 里且各有 tier',
+    SIG6.every(s => A.SKILL_ARCH[s] && A.SKILL_ARCH[s].tier >= 1 && A.SKILL_ARCH[s].tier <= 3));
+
+  const NAMES = ['凝神归元','焚心诀','吐纳术','清心咒','追风步','凌波微步','缩地成寸',
+    '万剑归宗','裂空斩','天雷引','破军式','金钟罩','金刚体','回春术','龟息功',
+    '魂力积蕴','炼气化神','聚灵阵'];
+  const orphan = NAMES.filter(n => !A.SKILL_SIG[n]);
+  chk('★★ 签名·18 个功法全有归属（漏一个 ⇒ 那个功法退回 burst，看不出区别）',
+    orphan.length === 0, orphan.length ? '缺: ' + orphan.join('、') : '18/18');
+
+  chk('★ 签名·映射值都是合法签名',
+    NAMES.every(n => SIG6.indexOf(A.SKILL_SIG[n]) >= 0));
+
+  // ---- ⑤ 并发上限（三段节拍后元素翻倍，不限量必掉帧）----
+  chk('★ 特效·有并发上限（同时存在的技能特效 ≤ ' + V.SKILL_MAX + '）',
+    typeof V.SKILL_MAX === 'number' && V.SKILL_MAX >= 2 && V.SKILL_MAX <= 8 &&
+    /live\.length >= VFX\.SKILL_MAX/.test(JR));
+
+  // ---- ⑥ 朝向：只有"有方向"的签名才带 aim ----
+  chk('★ 朝向·切痕带朝向、环形不带（环形朝哪都没意义）',
+    /aim: \(a === 'slash'\) \? crowdAim\(\) : 0/.test(JR) &&
+    /if \(v\.aim\) el\.style\.setProperty\('--aim'/.test(JR));
+
+  // ---- ⑦ 六种签名的 CSS 都得有形状（缺一个 = 那个功法"像没放"）----
+  const noShape = SIG6.filter(s => {
+    const k = '.vfx-' + s + '::';
+    const i = HR.indexOf(k);
+    if (i < 0) return true;
+    const seg = HR.slice(i, i + 700);
+    return seg.indexOf('animation:') < 0;      // 有规则但没动画 = 静态块，看不见"发生"
+  });
+  chk('★ 签名·六种都有独立形状 + 动画', noShape.length === 0,
+    noShape.length ? '缺形状/动画: ' + noShape.join(', ') : '6/6');
+})();
+
 
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
