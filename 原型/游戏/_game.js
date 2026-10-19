@@ -9096,8 +9096,10 @@ function render() {
     const sl = document.getElementById('sceneLabel');
     if (sl) {
       const place = invadeActive() ? (EVENT.active ? EVENT.active.place : '域外') : zbNow().name;
+      // ★ R79：带上总时长 —— 下面那行状态里的 "86s / 300s" 已删（重复且换了个单位），
+      //   但"还剩多久"是挂机时最需要的信息 ⇒ 在同一个单位里给出分子分母，不是两种单位说两遍。
       sl.innerHTML = G.running
-        ? ('秘境 · <b>' + place + '</b> · 已入 ' + G.t.toFixed(0) + ' 息')
+        ? ('秘境 · <b>' + place + '</b> · 已入 ' + G.t.toFixed(0) + ' / ' + P.RUN_SECONDS + ' 息')
         : ('秘境 · <b>待入</b>');
       // ★ Round 38：场景背景按【当前秘境五行】切换（assets/秘境/秘境_<五行>.webp）
       //   五行交汇（wx=null）用原水墨背景兜底。
@@ -9251,14 +9253,29 @@ function render() {
   const prog = Math.min(1, G.t / P.RUN_SECONDS);
   const kills = G.kills;
   $('#battleBar').style.width = (prog * 100) + '%';
+  // ★★ R79（用户要求）：这行只留"这一局发生了什么"，武器细节挪走。
+  //   ① 删掉 `${G.t}s / ${RUN_SECONDS}s` —— 场景抬头已经有「已入 N 息」，同一件事不用两种单位说两遍
+  //   ② 删掉「剑 范围18 · 打6」—— 那是武器属性，去【境】页的属性区看（那里一直有，没删）
+  //   ③ 「击杀 115 / 场上 2」不好懂 ⇒ 改成「已斩 115」「身周 3 只」：
+  //        · "击杀"是动词当名词用，加个"已斩"才看得出是【这局打了多少】
+  //        · "场上 2" 没量词、也没说是谁的场 ⇒ "身周 3 只"是玩家真正关心的（贴着我的有几个）
+  //   ④ 「超压 27.9s」同样难懂 ⇒ 「受击 28 息」：它就是【累计被怪打的时长】，
+  //      并且统一用「息」（和抬头同一个时间单位），不再突然冒出个 s
   $('#battleInfo').innerHTML = G.running
-    ? `<span>${G.t.toFixed(0)}s / ${P.RUN_SECONDS}s</span>
-       <span>击杀 <b>${kills}</b></span>
-       <span>${st.weapon.name} <span class="dim">范围${(st.reach * 200).toFixed(0)} · 打${st.aoe}</span></span>
-       <span>场上 <b>${G.field.length}</b></span>
+    ? `<span>已斩 <b>${kills}</b></span>
+       <span>身周 <b>${G.field.length}</b> 只</span>
        <span>掉落 <b>${G.dropped}</b></span>
-       <span>超压 <b class="${G.overloadT>0?'low':''}">${G.overloadT.toFixed(1)}s</b></span>`
+       <span>受击 <b class="${G.overloadT>0?'low':''}">${G.overloadT.toFixed(0)} 息</b></span>`
     : `<span class="dim">${G.phase === 'rest' ? '结算中…' : '待命'}</span>`;
+
+  // ★ R79：武器属性放背包（用户："剑的具体属性应该是进背包查看"）
+  {
+    const bw2 = document.getElementById('bagWeapon');
+    if (bw2) {
+      bw2.innerHTML = ico('wp', WEAPON_ICON[st.weapon.id], 'ico12') + st.weapon.name +
+        ' · 范围' + (st.reach * 200).toFixed(0) + ' · 打' + st.aoe;
+    }
+  }
 
   // ★ 修为条（灵气进度）
   {

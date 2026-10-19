@@ -5671,6 +5671,45 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
 })();
 
 
+// ============================================================================
+// ★ R79：战场状态行的取舍 —— 用户："有了已入多少息，秒就可以不要了；
+//   剑的属性应该进背包看；击杀和场上不容易理解"
+//
+//   改的是"信息放哪 + 怎么叫"，最容易的回归是：
+//   ① 有人又把 `86s / 300s` 加回来（和抬头重复）
+//   ② 顺手把武器属性彻底删掉（那就真查不到了 —— 它必须留在属性面板里）
+//   ③ 抬头丢了总时长（删掉秒之后，就没人知道还剩多久）
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const JR = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+
+  // 取 battleInfo 那个【模板本身】—— 不能按字数截，
+  // ⚠️ 它后面紧接着「武器属性写进背包」那段（含 范围/weapon.name），
+  //    按 700 字截会把那段框进来 ⇒ 断言被自己的新代码逗红（踩过一次）。
+  const i0 = JR.indexOf("$('#battleInfo').innerHTML");
+  const iEnd = i0 >= 0 ? JR.indexOf('`;', i0) : -1;
+  const seg = (i0 >= 0 && iEnd > i0) ? JR.slice(i0, iEnd + 2) : '';
+
+  chk('★ 战场状态·不再重复显示秒（抬头已有「已入 N 息」）',
+    seg.length > 0 && seg.indexOf('RUN_SECONDS}s') < 0 && seg.indexOf('s /') < 0);
+
+  chk('★ 战场状态·武器细节不在这行（挪去属性面板）',
+    seg.length > 0 && seg.indexOf('范围') < 0 && seg.indexOf('weapon.name') < 0);
+
+  chk('★★ 武器属性·没有因此丢掉（属性面板里必须还在：范围 / 打N）',
+    /' · 范围' \+ \(st\.reach \* 200\)\.toFixed\(0\) \+ ' · 打' \+ st\.aoe/.test(JR));
+
+  chk('★ 战场状态·用词已改成可读的（已斩 / 身周 / 受击）',
+    seg.indexOf('已斩') >= 0 && seg.indexOf('身周') >= 0 && seg.indexOf('受击') >= 0 &&
+    seg.indexOf('超压') < 0 && seg.indexOf('场上') < 0);
+
+  chk('★ 抬头·保留总时长（删掉秒之后仍要知道还剩多久）',
+    /已入 ' \+ G\.t\.toFixed\(0\) \+ ' \/ ' \+ P\.RUN_SECONDS \+ ' 息/.test(JR));
+})();
+
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));

@@ -146,6 +146,9 @@
   .bd-hd{display:flex;justify-content:space-between;align-items:center;
     padding:10px 18px;border-bottom:1px solid var(--line2);flex:0 0 auto;background:#101112}
   .bd-hd b{font-size:calc(11.5px * var(--fs,1));color:var(--gold);font-weight:400;letter-spacing:2px}
+  .bd-hd .bd-wp{font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:.5px;
+    margin-left:auto;margin-right:10px}
+  .bd-hd .bd-wp b{color:#c8b08a;font-weight:400}
   .bd-hd button{font-size:calc(11px * var(--fs,1));padding:4px 10px;background:transparent;
     border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;font-family:inherit}
   .bd-hd button:hover{border-color:var(--gold);color:var(--gold)}
@@ -153,6 +156,9 @@
   @keyframes bdSlide{from{transform:translateY(-14px);opacity:0}to{transform:translateY(0);opacity:1}}
 
   .bd-hd b{font-size:calc(11.5px * var(--fs,1));color:var(--gold);font-weight:400;letter-spacing:2px}
+  .bd-hd .bd-wp{font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:.5px;
+    margin-left:auto;margin-right:10px}
+  .bd-hd .bd-wp b{color:#c8b08a;font-weight:400}
   .bd-hd button{font-size:calc(11px * var(--fs,1));padding:4px 10px;background:transparent;
     border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;font-family:inherit}
   .bd-hd button:hover{border-color:var(--gold);color:var(--gold)}
@@ -1330,6 +1336,9 @@
     <div id="bagDrawer">
       <div class="bd-hd">
         <b>背包 · 经络图</b>
+        <!-- ★ R79（用户要求）：武器属性进背包 —— 战场状态行只说"这局发生了什么"，
+             武器这种"查一下"的信息放这里，翻装备时顺手就能看到 -->
+        <span id="bagWeapon" class="bd-wp"></span>
         <button id="btnCloseBag">收起 ▾</button>
       </div>
       <div class="bd-body">
