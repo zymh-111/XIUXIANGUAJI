@@ -7681,11 +7681,14 @@ function wanderHero(dt) {
   G.wanderT = (G.wanderT || 0) - dt;
   if (G.wanderT <= 0) {
     G.wanderT = R(1.0, 2.6);
-    // 随机方向的落点
-    const a = R(0, Math.PI * 2);
-    const r = 0.03 + Math.random() * (P.WANDER_RADIUS - 0.03);
-    let tx = home.x + Math.cos(a) * r;
-    let ty = home.y + Math.sin(a) * r * 0.8;
+    // ★★ Round 50：随机落点改成【方形】范围（用户："人物移动范围有点太画圆了，
+    //   得在正方形内随机移动更好"）
+    //   ⚠️ 原来是极坐标（随机角度 + 随机半径）⇒ 落点天然聚成圆盘，
+    //      再叠加下面的"圆形边界拉回"⇒ 走位看起来就是在画圈
+    //   ⇒ 改成在 [-R, +R] 的方形里各自独立取均匀随机
+    const _r = P.WANDER_RADIUS;
+    let tx = home.x + (Math.random() * 2 - 1) * _r;
+    let ty = home.y + (Math.random() * 2 - 1) * _r * 0.78;
 
     // ★ 避怪偏移：把目标点朝"远离怪群重心"的方向拉
     const w = G.crowdAvoid;
@@ -7745,18 +7748,23 @@ function wanderHero(dt) {
     G.heroY += dy * sp;
   }
 
-  // ---------- 边界 ----------
+  // ---------- 边界（★ Round 50：圆形拉回 → 方形夹紧）----------
+  //   ⚠️ 原来超出半径就往中心拉（Math.hypot + 归一化方向）——
+  //      这是"走位画圆"的第二个原因，即使落点改成方形也会被拉成圆
+  //   ⇒ 改成对 x / y 各自独立夹紧（方形软边界）
+  {
+    const lim = P.WANDER_RADIUS + P.DASH_DIST + P.AVOID_STRENGTH;
+    const limY = lim * 0.78;                       // 场景高宽比：纵向范围小一些
+    const dx = G.heroX - home.x, dy = G.heroY - home.y;
+    // 超出方形就软推回（保留一点弹性，不做硬钳）
+    if (dx > lim)  G.heroX -= Math.min((dx - lim) * 2.5 * dt, dx - lim);
+    if (dx < -lim) G.heroX -= Math.max((dx + lim) * 2.5 * dt, dx + lim);
+    if (dy > limY)  G.heroY -= Math.min((dy - limY) * 2.5 * dt, dy - limY);
+    if (dy < -limY) G.heroY -= Math.max((dy + limY) * 2.5 * dt, dy + limY);
+  }
+  // 场地硬边界（画面内）
   G.heroX = Math.min(0.88, Math.max(0.12, G.heroX));
   G.heroY = Math.min(0.80, Math.max(0.28, G.heroY));
-  {
-    const hx = G.heroX - home.x, hy = G.heroY - home.y;
-    const hd = Math.hypot(hx, hy);
-    const lim = P.WANDER_RADIUS + P.DASH_DIST + P.AVOID_STRENGTH;
-    if (hd > lim) {
-      const pull = Math.min((hd - lim) * 2.5 * dt, hd - lim);
-      G.heroX -= hx / hd * pull; G.heroY -= hy / hd * pull;
-    }
-  }
   if (G.dodgeFlash > 0) G.dodgeFlash -= dt;
   // ★ Round 43：横幅播报计时（几秒后自动消失）
   if (BANNER_T > 0) {
@@ -8858,6 +8866,33 @@ function banner(msg, cls) {
     BANNER_T = 3.2;
   }
   log(String(msg).replace(/<[^>]*>/g, ''), cls || 'ok');
+}
+
+// ★★ Round 50：字体缩放（用户："可以调节字体大小"）
+//   ⚠️ 全站字号是硬编码 px 的，逐条改不现实
+//   ⇒ 用 zoom 缩放整个 #win（Chromium/Edge 支持），再加上 body 基准字号跟随
+//     这样"整体变大变小"最简单可靠，也不会破坏布局
+let FS_LEVELS = [0.9, 1.0, 1.08, 1.16, 1.25, 1.35];
+let FS_IDX = 1;
+function applyFontScale(idx) {
+  FS_IDX = Math.max(0, Math.min(FS_LEVELS.length - 1, idx | 0));
+  const v = FS_LEVELS[FS_IDX];
+  const win = document.getElementById('win');
+  if (win && win.style) {
+    // zoom 会让内容整体等比放大（含边框/间距），比逐条改 font-size 稳
+    win.style.zoom = v;
+    win.style.setProperty('--fs', v * 0.92 + 0.08);   // 文字跟随（略缓，避免过大）
+  }
+  const lbl = document.getElementById('fsLbl');
+  if (lbl) lbl.textContent = Math.round(v * 100) + '%';
+  try { localStorage.setItem('xiuxian_fs', String(FS_IDX)); } catch (e) { }
+  return v;
+}
+function fsStep(d) { return applyFontScale(FS_IDX + d); }
+function fsLoad() {
+  let v = 1;
+  try { const s = localStorage.getItem('xiuxian_fs'); if (s != null) v = parseInt(s, 10) || 1; } catch (e) { }
+  applyFontScale(v);
 }
 
 function log(msg, cls) {
@@ -10572,6 +10607,11 @@ $('#btnArchiveBack')?.addEventListener('click', function () { openArchive(false)
 // ★★ Round 42：设施页的按钮监听（函数已移到模块级）
 $('#btnFacBack')?.addEventListener('click', closeFacility);
 
+// ★★ Round 50：字号调节
+$('#fsMinus')?.addEventListener('click', function () { fsStep(-1); });
+$('#fsPlus')?.addEventListener('click', function () { fsStep(1); });
+try { fsLoad(); } catch (e) { }
+
 // 史册 / 生平 切换（原来靠底部「录」页签，现在并进宗页）
 $('#arcTabHis')?.addEventListener('click', function () {
   const a = document.getElementById('archiveBox'), l = document.getElementById('logBox');
@@ -10853,7 +10893,7 @@ globalThis.__api = {
   DUJIE, dujieReset, dujieRate, doDujie, dujieBaseRate, dujieDaoji, dujieLifeFactor, dujieQiMul, isRealmBreak,
   TRAIN, trainCost, trainStepCost, trainTotalCost, trainStartTier, trainUpgrade, trainNewDisciple,
   SECT_RES, FORGE_RECIPES, forge, forgeAll, forgeCost, canForge,
-  setBagOpen, viewDisciple, BAG_OPEN,
+  setBagOpen, viewDisciple, BAG_OPEN, applyFontScale, fsStep, fsLoad,
   reforge, reforgeCost, transferAffixes, transferCost, targetForge, targetCost, targetPool,
   FORGE_BASE, affixScoreOf,
   SECT_DOCTRINE, doctrineReset, renderArchiveBody, openArchive, banner, snapshotChronicle,

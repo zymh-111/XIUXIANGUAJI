@@ -28,12 +28,14 @@
     --green:#6fd3ab; --red:#e0785f;
     /* 品质色（保留，装备需要） */
     --q0:#9aa3b6; --q1:#6fd8ba; --q2:#5b96dc; --q3:#bd72d8; --q4:#e8bd48;
+    --fs:1;            /* ★ Round 50：全站字体缩放（设置面板调）*/
+  
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
     background:var(--bg); color:var(--paper); overflow:hidden;
-    font:13px/1.6 "WenKai","KaiTi","Songti SC",serif;
+    font:calc(13px * var(--fs,1))/1.6 "WenKai","KaiTi","Songti SC",serif;
     display:flex; align-items:center; justify-content:center;
   }
 
@@ -45,6 +47,7 @@
         高 +112px ⇒ 建筑面板/名册/宗门现状都能多显示几行
      ⚠️ 用 min(...,100%) 保证在矮视口里不溢出（body 是 flex 居中，溢出会被切） */
   #win{
+    font-size:calc(13px * var(--fs,1));
     width:420px; height:min(760px, 100%); position:relative;
     border-radius:9px; overflow:hidden; background:var(--ink);
     border:1px solid #ffffff17;
@@ -222,47 +225,6 @@
     30% {opacity:.55}
     100%{opacity:0;  transform:translate(var(--dx,0), var(--dy,0)) scale(1.04)}
   }
-  #hero .halo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:88px;height:88px;border-radius:50%;border:1px solid #c9a2273d;
-    animation:halo 2.4s ease-out infinite}
-  @keyframes halo{0%{transform:translate(-50%,-50%) scale(.6);opacity:.8}
-    100%{transform:translate(-50%,-50%) scale(1.5);opacity:0}}
-  #hero .hpwrap{position:absolute;left:50%;top:-10px;transform:translateX(-50%);
-    width:64px;height:2px;background:#ffffff1a;overflow:hidden}
-  #hero .hpwrap i{display:block;height:100%;width:100%;
-    background:linear-gradient(90deg,#7d6118,#d9b84a)}
-  #hero.dodge .torso,#hero.dash{filter:brightness(1.6)}
-  #arena{position:absolute;inset:0}
-  /* ★ 敌人（Round 14 补全：此前重写 HTML 时把这段写残了，
-       只剩 position/border-radius、没有尺寸 ⇒ 宽高 0 ⇒ 完全看不见怪）
-     ★ Round 38（用户要求）：小怪放大 12→16px，并改用【妖怪贴图】
-       （assets/妖怪/妖_<名>.webp）。贴图挂 ::before，不影响 hpbar / bossTag / hit */
-  .mob{position:absolute;width:16px;height:16px;border-radius:50%;
-    transform:translate(-50%,-50%);
-    transition:left .28s linear, top .28s linear, opacity .15s;z-index:3}
-  /* 贴图层：有 sprite 时用它，没有则退回纯色块（兜底样式在上面被覆盖） */
-  .mob .sprite{position:absolute;inset:0;background-repeat:no-repeat;
-    background-position:center;background-size:contain;
-    filter:drop-shadow(0 1px 2px #000000aa)}
-  /* 无贴图的怪（如域外天魔）：用回五行色块 */
-  .mob.nosprite{border-radius:50%;border:1px solid #ff6b5a;
-    background:radial-gradient(circle at 35% 32%,#ff9a8a,#b8332a)}
-  .mob.nosprite .sprite{display:none}
-  /* ★ Round 41（用户要求："精英复用小怪的，变大一点然后随便加点精英该有的变化区别"）
-     ⇒ 精英【不再单独出贴图】：同一张 16px 源图放大到 24px（够用，Q版缩小再放大损失小），
-        再叠三样"精英标识" —— 金环 / 金辉 / 头顶菱形
-     好处：省掉 10 套 _精英 贴图（约 60 个文件），且以后换小怪图精英自动跟着变 */
-  .mob.elite{width:24px;height:24px;z-index:4}
-  /* 金环 + 外发光（用 border 不用 box-shadow，避免和 .hit 的 filter 打架） */
-  .mob.elite .sprite{
-    border:1.5px solid #e8bd38;
-    border-radius:6px;
-    box-shadow:0 0 7px #e8bd38aa, inset 0 0 5px #e8bd3866;
-    animation:elitePulse 1.6s ease-in-out infinite}
-  /* 头顶菱形：一眼区分精英 */
-  .mob.elite::after{content:'';position:absolute;left:50%;top:-6px;
-    transform:translateX(-50%) rotate(45deg);width:4px;height:4px;
-    background:#e8bd38;box-shadow:0 0 4px #e8bd38cc}
   @keyframes elitePulse{0%,100%{box-shadow:0 0 5px #e8bd3888, inset 0 0 4px #e8bd3844}
     50%{box-shadow:0 0 11px #e8bd38cc, inset 0 0 7px #e8bd3888}}
   .mob.elite.nosprite{border-radius:5px;border:1px solid #ffc84a;
@@ -838,6 +800,16 @@
   .sc-pool{font-size:9.5px;color:var(--dim2);margin-top:3px;line-height:1.6}
   /* ★★ Round 48：当前宗门 buff（替代原来的设施升级列表）
      ⚠️ 4 个有建筑的升级项已在各自建筑页能升 ⇒ 这里只显示"现在生效的加成" */
+  /* ★★ Round 50：显示设置行（字号） */
+  .fs-row{display:flex;align-items:center;gap:8px;font-size:11px;padding:6px 0}
+  .fs-row .k{color:var(--dim2)}
+  .fs-row .v{color:var(--gold);min-width:44px;text-align:center;
+    font-variant-numeric:tabular-nums}
+  .fs-row button{font-size:11px;padding:3px 9px;background:transparent;
+    border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;
+    font-family:inherit}
+  .fs-row button:hover{border-color:var(--gold);color:var(--gold)}
+
   .sc-sec{font-size:9.5px;color:var(--dim2);letter-spacing:2px;
     margin:8px 0 3px;padding-top:6px;border-top:1px solid var(--line2)}
   .sc-buff{display:flex;align-items:baseline;gap:7px;font-size:10.5px;
@@ -1175,7 +1147,6 @@
       <div id="battleWrap">
         <div id="reachRing"></div>
         <div id="hero">
-          <div class="halo"></div>
           <div class="hpwrap"><i id="heroHp"></i></div>
           <img id="heroImg" src="assets/弟子/弟子_2@2x.webp" alt="">
           <!-- ★ R66：技能进度条（自走棋那种"还差多少才放"）—— 内容由 renderSkillBar() 填，
@@ -1373,6 +1344,15 @@
         <!-- ★ 重置 / 导出存档（Round 42：留在首屏底部） -->
         <div class="sec">
           <div id="resetBox"></div>
+          <!-- ★★ Round 50：显示设置（用户："可以调节字体大小"） -->
+          <div class="sec-hd" style="margin-top:12px"><span>显示设置</span></div>
+          <div class="fs-row">
+            <span class="k">字号</span>
+            <button id="fsMinus">A−</button>
+            <span id="fsLbl" class="v">100%</span>
+            <button id="fsPlus">A＋</button>
+            <span class="k" style="margin-left:8px">（整体缩放）</span>
+          </div>
         </div>
 
       </div><!-- /#zongHome -->

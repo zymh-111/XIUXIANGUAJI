@@ -4002,7 +4002,7 @@ chk('★ 读档后门规的轴/值/署名都对',
 // ============================================================
 // ============================================================
 // ============================================================
-hdr('测试 54：宗门现状 = 当前宗门 buff（Round 48）');
+hdr('测试 56：宗门现状 = 当前宗门 buff（Round 48）');
 //
 //   用户："如果有其他入口就把这里的删了，然后这里主要显示当前宗门buff（比如余韵什么的）"
 //   ⇒ 有建筑的 4 项升级已在各自建筑页能升 ⇒ 这里只留汇总 + 入门礼
@@ -4321,6 +4321,75 @@ chk('★ 前线引用重连（是 list 里的同一对象）',
   ' alive=' + A.ROSTER.list.map(x=>x.alive?1:0).join(''));
 chk('★ 分派规则恢复', A.ROSTER.rule && A.ROSTER.rule.kind, JSON.stringify(A.ROSTER.rule));
 // ============================================================================
+// ============================================================
+hdr('测试 55：光环删除 + 方形游走 + 字号可调（Round 50）');
+const _H5 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
+const _J5 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8');
+
+// ---- ① 光环删除 ----
+chk('★ 弟子脚下光环已删（DOM）', _H5.indexOf('class="halo"') < 0);
+chk('★ 光环 CSS 已删', _H5.indexOf('#hero .halo') < 0);
+chk('★ 光环 keyframes 已删', _H5.indexOf('@keyframes halo') < 0);
+chk('★ 攻击范围圈 #reachRing 保留', _H5.indexOf('id="reachRing"') >= 0);
+
+// ---- ② 方形游走 ----
+chk('★ 落点用独立均匀（方）而不是极坐标', (function () {
+  // 旧：Math.cos(a) * r / Math.sin(a) * r  ⇒ 圆盘
+  // 新：(Math.random() * 2 - 1) * _r
+  const i = _J5.indexOf('function wanderHero');
+  const seg = _J5.slice(i, i + 3000);
+  return /Math\.random\(\) \* 2 - 1\) \* _r/.test(seg) &&
+         !/Math\.cos\(a\) \* r/.test(seg);
+})());
+chk('★ 边界改成方形夹紧（不再 Math.hypot 拉回）', (function () {
+  const i = _J5.indexOf('function wanderHero');
+  const seg = _J5.slice(i, i + 4000);
+  return /超出方形就软推回/.test(seg) && /if \(dx > lim\)/.test(seg);
+})());
+
+// ---- ③ 字号可调 ----
+chk('★ 有 applyFontScale / fsStep / fsLoad', /function applyFontScale/.test(_J5) &&
+  /function fsStep/.test(_J5) && /function fsLoad/.test(_J5));
+chk('★ 有字号按钮 #fsPlus / #fsMinus', /id="fsPlus"/.test(_H5) && /id="fsMinus"/.test(_H5));
+chk('★ 有 --fs 变量', /--fs/.test(_H5));
+chk('★ applyFontScale 可运行且返回倍数', (function () {
+  if (typeof A.applyFontScale !== 'function') return false;
+  const v0 = A.applyFontScale(0), v5 = A.applyFontScale(5);
+  return v0 > 0 && v5 > v0;
+})());
+
+// ---- ④ 运行时：hero 确实在动、且不是圆形 ----
+chk('★ hero 会移动（不是静止）', (function () {
+  A.SECT.up = {}; A.SECT_RES.materials = 0; A.doctrineReset();
+  A.ROSTER.list.length = 0; A.ROSTER.front = null; A.ROSTER.nextId = 1;
+  A.newDisciple([A.makeSlotItem('主手', 6, 1, 'sword')]);
+  A.startRun();
+  const pts = [];
+  for (let i = 0; i < 60; i++) { G._lastTick = Date.now() - 200; A.tick(); if (G.running) pts.push([G.heroX, G.heroY]); }
+  const uniq = new Set(pts.map(p => p[0].toFixed(4) + ',' + p[1].toFixed(4))).size;
+  return uniq >= 5;
+})());
+chk('★ 走位不是圆形（|dx|↔|dy| 相关性接近 0）', (function () {
+  A.ROSTER.list.length = 0; A.ROSTER.front = null; A.ROSTER.nextId = 1;
+  A.newDisciple([A.makeSlotItem('主手', 6, 1, 'sword')]);
+  const HOME = { x: 0.5, y: 0.56 };
+  const pts = [];
+  let guard = 0;
+  while (pts.length < 1200 && guard++ < 30000) {
+    if (!G.running) A.startRun();
+    G._lastTick = Date.now() - 200; A.tick();
+    if (G.running) pts.push([G.heroX, G.heroY]);
+  }
+  const hx = pts.map(p => Math.abs(p[0] - HOME.x));
+  const hy = pts.map(p => Math.abs(p[1] - HOME.y));
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const ma = mean(hx), mb = mean(hy);
+  let n = 0, da = 0, db = 0;
+  for (let i = 0; i < hx.length; i++) { n += (hx[i] - ma) * (hy[i] - mb); da += (hx[i] - ma) ** 2; db += (hy[i] - mb) ** 2; }
+  const c = da && db ? n / Math.sqrt(da * db) : 0;
+  // 圆形会是强负相关（约 -0.33）；方形接近 0。给宽区间但在圆之外
+  return pts.length > 500 && c > -0.15;
+})());
 hdr('测试 54：Round 50 —— 地图加大 + 设施归位 + 灵根重排');
 //   三个用户诉求：
 //     ① 宗门全景占比变大 + 顶排建筑名看得见
