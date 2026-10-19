@@ -9123,10 +9123,7 @@ function render() {
   if (bw) {
     const W = bw.clientWidth || 480;
     const reachPx = st.reach * W * 2;
-    // ★ 威胁圈【完全不可见】——玩家只能看到怪变多，自己感受危险
-    //   （用户决策：不需要告诉玩家威胁圈在哪、有多大）
-    const rr = $('#reachRing');
-    if (rr) { rr.style.width = reachPx + 'px'; rr.style.height = (reachPx * 0.80) + 'px'; }
+    // ★ Round 51：范围圈已删除（用户要求），这里不再设置尺寸
   }
 
   // ★ 挂机报告：有重要事件时显示
@@ -9184,9 +9181,7 @@ function render() {
     if (bw2) bw2.classList.toggle('breaking', breakoutFlash > 0);
     if (breakoutFlash <= 0) { const bw3 = $('#battleWrap'); if (bw3) bw3.classList.remove('breaking'); }
   }
-  // 攻击范围跟着角色走（威胁圈已完全隐形，不再绘制）
-  const rrM = $('#reachRing');
-  if (rrM) { rrM.style.left = (G.heroX * 100) + '%'; rrM.style.top = (G.heroY * 100) + '%'; }
+  // ★ Round 51：范围圈已删除，不再跟随位置
 
   renderSkillBar();   // ★ R66：弟子脚下的技能进度条（自走棋那种"还差多少才放"）
 

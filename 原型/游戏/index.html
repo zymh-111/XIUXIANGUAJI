@@ -160,8 +160,6 @@
 
   /* 战斗角色（保留原有观感，缩到窄窗里） */
   #battleWrap{position:absolute;inset:0;z-index:4}
-  #reachRing{position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);
-    border-radius:50%;z-index:2;pointer-events:none;border:1px solid #5aa9e64d}
   /* ★ 主角 = 当前历练弟子（立绘换成 <img>），尺寸随场景加高一起放大
      旧版是 34×46 的纯 CSS 小人；现在用 72×72 的弟子头像 */
   #hero{position:absolute;left:50%;top:56%;width:72px;height:72px;
@@ -1145,7 +1143,6 @@
       <img src="assets/asian-mountain-forest-bg__sprite_northWindShrineBG.webp" alt="">
       <div class="veil"></div>
       <div id="battleWrap">
-        <div id="reachRing"></div>
         <div id="hero">
           <div class="hpwrap"><i id="heroHp"></i></div>
           <img id="heroImg" src="assets/弟子/弟子_2@2x.webp" alt="">

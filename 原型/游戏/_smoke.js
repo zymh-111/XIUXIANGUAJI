@@ -4330,7 +4330,8 @@ const _J5 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.j
 chk('★ 弟子脚下光环已删（DOM）', _H5.indexOf('class="halo"') < 0);
 chk('★ 光环 CSS 已删', _H5.indexOf('#hero .halo') < 0);
 chk('★ 光环 keyframes 已删', _H5.indexOf('@keyframes halo') < 0);
-chk('★ 攻击范围圈 #reachRing 保留', _H5.indexOf('id="reachRing"') >= 0);
+chk('★ 攻击范围圈 #reachRing 也已删（Round 51）',
+  _H5.indexOf('id="reachRing"') < 0 && _H5.indexOf('#reachRing') < 0);
 
 // ---- ② 方形游走 ----
 chk('★ 落点用独立均匀（方）而不是极坐标', (function () {
