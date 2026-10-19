@@ -5464,9 +5464,59 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
     'v=' + A.SFX_CFG.item.v + ' gap=' + A.SFX_CFG.item.gap);
 })();
 
+// ============================================================================
+// ★ R76：界面「关键选择器」必须存在 —— 把那条纪律变成断言
+//
+//   ⚠️ 为什么加：这类错**已经发生第 4 次**了，而且 900+ 项断言一条都抓不到
+//   （它们测逻辑不测 CSS）。最近一次（R50 的"修布局塌陷"）把 `#arena{}` 和
+//   `.mob{}` 整段删掉了，游戏照常跑（击杀在涨、伤害数字在飘），但**场上一只怪都看不见**
+//   —— `.mob` 只剩 `.mob.elite` / `.mob.hit` 这些修饰符，基础规则没了。
+//   同 R14「重写 HTML 把这段写残了 ⇒ 宽高 0 ⇒ 完全看不见怪」是同一个坑。
+//
+//   ⇒ 这里对 index.html 做静态断言：**关键选择器在不在** + **尺寸类规则有没有尺寸**。
+//     分工：这条负责"别被删掉"，`_tools/shot.js` 负责"真跑起来长什么样"，两者都要。
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const HTML = fsx.readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
+  // [选择器, 规则块里必须出现的属性...]  —— 缺 `.mob` 的 width/height 就是"看不见怪"
+  const CRIT = [
+    ['#win', ['width:420px']],
+    ['#arena', ['position:absolute']],
+    ['#hero', ['width:72px']],
+    ['.mob', ['position:absolute', 'width:16px', 'height:16px']],
+    ['.mob .sprite', ['position:absolute']],
+    ['.mob.nosprite', ['border-radius']],
+    ['.mob.elite', ['width:24px', 'height:24px']],
+    ['.mob .hpbar', ['position:absolute']],
+    ['.mob.boss', ['width:36px']],
+  ];
+  const bad = [];
+  for (const pair of CRIT) {
+    const sel = pair[0], props = pair[1] || [];
+    const idx = HTML.indexOf(sel + '{');
+    if (idx < 0) { bad.push(sel + ' 整条规则不存在'); continue; }
+    const bodyText = HTML.slice(idx, idx + 500);
+    for (const pr of props) {
+      if (bodyText.indexOf(pr) < 0) bad.push(sel + ' 缺 ' + pr);
+    }
+  }
+  chk('★ 界面·关键选择器都在（缺 .mob{} 就是"看不见怪"，R50 真发生过）',
+    bad.length === 0, bad.join(' · '));
+
+  // 交叉校验：_game.js 建的 class，CSS 里必须有对应规则
+  const need = ['.mob{', '.mob .sprite{', '.mob .hpbar{', '#arena{'];
+  const miss = need.filter(t => HTML.indexOf(t) < 0);
+  chk('★ 界面·战斗渲染依赖的 class 都有样式（mob / sprite / hpbar / arena）',
+    miss.length === 0, miss.join(' · '));
+
+  // ★ 字号缩放（R50 新增）：--fs 变量与它挂上的地方必须在
+  chk('★ 界面·字号缩放变量在（--fs，R50 新增的设置项）',
+    HTML.indexOf('--fs:1') >= 0 && HTML.indexOf('calc(13px * var(--fs,1))') >= 0);
+})();
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));
+
 process.exit(fail === 0 ? 0 : 1);
-
-

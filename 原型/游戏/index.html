@@ -223,6 +223,35 @@
     30% {opacity:.55}
     100%{opacity:0;  transform:translate(var(--dx,0), var(--dy,0)) scale(1.04)}
   }
+  /* ★★★ R76 恢复（⚠️ 这一块被 R50 的"修布局塌陷"整段删掉了，别再加回来又删一遍）
+     症状：游戏照常跑（击杀在涨、伤害数字在飘），但**场上一只怪都看不见**——
+     因为 `.mob` 只剩 `.mob.elite` / `.mob.hit` / `.mob.boss` 这些**修饰符**，
+     基础规则（绝对定位 + 16×16 尺寸）没了 ⇒ 元素退化成块级、宽撑满 382、高 0。
+     ⚠️ `_smoke.js` 的 924 项断言**一条都抓不到**（它们测逻辑不测 CSS），只有截图能看见。
+     同 R14 那次"重写 HTML 把这段写残了、宽高 0 ⇒ 完全看不见怪"是同一个坑，两次了。 */
+  #arena{position:absolute;inset:0}
+  .mob{position:absolute;width:16px;height:16px;border-radius:50%;
+    transform:translate(-50%,-50%);
+    transition:left .28s linear, top .28s linear, opacity .15s;z-index:3}
+  /* 贴图层：有 sprite 时用它，没有则退回纯色块（兜底样式在上面被覆盖） */
+  .mob .sprite{position:absolute;inset:0;background-repeat:no-repeat;
+    background-position:center;background-size:contain;
+    filter:drop-shadow(0 1px 2px #000000aa)}
+  /* 无贴图的怪（如域外天魔）：用回五行色块 */
+  .mob.nosprite{border-radius:50%;border:1px solid #ff6b5a;
+    background:radial-gradient(circle at 35% 32%,#ff9a8a,#b8332a)}
+  .mob.nosprite .sprite{display:none}
+  /* 精英：复用同一张 16px 源图放大到 24px，再叠三样标识（金环 / 金辉 / 头顶菱形） */
+  .mob.elite{width:24px;height:24px;z-index:4}
+  .mob.elite .sprite{
+    border:1.5px solid #e8bd38;
+    border-radius:6px;
+    box-shadow:0 0 7px #e8bd38aa, inset 0 0 5px #e8bd3866;
+    animation:elitePulse 1.6s ease-in-out infinite}
+  /* 头顶菱形：一眼区分精英 */
+  .mob.elite::after{content:'';position:absolute;left:50%;top:-6px;
+    transform:translateX(-50%) rotate(45deg);width:4px;height:4px;
+    background:#e8bd38;box-shadow:0 0 4px #e8bd38cc}
   @keyframes elitePulse{0%,100%{box-shadow:0 0 5px #e8bd3888, inset 0 0 4px #e8bd3844}
     50%{box-shadow:0 0 11px #e8bd38cc, inset 0 0 7px #e8bd3888}}
   .mob.elite.nosprite{border-radius:5px;border:1px solid #ffc84a;
