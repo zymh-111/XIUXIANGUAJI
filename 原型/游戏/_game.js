@@ -8409,7 +8409,10 @@ function step(st, dt) {
         G.kills++; G.totalKills++;
         // ★ A27 枯竭：本源获取 −X%
         const _om = (G._lastSt && G._lastSt.originMul) || 1;
-        G.origin += P.ORIGIN_PER_KILL * _om;
+        // ★★ R78：本源内部是【浮点】（0.22/杀），显示前必须取整，
+        //   否则会打出 "39.81999999999999" 这种尾数（用户截图报的 bug）。
+        //   累加后顺手截到 2 位，防止误差越滚越大（浮点 +0.22 加 180 次会漂）。
+        G.origin = Math.round((G.origin + P.ORIGIN_PER_KILL * _om) * 100) / 100;
         // ★ 灵气：击杀获得修为（精英给更多）
         gfOnKill();   // ★ 功法：心法层数 / 身法层数 / 魂力
         GF.holdT = 0;                       // ★ 焚心诀：击杀即续命
@@ -8749,7 +8752,7 @@ function endRun(survived, reason) {
     ' · 掉落 ' + G.dropped + ' 件' +
     (bonus ? '（含通关保底 ' + bonus + '）' : '') +
     (G.disenchanted ? ' · 已分解 ' + G.disenchanted : '') +
-    ' · 本源 +' + G.origin +
+    ' · 本源 +' + Math.floor(G.origin || 0) +
     (backlash ? ' —— 反噬积满，本局提前结束（弟子活着回来了）' : ''),
     backlash ? 'bad' : (survived ? 'ok' : 'bad'));
   render();
@@ -9005,9 +9008,12 @@ function banner(msg, cls) {
 }
 
 // ★★ Round 50：字体缩放（用户："可以调节字体大小"）
-//   ⚠️ 全站字号是硬编码 px 的，逐条改不现实
-//   ⇒ 用 zoom 缩放整个 #win（Chromium/Edge 支持），再加上 body 基准字号跟随
-//     这样"整体变大变小"最简单可靠，也不会破坏布局
+// ★★ R78 修：原来这里用的是 `win.style.zoom = v` —— **zoom 会把整个 #win 连布局一起放大**
+//     （420×760 的窗口被放大成 567×1026），所以用户看到的是"页面也变大了"，不是"字变大了"。
+//     ⇒ 去掉 zoom，改成**只缩放字号**：index.html 里 175 处 `font-size` 与 font 简写
+//        全部改成 `calc(Npx * var(--fs,1))`，`--fs` 只影响文字，布局尺寸一个像素都不动。
+//     ⚠️ 代价（说清楚）：字变大而容器不变 ⇒ 行高/宽度会重排，极端档位（135%）长文案可能换行更多。
+//        这是"只放大文字"必须付的账；如果你更想要"整体等比放大"，那就该用回 zoom，两者不能兼得。
 let FS_LEVELS = [0.9, 1.0, 1.08, 1.16, 1.25, 1.35];
 let FS_IDX = 1;
 function applyFontScale(idx) {
@@ -9015,9 +9021,8 @@ function applyFontScale(idx) {
   const v = FS_LEVELS[FS_IDX];
   const win = document.getElementById('win');
   if (win && win.style) {
-    // zoom 会让内容整体等比放大（含边框/间距），比逐条改 font-size 稳
-    win.style.zoom = v;
-    win.style.setProperty('--fs', v * 0.92 + 0.08);   // 文字跟随（略缓，避免过大）
+    win.style.zoom = '';                      // ★ R78：清掉旧版留下的 zoom（存档里可能还带着）
+    win.style.setProperty('--fs', v);         // 只驱动字号
   }
   const lbl = document.getElementById('fsLbl');
   if (lbl) lbl.textContent = Math.round(v * 100) + '%';
@@ -9216,7 +9221,8 @@ function render() {
         '<small>出手 ' + st.actFreq.toFixed(1) + '/s</small></span></div>' +
       '<div class="stat"><span class="k">护体</span><span class="v">' + st.def.toFixed(0) +
         '<small>减伤 ' + (dmgMul(st.def) * 100).toFixed(0) + '%</small></span></div>' +
-      '<div class="stat"><span class="k">本源</span><span class="v gold">' + G.origin +
+      // ★ R78：取整显示 —— 本源内部是浮点（0.22/杀），直接打会出尾数
+      '<div class="stat"><span class="k">本源</span><span class="v gold">' + Math.floor(G.origin || 0) +
         '<small>法宝催动 · 未用则散</small></span></div>' +
       '<div class="stat"><span class="k">天赋</span><span class="v">' +
         '<span style="color:#c8b08a">' + talOf().name + '</span>' +

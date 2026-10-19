@@ -5628,6 +5628,49 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
 })();
 
 
+// ============================================================================
+// ★ R78：两个用户报的显示 bug —— 都用断言钉住
+//   ① 本源显示出 "39.81999999999999"：本源内部是浮点（0.22/杀 × 180 次），
+//      显示前没取整。这类错只在**特定数值**下出现，截图/测试都很难稳定复现 ⇒ 用源码断言。
+//   ② 调字号连页面一起变大：原来用 `zoom` 缩放整个 #win（布局跟着放大）。
+//      改成只缩放字号（index.html 里每一处 font-size/font 都挂 --fs）。
+// ============================================================================
+(function () {
+  const fsx = require('fs');
+  const ROOT = 'D:/游戏资料库/原型/游戏/';
+  const JR = fsx.readFileSync(ROOT + '_game.js', 'utf8');
+  const HR = fsx.readFileSync(ROOT + 'index.html', 'utf8');
+
+  // ---- ① 本源显示必须取整 ----
+  chk('★★ 本源·显示取整（浮点 0.22/杀，不取整会显示 39.81999999999999）',
+    /class="v gold">' \+ Math\.floor\(G\.origin \|\| 0\)/.test(JR) &&
+    /' · 本源 \+' \+ Math\.floor\(G\.origin \|\| 0\)/.test(JR));
+
+  chk('★ 本源·累加截到 2 位（防浮点误差越滚越大）',
+    /G\.origin = Math\.round\(\(G\.origin \+ P\.ORIGIN_PER_KILL \* _om\) \* 100\) \/ 100/.test(JR));
+
+  // ---- ② 字号只能用 --fs 缩放，不许再 zoom ----
+  //   ⚠️ 两个坑都踩过，所以这里不用正则：
+  //      ① 注释里为了解释"为什么去掉 zoom"写着一句 `win.style.zoom = v`，
+  //         必须先把注释行剔掉，否则断言被自己的注释逗红；
+  //      ② 用 `(?!'')` 写"右值不是空串"时，`\s*` 可以回溯成零宽 ⇒ 空白字符
+  //         就把否定前瞻骗过去了（断言永远为真）。改成逐行判断。
+  const codeOnly = JR.split('\n').filter(l => l.trim().indexOf('//') !== 0);
+  const badZoom = codeOnly.filter(l => l.indexOf('.style.zoom') >= 0 && l.indexOf("= ''") < 0);
+  chk('★★ 字号·不用 zoom（zoom 会把布局一起放大 —— 用户报的"页面也变大了"）',
+    badZoom.length === 0 && codeOnly.some(l => l.indexOf("win.style.zoom = ''") >= 0),
+    badZoom.length ? '还在用 zoom: ' + badZoom[0].trim() : '已改成只缩放字号');
+
+  const fsHits = (HR.match(/var\(--fs,1\)/g) || []).length;
+  chk('★ 字号·每一处 font-size / font 都挂了 --fs（现在 ' + fsHits + ' 处）',
+    fsHits >= 150 && HR.indexOf('--fs:1') >= 0);
+
+  // 残留的裸 px 字号 = 调字号时它不会变大（漏网之鱼）
+  const bare = (HR.match(/font-size:\s*\d+(\.\d+)?px/g) || []);
+  chk('★ 字号·没有漏网的裸 px 字号', bare.length === 0, bare.slice(0, 3).join(' · '));
+})();
+
+
 console.log('\n' + '='.repeat(84));
 console.log(fail === 0 ? `✅ 全部通过（${pass} 项）` : `❌ ${fail} 项失败 / ${pass} 项通过`);
 console.log('='.repeat(84));

@@ -68,8 +68,8 @@
 
   /* ============ 顶部（世代 + 印章） ============ */
   .top{display:flex;align-items:flex-start;justify-content:space-between;padding:15px 18px 0;flex:0 0 auto}
-  .gen{font-size:11px;color:var(--dim);letter-spacing:2px;padding-top:3px}
-  .gen b{color:var(--paper);font-weight:400;font-size:12px}
+  .gen{font-size:calc(11px * var(--fs,1));color:var(--dim);letter-spacing:2px;padding-top:3px}
+  .gen b{color:var(--paper);font-weight:400;font-size:calc(12px * var(--fs,1))}
   .seal{width:26px;height:26px;border:1px solid var(--cinnabar);color:var(--cinnabar);
     display:flex;align-items:center;justify-content:center;border-radius:2px;
     opacity:.85;flex:0 0 auto}
@@ -79,19 +79,19 @@
      玩家必须显式点开；选择存 localStorage（`mijinglu_sfx`）。
      `margin-left:auto` 把它跟右边的印章一起推到行尾（.top 是三段的 space-between）。 */
   .sfx-btn{margin-left:auto;margin-right:7px;flex:0 0 auto;width:26px;height:26px;padding:0;
-    font:13px/1 inherit;background:transparent;border:1px solid #ffffff22;border-radius:2px;
+    font:calc(13px * var(--fs,1))/1 inherit;background:transparent;border:1px solid #ffffff22;border-radius:2px;
     color:#8c8574;cursor:pointer;opacity:.65;
     display:flex;align-items:center;justify-content:center}
   .sfx-btn:hover{opacity:1;border-color:#ffffff44}
   .sfx-btn.on{opacity:.95;border-color:var(--gold);color:var(--gold);background:#c9a22712}
-  .seal span{writing-mode:vertical-rl;font-size:9px;line-height:1.05;letter-spacing:1px}
+  .seal span{writing-mode:vertical-rl;font-size:calc(9px * var(--fs,1));line-height:1.05;letter-spacing:1px}
 
   /* ★ 事件横幅 */
   #eventBar{margin:10px 18px 0;padding:7px 10px;border:1px solid var(--cinnabar);
-    border-radius:3px;font-size:11px;letter-spacing:1px;color:#d9705f;
+    border-radius:3px;font-size:calc(11px * var(--fs,1));letter-spacing:1px;color:#d9705f;
     background:#a8392c14;display:flex;justify-content:space-between;align-items:baseline}
   #eventBar b{color:var(--cinnabar);font-weight:400;letter-spacing:2px}
-  #eventBar .left{color:#8c8574;font-size:10px}
+  #eventBar .left{color:#8c8574;font-size:calc(10px * var(--fs,1))}
 
   /* ============ 境 · 场景 ============ */
   /* ★ Round 35：场景加高（用户选定"方案C"）246px → 380px，战斗区更宽敞 */
@@ -110,11 +110,11 @@
      ⇒ 窄屏（400px 手机框）下必然重叠 —— "秘境·金煞谷·已入 12 息" 和战斗统计
      糊成一行（截图可复现）。
      ⇒ 现在：秘境名留在场景内左下（加半透明底），战斗数据移到场景【下方】独立一行。 */
-  .qilabel{position:absolute;z-index:3;left:12px;bottom:9px;font-size:10.5px;
+  .qilabel{position:absolute;z-index:3;left:12px;bottom:9px;font-size:calc(10.5px * var(--fs,1));
     color:#8c8574;letter-spacing:1.5px;
     background:#0a0b0ccc;border-radius:3px;padding:1px 6px}
   .qilabel b{color:var(--gold);font-weight:400}
-  #battleInfo{margin:6px 18px 0;font-size:10.5px;color:#8c8574;letter-spacing:.5px;
+  #battleInfo{margin:6px 18px 0;font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:.5px;
     line-height:1.7;display:flex;flex-wrap:wrap;gap:0 12px;align-items:baseline;
     flex:0 0 auto}
   #battleInfo span{white-space:nowrap}
@@ -125,7 +125,7 @@
   /* ★ 弟子数据控件（用户要求：境页面单独加个控件，点了才显示弟子详细数据） */
   /* ★★ Round 40：境页的功能入口按钮（背包 / 当前弟子） */
   .jing-acts{display:flex;gap:7px;padding:8px 18px 0;flex:0 0 auto}
-  .jing-acts button{flex:1;font-size:11px;padding:7px 0;background:transparent;
+  .jing-acts button{flex:1;font-size:calc(11px * var(--fs,1));padding:7px 0;background:transparent;
     border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;
     font-family:inherit;letter-spacing:1px}
   .jing-acts button:hover{border-color:#ffffff44;color:var(--paper)}
@@ -145,15 +145,15 @@
   #bagDrawer.on{display:flex;animation:bdSlide .18s ease-out}
   .bd-hd{display:flex;justify-content:space-between;align-items:center;
     padding:10px 18px;border-bottom:1px solid var(--line2);flex:0 0 auto;background:#101112}
-  .bd-hd b{font-size:11.5px;color:var(--gold);font-weight:400;letter-spacing:2px}
-  .bd-hd button{font-size:11px;padding:4px 10px;background:transparent;
+  .bd-hd b{font-size:calc(11.5px * var(--fs,1));color:var(--gold);font-weight:400;letter-spacing:2px}
+  .bd-hd button{font-size:calc(11px * var(--fs,1));padding:4px 10px;background:transparent;
     border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;font-family:inherit}
   .bd-hd button:hover{border-color:var(--gold);color:var(--gold)}
   .bd-body{flex:1 1 auto;overflow-y:auto;padding:0 0 14px}
   @keyframes bdSlide{from{transform:translateY(-14px);opacity:0}to{transform:translateY(0);opacity:1}}
 
-  .bd-hd b{font-size:11.5px;color:var(--gold);font-weight:400;letter-spacing:2px}
-  .bd-hd button{font-size:11px;padding:4px 10px;background:transparent;
+  .bd-hd b{font-size:calc(11.5px * var(--fs,1));color:var(--gold);font-weight:400;letter-spacing:2px}
+  .bd-hd button{font-size:calc(11px * var(--fs,1));padding:4px 10px;background:transparent;
     border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;font-family:inherit}
   .bd-hd button:hover{border-color:var(--gold);color:var(--gold)}
 
@@ -542,11 +542,11 @@
 
   /* 名字横幅：让玩家知道"刚才是哪个法宝/功法"（挂在特效容器里，跟着它一起消失） */
   .vfx-name{position:absolute;left:0;top:-46px;transform:translateX(-50%);
-    white-space:nowrap;font-size:12px;letter-spacing:2px;
+    white-space:nowrap;font-size:calc(12px * var(--fs,1));letter-spacing:2px;
     color:var(--wx,#c9a227);text-shadow:0 0 8px #000,0 1px 2px #000;
     padding:1px 7px;border:1px solid var(--wx,#c9a227);border-radius:2px;
     background:#0c0d0ecc;animation:vfxName 1.15s cubic-bezier(.15,.9,.3,1) forwards}
-  .vfx-skill.big .vfx-name{font-size:14px;top:-56px}
+  .vfx-skill.big .vfx-name{font-size:calc(14px * var(--fs,1));top:-56px}
   @keyframes vfxName{
     0%  {opacity:0;transform:translateX(-50%) translateY(10px) scale(.88)}
     14% {opacity:1;transform:translateX(-50%) translateY(0) scale(1.04)}
@@ -570,25 +570,25 @@
   #battleWrap.breaking{box-shadow:inset 0 0 60px #c9a22766}
 
   /* 飘字 */
-  .pop{position:absolute;font-size:11px;pointer-events:none;z-index:9;
+  .pop{position:absolute;font-size:calc(11px * var(--fs,1));pointer-events:none;z-index:9;
     text-shadow:0 1px 3px #000}
-  .pop.crit{color:#e8cc72;font-size:14px;font-weight:700}
-  .pop.ke{color:#7fd8bc;font-size:15px;font-weight:800}
+  .pop.crit{color:#e8cc72;font-size:calc(14px * var(--fs,1));font-weight:700}
+  .pop.ke{color:#7fd8bc;font-size:calc(15px * var(--fs,1));font-weight:800}
   .pop.dmg{color:#d8d1c3} .pop.miss{color:#7e7768}
-  .pop.dodge{color:#63b394} .pop.break{color:#f0d080;font-size:16px;font-weight:800}
+  .pop.dodge{color:#63b394} .pop.break{color:#f0d080;font-size:calc(16px * var(--fs,1));font-weight:800}
 
   /* ============ 修为条 ============ */
   #qiWrap{margin:16px 18px 0;flex:0 0 auto}
   #qiWrap .qi-lbl{display:flex;justify-content:space-between;align-items:baseline;
-    font-size:11px;color:var(--dim);letter-spacing:1px;margin-bottom:7px}
-  #qiWrap .qi-lbl b{color:var(--bright);font-size:15px;letter-spacing:2px;font-weight:400}
-  #qiTierTxt{color:#8c8574;font-size:11px}
+    font-size:calc(11px * var(--fs,1));color:var(--dim);letter-spacing:1px;margin-bottom:7px}
+  #qiWrap .qi-lbl b{color:var(--bright);font-size:calc(15px * var(--fs,1));letter-spacing:2px;font-weight:400}
+  #qiTierTxt{color:#8c8574;font-size:calc(11px * var(--fs,1))}
   #qiBarOuter{height:1px;background:#ffffff1a;position:relative}
   #qiBar{position:absolute;left:0;top:0;height:1px;width:0;
     background:linear-gradient(90deg,#7d6118,#d9b84a);transition:width .25s}
   #qiBar::after{content:'';position:absolute;right:-2px;top:-2px;width:5px;height:5px;
     border-radius:50%;background:#d9b84a;box-shadow:0 0 7px #d9b84a}
-  #qiTxt{display:block;margin-top:7px;font-size:10px;color:var(--dim2);
+  #qiTxt{display:block;margin-top:7px;font-size:calc(10px * var(--fs,1));color:var(--dim2);
     letter-spacing:1px;text-align:right;font-variant-numeric:tabular-nums}
 
   /* ============ 属性行（.stat 风格） ============ */
@@ -601,23 +601,23 @@
     position:relative;overflow:hidden;background:radial-gradient(circle at 40% 32%,
       #f2ece0 0%,#d5cdbe 72%,#b8ae9c 100%);box-shadow:0 0 0 1px #ffffff1c}
   #hud .hud-disc .av img{position:absolute;left:0;top:0;width:100%;height:100%}
-  #hud .hud-disc .nm{flex:0 0 auto;color:var(--paper);font-size:11.5px}
-  #hud .hud-disc .lg{flex:0 0 auto;font-size:9px;padding:0 3px;border-radius:2px;
+  #hud .hud-disc .nm{flex:0 0 auto;color:var(--paper);font-size:calc(11.5px * var(--fs,1))}
+  #hud .hud-disc .lg{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:0 3px;border-radius:2px;
     border:1px solid #ffffff1a;color:#9a9284;display:inline-flex;align-items:center;gap:2px}
   #hud .hud-disc .lg i{display:inline-block;width:6px;height:6px;border-radius:50%}
-  #hud .hud-disc .tal{flex:0 0 auto;color:#c9a86e;font-size:10px}   /* Round 39：滚动交给父层 .scroll（原来双滚动）*/
+  #hud .hud-disc .tal{flex:0 0 auto;color:#c9a86e;font-size:calc(10px * var(--fs,1))}   /* Round 39：滚动交给父层 .scroll（原来双滚动）*/
   #hud .stat{display:flex;justify-content:space-between;align-items:baseline;
-    padding:7px 0;border-top:1px solid var(--line2);font-size:12px}
-  #hud .stat .k{color:var(--dim);letter-spacing:2px;font-size:11px;
+    padding:7px 0;border-top:1px solid var(--line2);font-size:calc(12px * var(--fs,1))}
+  #hud .stat .k{color:var(--dim);letter-spacing:2px;font-size:calc(11px * var(--fs,1));
     flex:0 0 auto;white-space:nowrap}   /* ★ R59：.v 侧加了图标后，标签不许被挤换行 */
   #hud .stat .v{color:var(--bright);font-variant-numeric:tabular-nums;letter-spacing:1px}
   #hud .stat .v.gold{color:var(--gold)} #hud .stat .v.low{color:var(--red)}
-  #hud .stat .v small{color:#6d675b;font-size:10.5px;margin-left:5px;letter-spacing:0}
+  #hud .stat .v small{color:#6d675b;font-size:calc(10.5px * var(--fs,1));margin-left:5px;letter-spacing:0}
 
   /* ============ 按钮（细边 · 无方框感） ============ */
   .btns{display:flex;gap:7px;padding:12px 18px 0;flex:0 0 auto;flex-wrap:wrap}
   button{flex:1;padding:8px 10px;border:1px solid #ffffff2b;border-radius:4px;
-    cursor:pointer;background:#ffffff0a;color:#b9c2d0;font-size:12px;
+    cursor:pointer;background:#ffffff0a;color:#b9c2d0;font-size:calc(12px * var(--fs,1));
     font-family:"WenKai",serif;letter-spacing:1px;transition:.15s;white-space:nowrap}
   button:hover{border-color:#ffffff66;color:#fff}
   button.primary{border-color:var(--gold);color:#e0c464;background:#c9a22722}
@@ -627,7 +627,7 @@
 
   /* ============ 底部页签 ============ */
   .nav{display:flex;border-top:1px solid var(--line);flex:0 0 auto;margin-top:auto}
-  .nav div{flex:1;text-align:center;padding:13px 0 14px;font-size:12.5px;
+  .nav div{flex:1;text-align:center;padding:13px 0 14px;font-size:calc(12.5px * var(--fs,1));
     color:var(--dim2);letter-spacing:4px;cursor:pointer;position:relative;
     user-select:none;transition:color .16s}
   .nav div:hover{color:#8c8574}
@@ -643,7 +643,7 @@
   /* ============ 装 · 身体分区 ============ */
   #zones{position:relative}
   .zone{border:1px dashed #ffffff1f;border-radius:3px;position:relative}
-  .zone .zname{font-size:10px;color:var(--dim2);padding:3px 5px;letter-spacing:1px;
+  .zone .zname{font-size:calc(10px * var(--fs,1));color:var(--dim2);padding:3px 5px;letter-spacing:1px;
     display:flex;justify-content:space-between;align-items:baseline}
   .zone .zname em{font-style:normal;color:var(--gold);font-variant-numeric:tabular-nums}
 
@@ -679,44 +679,44 @@
   .ztile{position:relative;z-index:2;min-width:0}
   .ztile.left{grid-column:1}.ztile.right{grid-column:3}
   .ztile .zh{display:flex;justify-content:space-between;align-items:baseline;
-    font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:4px;white-space:nowrap}
-  .ztile .zh b{color:#bbb4a6;font-weight:400;font-size:11px}
-  .ztile .zh em{font-style:normal;color:var(--dim2);font-variant-numeric:tabular-nums;font-size:9.5px}
+    font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:4px;white-space:nowrap}
+  .ztile .zh b{color:#bbb4a6;font-weight:400;font-size:calc(11px * var(--fs,1))}
+  .ztile .zh em{font-style:normal;color:var(--dim2);font-variant-numeric:tabular-nums;font-size:calc(9.5px * var(--fs,1))}
   .ztile .zh em.full{color:var(--gold)}
   /* 格内网格（沿用原有 cell / it 视觉，只是格子变小） */
   .zg{display:grid;gap:2px;justify-content:start}
   .zg .cell{width:14px;height:14px;border:1px solid var(--line2);border-radius:2px;
-    display:flex;align-items:center;justify-content:center;font-size:8px;
+    display:flex;align-items:center;justify-content:center;font-size:calc(8px * var(--fs,1));
     overflow:hidden;position:relative}
   .zg .cell.item{border-width:1px;border-style:solid}
   .zg .cell.empty{border-style:dashed;border-color:#ffffff0d}
   .zg .cell.dragover{border-color:var(--gold);background:#c9a2270f}
 
   /* ============ 背包 / 掉落 ============ */
-  .flt{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px;
+  .flt{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:calc(11px * var(--fs,1));
     color:var(--dim);padding:7px 0;border-top:1px solid var(--line2)}
   select{background:#141517;color:var(--paper);border:1px solid #ffffff1f;
-    border-radius:3px;font-size:11px;padding:2px 4px;font-family:"WenKai",serif}
-  label{display:inline-flex;align-items:center;gap:3px;font-size:11px}
+    border-radius:3px;font-size:calc(11px * var(--fs,1));padding:2px 4px;font-family:"WenKai",serif}
+  label{display:inline-flex;align-items:center;gap:3px;font-size:calc(11px * var(--fs,1))}
   #bagList{max-height:none}
   .bag-i{display:flex;align-items:baseline;gap:7px;padding:7px 0;
-    border-top:1px solid var(--line2);font-size:12px;cursor:pointer;position:relative}
-  .bag-i .q{flex:0 0 auto;font-size:10.5px;letter-spacing:1px}
+    border-top:1px solid var(--line2);font-size:calc(12px * var(--fs,1));cursor:pointer;position:relative}
+  .bag-i .q{flex:0 0 auto;font-size:calc(10.5px * var(--fs,1));letter-spacing:1px}
   .bag-i .nm{flex:1;color:var(--txt);letter-spacing:1px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
   .bag-i .nm b{font-weight:400;color:var(--bright)}
-  .bag-i .dim{color:var(--dim2);font-size:10.5px}
-  .bag-i .af{font-size:9.5px;color:#8a95a8;letter-spacing:-0.5px}
-  .bag-i .sg{font-size:9.5px;color:var(--gold)}
-  .bag-i .sz{font-size:10px;color:var(--dim2);font-variant-numeric:tabular-nums}
-  .bag-i .up{color:var(--green);font-size:11px;font-variant-numeric:tabular-nums}
-  .bag-i .down{color:var(--red);font-size:11px;font-variant-numeric:tabular-nums}
-  .bag-i .same{color:var(--dim2);font-size:11px}
+  .bag-i .dim{color:var(--dim2);font-size:calc(10.5px * var(--fs,1))}
+  .bag-i .af{font-size:calc(9.5px * var(--fs,1));color:#8a95a8;letter-spacing:-0.5px}
+  .bag-i .sg{font-size:calc(9.5px * var(--fs,1));color:var(--gold)}
+  .bag-i .sz{font-size:calc(10px * var(--fs,1));color:var(--dim2);font-variant-numeric:tabular-nums}
+  .bag-i .up{color:var(--green);font-size:calc(11px * var(--fs,1));font-variant-numeric:tabular-nums}
+  .bag-i .down{color:var(--red);font-size:calc(11px * var(--fs,1));font-variant-numeric:tabular-nums}
+  .bag-i .same{color:var(--dim2);font-size:calc(11px * var(--fs,1))}
   .bag-i.good{background:#63b3940a}
   .bag-i.spec{border-left:2px dashed;padding-left:7px;margin-left:-9px}
   .bag-i.spec .nm b{font-weight:600}
-  .spec-desc{font-size:9.5px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #cmpBox{font-size:11px;color:var(--dim)}
+  .spec-desc{font-size:calc(9.5px * var(--fs,1));max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #cmpBox{font-size:calc(11px * var(--fs,1));color:var(--dim)}
 
   /* ============ 宗 · 宗门地图（AI 生成 · 三档图） ============
      阶位 → 用图：0/1 档1（素）· 2/3 档2（金顶）· 4 档3（仙门）
@@ -755,7 +755,7 @@
   .spot .ring{position:absolute;inset:0;border:1px solid transparent;border-radius:5px;
     transition:all .16s ease;pointer-events:none}
   .spot .tag{position:absolute;left:50%;top:0;transform:translate(-50%,-108%);
-    font-size:9px;color:#e6ded0;background:#0c0d0ef0;border:1px solid #ffffff30;
+    font-size:calc(9px * var(--fs,1));color:#e6ded0;background:#0c0d0ef0;border:1px solid #ffffff30;
     border-radius:3px;padding:1px 4px;white-space:nowrap;opacity:0;
     transition:opacity .16s;pointer-events:none;z-index:9}
   /* ★★ Round 50：顶上那排建筑（y=2%）的标签原本被 overflow:hidden 裁掉了
@@ -780,17 +780,17 @@
   .bldg-panel .bh{display:flex;align-items:center;gap:7px;margin-bottom:6px}
   .bldg-panel .bh img{width:26px;height:26px;object-fit:contain;
     filter:drop-shadow(0 1px 2px #000000aa)}
-  .bldg-panel .bh b{color:var(--bright);font-weight:400;font-size:12px;letter-spacing:1px}
-  .bldg-panel .bh em{font-style:normal;display:block;font-size:9px;color:var(--dim2)}
+  .bldg-panel .bh b{color:var(--bright);font-weight:400;font-size:calc(12px * var(--fs,1));letter-spacing:1px}
+  .bldg-panel .bh em{font-style:normal;display:block;font-size:calc(9px * var(--fs,1));color:var(--dim2)}
   .bldg-panel .bp{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
-    font-size:10px;padding:3px 0;border-top:1px solid var(--line2)}
+    font-size:calc(10px * var(--fs,1));padding:3px 0;border-top:1px solid var(--line2)}
   .bldg-panel .bp>span{color:var(--dim);flex:0 0 auto}
   .bldg-panel .bp>b{color:var(--txt);font-weight:400;text-align:right}
   .bldg-panel .bp>b.g{color:var(--gold);letter-spacing:1px}
   .bldg-panel .bp>b.lock{color:var(--red)}
-  .bldg-panel .bp>b.none{color:var(--dim2);font-size:9.5px}
+  .bldg-panel .bp>b.none{color:var(--dim2);font-size:calc(9.5px * var(--fs,1))}
   .bldg-panel .bbtn{margin-top:6px;text-align:right}
-  .bldg-panel .bbtn button{font:10px inherit;padding:3px 9px;background:#c9a22722;
+  .bldg-panel .bbtn button{font:calc(10px * var(--fs,1)) inherit;padding:3px 9px;background:#c9a22722;
     border:1px solid var(--gold);border-radius:3px;color:#e0c464;cursor:pointer}
   .bldg-panel .bbtn button:disabled{opacity:.35;border-color:#ffffff22;
     background:transparent;color:#8c8574;cursor:default}
@@ -800,41 +800,41 @@
      内容由 #archiveBody 承载（渲染逻辑在别处实现）。 */
   /* ★ Round 40：史册 / 生平 切换（原来靠底部「录」页签，现在并进宗页） */
   .arc-tabs{display:flex;gap:6px;margin:2px 0 8px}
-  .arc-tabs button{flex:1;font-size:10.5px;padding:5px 0;background:transparent;
+  .arc-tabs button{flex:1;font-size:calc(10.5px * var(--fs,1));padding:5px 0;background:transparent;
     border:1px solid #ffffff1c;border-radius:3px;color:#8c8574;cursor:pointer;
     font-family:inherit;letter-spacing:2px}
   .arc-tabs button.on{border-color:var(--gold);color:var(--gold);background:#c9a22712}
 
   #archiveBox{padding-bottom:6px}
-  #archiveBox .arc-hd{font-size:11px;color:var(--gold);letter-spacing:3px;
+  #archiveBox .arc-hd{font-size:calc(11px * var(--fs,1));color:var(--gold);letter-spacing:3px;
     padding-bottom:7px;margin-bottom:8px;border-bottom:1px solid var(--line2);
     display:flex;justify-content:space-between;align-items:baseline}
-  #archiveBox .arc-hd em{font-style:normal;font-size:10px;color:var(--dim2);
+  #archiveBox .arc-hd em{font-style:normal;font-size:calc(10px * var(--fs,1));color:var(--dim2);
     letter-spacing:1px}
-  #archiveBox .arc-sec{font-size:10.5px;color:var(--dim);letter-spacing:2px;
+  #archiveBox .arc-sec{font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;
     margin:10px 0 4px}
   #archiveBox .arc-item{display:flex;gap:9px;padding:6px 0;
-    border-bottom:1px solid var(--line2);font-size:10.5px;align-items:baseline}
-  #archiveBox .arc-item .g{flex:0 0 auto;color:var(--gold);font-size:10px;
+    border-bottom:1px solid var(--line2);font-size:calc(10.5px * var(--fs,1));align-items:baseline}
+  #archiveBox .arc-item .g{flex:0 0 auto;color:var(--gold);font-size:calc(10px * var(--fs,1));
     letter-spacing:1px;font-variant-numeric:tabular-nums}
   #archiveBox .arc-item .b{flex:1;min-width:0;color:var(--txt);line-height:1.6}
   #archiveBox .arc-item .b i{font-style:normal;color:var(--dim2)}
   #archiveBox .arc-item .b b{color:var(--gold);font-weight:400}
-  #archiveBox .arc-empty{font-size:10px;color:#5d574c;padding:8px 0}
+  #archiveBox .arc-empty{font-size:calc(10px * var(--fs,1));color:#5d574c;padding:8px 0}
   /* ★ Round 53：生平卷（三幕 + 墓志）/ 宗门本纪 */
-  .bio-act{font-size:10.5px;color:var(--txt);line-height:1.75;margin:2px 0;text-indent:0}
-  .bio-act span{color:var(--gold);font-size:9.5px;letter-spacing:2px;margin-right:6px}
+  .bio-act{font-size:calc(10.5px * var(--fs,1));color:var(--txt);line-height:1.75;margin:2px 0;text-indent:0}
+  .bio-act span{color:var(--gold);font-size:calc(9.5px * var(--fs,1));letter-spacing:2px;margin-right:6px}
   .bio-act i{font-style:italic;color:var(--dim2)}
-  .bio-epi{font-size:10.5px;color:#c8b08a;line-height:1.75;margin:6px 0 2px;text-indent:0;
+  .bio-epi{font-size:calc(10.5px * var(--fs,1));color:#c8b08a;line-height:1.75;margin:6px 0 2px;text-indent:0;
     padding-left:8px;border-left:2px solid #c9a22755}
   .sect-vol{padding:2px 0 8px}
-  .arc-item .g em{display:block;font-style:normal;font-size:9.5px;color:var(--dim2);letter-spacing:0}
+  .arc-item .g em{display:block;font-style:normal;font-size:calc(9.5px * var(--fs,1));color:var(--dim2);letter-spacing:0}
   .arc-item.bio-in{border-left:2px solid #6f9a6f;padding-left:8px}
   .arc-item.bio-dead{border-left:2px solid #a8594f;padding-left:8px}
   .arc-item.bio-hand{border-left:2px solid #8a8f96;padding-left:8px}
   .arc-item.bio-asc{border-left:2px solid #d9b95c;padding-left:8px}
   .bio-raw{margin:4px 0 10px}
-  .bio-raw summary{font-size:9.5px;color:#5d574c;cursor:pointer;letter-spacing:1px}
+  .bio-raw summary{font-size:calc(9.5px * var(--fs,1));color:#5d574c;cursor:pointer;letter-spacing:1px}
 
   .sect-banner{position:relative;isolation:isolate;margin:14px 18px 0;height:156px;
     border-radius:3px;overflow:hidden;background:#0a0b0c;flex:0 0 auto}
@@ -844,10 +844,10 @@
     background:radial-gradient(ellipse at 50% 45%,transparent 0%,rgba(8,9,10,.60) 100%),
                linear-gradient(180deg,rgba(10,11,12,.34),rgba(10,11,12,.82))}
   .sect-banner .bn{position:absolute;left:14px;bottom:10px;z-index:2;
-    font-size:10.5px;color:#8c8574;letter-spacing:2px}
-  .sect-banner .bn b{color:var(--gold);font-weight:400;font-size:12px}
+    font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:2px}
+  .sect-banner .bn b{color:var(--gold);font-weight:400;font-size:calc(12px * var(--fs,1))}
   .sect-banner .bnr{position:absolute;right:14px;bottom:10px;z-index:2;
-    font-size:10.5px;color:#8c8574;letter-spacing:1px;text-align:right;line-height:1.6}
+    font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:1px;text-align:right;line-height:1.6}
   .sect-banner .bnr b{color:var(--paper);font-weight:400}
 
   /* ★ Round 41：三列竖窗 → 自适应
@@ -858,21 +858,21 @@
      统一间距与分隔线 —— 以后再调区块节奏只改这里 */
   /* ★★ Round 42：常驻状态栏（宗页顶部，进设施页也不隐藏）*/
   #zongBar{display:flex;gap:12px;align-items:baseline;padding:5px 12px 0;
-    font-size:10.5px;color:#8c8574;letter-spacing:1px;flex:0 0 auto}
+    font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:1px;flex:0 0 auto}
   #zongBar b{color:var(--gold);font-weight:400;font-variant-numeric:tabular-nums}
   /* 设施页 */
   /* ★★ Round 44：设施页升级区（复用 .bldg-panel 的 .bp 行）
      ⚠️ .bp 原来是 flex-column（标签一行、值一行）—— 在建筑面板里是那样，
         但搬到设施页顶部后应该左右对齐才好读 */
   #facUpBox .bp{display:flex;justify-content:space-between;align-items:baseline;
-    gap:10px;padding:4px 0;border-bottom:1px solid #ffffff0f;font-size:11px}
+    gap:10px;padding:4px 0;border-bottom:1px solid #ffffff0f;font-size:calc(11px * var(--fs,1))}
   #facUpBox .bp:last-child{border-bottom:0}
   #facUpBox .bp > span{flex:0 0 auto;color:var(--dim2)}
   #facUpBox .bp > b{flex:1 1 auto;text-align:right;font-weight:400;color:var(--paper)}
   #facUpBox .bp > b.g{color:var(--gold)}
-  #facUpBox .bp > b.none{color:#5d574c;font-size:10px}
+  #facUpBox .bp > b.none{color:#5d574c;font-size:calc(10px * var(--fs,1))}
   #facUpBox .bbtn{margin-top:8px}
-  #facUpBox .bbtn button{width:100%;font-size:11px;padding:7px 0}
+  #facUpBox .bbtn button{width:100%;font-size:calc(11px * var(--fs,1));padding:7px 0}
   #facPage .fac > *{margin-left:18px;margin-right:18px}
   #facPage .fac > .sec{margin-left:0;margin-right:0}
 
@@ -881,7 +881,7 @@
   #evBanner{position:absolute;left:12px;right:12px;top:8px;z-index:60;
     display:none;padding:7px 12px;border-radius:3px;
     background:#0d0e0fee;border:1px solid var(--gold);
-    color:var(--gold);font-size:11px;letter-spacing:1px;text-align:center;
+    color:var(--gold);font-size:calc(11px * var(--fs,1));letter-spacing:1px;text-align:center;
     box-shadow:0 4px 16px #000000aa;pointer-events:none}
   #evBanner.on{display:block;animation:evbIn .22s ease-out}
   @keyframes evbIn{from{transform:translateY(-10px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -890,8 +890,8 @@
   .sec{margin-top:14px;border-top:1px solid var(--line2);padding-top:9px}
   .sec:first-of-type{margin-top:10px}
   .sec-hd{display:flex;justify-content:space-between;align-items:baseline;
-    font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:7px}
-  .sec-hd .sub{color:var(--dim2);font-size:9.5px;letter-spacing:1px}
+    font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:7px}
+  .sec-hd .sub{color:var(--dim2);font-size:calc(9.5px * var(--fs,1));letter-spacing:1px}
   .sec-hd b{color:var(--gold);font-weight:400}
   /* 区块标题左侧金色短线：让 14 个区块不再糊成一片 */
   .sec-hd > span:first-child{position:relative;padding-left:9px}
@@ -910,10 +910,10 @@
   .vwin-row{display:flex;flex-direction:column;gap:9px;padding:8px 0 0}
   .vwin{min-width:0;border:1px solid var(--line2);border-radius:3px;
     padding:9px 10px 10px;position:relative;background:#ffffff05}
-  .vwin-t{font-size:10.5px;color:var(--gold);letter-spacing:2px;
+  .vwin-t{font-size:calc(10.5px * var(--fs,1));color:var(--gold);letter-spacing:2px;
     padding-bottom:5px;margin-bottom:7px;border-bottom:1px solid var(--line2);
     font-weight:400;display:flex;justify-content:space-between;align-items:baseline}
-  .vwin-b{min-width:0;font-size:11px}
+  .vwin-b{min-width:0;font-size:calc(11px * var(--fs,1))}
   /* ★ Round 41：单列堆叠后的保险 —— 这两个在窄窗里会逐字换行 */
   .vwin .lg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .vwin .lc{flex-direction:row;justify-content:space-between;align-items:baseline;
@@ -922,50 +922,50 @@
   .vwin .lc .hint{flex:1 1 100%}
   .vwin .lc > span:first-child{flex:0 0 auto}
   .vwin .lc > b{flex:0 0 auto}
-  .sc-head{display:flex;flex-direction:column;gap:2px;font-size:10.5px}
+  .sc-head{display:flex;flex-direction:column;gap:2px;font-size:calc(10.5px * var(--fs,1))}
   .sc-head .rank{color:var(--gold);font-weight:400;letter-spacing:1px}
   /* 设施图标（AI 生成 · assets/宗门/设施_*.webp） */
   .sc-up .sc-icon{flex:0 0 auto;width:24px;height:24px;object-fit:contain;
     align-self:center;filter:drop-shadow(0 1px 2px #000000aa)}
-  .sc-head .honor{color:#c9a227;font-size:10px}
-  .sc-pool{font-size:9.5px;color:var(--dim2);margin-top:3px;line-height:1.6}
+  .sc-head .honor{color:#c9a227;font-size:calc(10px * var(--fs,1))}
+  .sc-pool{font-size:calc(9.5px * var(--fs,1));color:var(--dim2);margin-top:3px;line-height:1.6}
   /* ★★ Round 48：当前宗门 buff（替代原来的设施升级列表）
      ⚠️ 4 个有建筑的升级项已在各自建筑页能升 ⇒ 这里只显示"现在生效的加成" */
   /* ★★ Round 50：显示设置行（字号） */
-  .fs-row{display:flex;align-items:center;gap:8px;font-size:11px;padding:6px 0}
+  .fs-row{display:flex;align-items:center;gap:8px;font-size:calc(11px * var(--fs,1));padding:6px 0}
   .fs-row .k{color:var(--dim2)}
   .fs-row .v{color:var(--gold);min-width:44px;text-align:center;
     font-variant-numeric:tabular-nums}
-  .fs-row button{font-size:11px;padding:3px 9px;background:transparent;
+  .fs-row button{font-size:calc(11px * var(--fs,1));padding:3px 9px;background:transparent;
     border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;
     font-family:inherit}
   .fs-row button:hover{border-color:var(--gold);color:var(--gold)}
 
-  .sc-sec{font-size:9.5px;color:var(--dim2);letter-spacing:2px;
+  .sc-sec{font-size:calc(9.5px * var(--fs,1));color:var(--dim2);letter-spacing:2px;
     margin:8px 0 3px;padding-top:6px;border-top:1px solid var(--line2)}
-  .sc-buff{display:flex;align-items:baseline;gap:7px;font-size:10.5px;
+  .sc-buff{display:flex;align-items:baseline;gap:7px;font-size:calc(10.5px * var(--fs,1));
     padding:3px 0;border-bottom:1px dashed #ffffff0d}
   .sc-buff:last-child{border-bottom:0}
   .sc-buff > b{flex:0 0 auto;color:#9aa5b8;font-weight:400}
   .sc-buff > .v{flex:1 1 auto;text-align:right;color:var(--gold);
     font-variant-numeric:tabular-nums}
-  .sc-buff > .lv{flex:0 0 auto;color:#6ea8fe;font-size:9.5px}
-  .sc-buff > .t{flex:0 0 auto;color:var(--dim2);font-size:9.5px}
-  .sc-buff.none{color:#5d574c;font-size:10px;border-bottom:0}
-  .sc-up{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:10px;
+  .sc-buff > .lv{flex:0 0 auto;color:#6ea8fe;font-size:calc(9.5px * var(--fs,1))}
+  .sc-buff > .t{flex:0 0 auto;color:var(--dim2);font-size:calc(9.5px * var(--fs,1))}
+  .sc-buff.none{color:#5d574c;font-size:calc(10px * var(--fs,1));border-bottom:0}
+  .sc-up{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:calc(10px * var(--fs,1));
     padding:4px 0;border-top:1px solid var(--line2)}
   /* ★ 去掉 width:100% —— 否则设施名独占一行，把图标挤到上一行 */
   .sc-up .nm{color:#9aa5b8;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;
     white-space:nowrap}
-  .sc-up .lv{color:#6ea8fe;font-size:9.5px;flex:0 0 auto}
-  .sc-up .dsc{flex:1 1 100%;color:var(--dim2);font-size:9.5px;overflow:hidden;
+  .sc-up .lv{color:#6ea8fe;font-size:calc(9.5px * var(--fs,1));flex:0 0 auto}
+  .sc-up .dsc{flex:1 1 100%;color:var(--dim2);font-size:calc(9.5px * var(--fs,1));overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
-  .sc-up button{flex:0 0 auto;font-size:9px;padding:1px 5px;border-radius:3px}
+  .sc-up button{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:1px 5px;border-radius:3px}
   .sc-up button:disabled{opacity:.35;cursor:default}
-  .lc{display:flex;flex-direction:column;gap:1px;padding:3px 0;font-size:10.5px}
+  .lc{display:flex;flex-direction:column;gap:1px;padding:3px 0;font-size:calc(10.5px * var(--fs,1))}
   .lc b{font-variant-numeric:tabular-nums;font-weight:400}
   .lc b.gold{color:var(--gold)} .lc b.ok{color:var(--green)} .lc b.bad{color:var(--red)}
-  .lc .hint{font-size:9.5px;color:var(--dim2)}
+  .lc .hint{font-size:calc(9.5px * var(--fs,1));color:var(--dim2)}
   /* ============ 通用行内图标（Round 59 · 图标接入）============
      源图：assets/{宗门,器物,五行,法宝,功法}/*.webp（28px + 56px@2x，透明底）
      生成管线：_tools/icon_slice.py（四宫格 → 去背 → 归一 → 缩尺寸）
@@ -980,10 +980,10 @@
   /* 设施页标题里那颗（#facName 的 innerHTML 由 openFacility 拼） */
   .fac-hd-ico{width:22px;height:22px;object-fit:contain;vertical-align:middle;
     margin-right:4px;margin-top:-2px;filter:drop-shadow(0 1px 2px #000000aa)}
-  .gf-row{display:flex;gap:3px;align-items:center;font-size:10px;padding:3px 0}
-  .gf-row .tp{width:44px;color:var(--dim2);flex:0 0 auto;font-size:9.5px;
+  .gf-row{display:flex;gap:3px;align-items:center;font-size:calc(10px * var(--fs,1));padding:3px 0}
+  .gf-row .tp{width:44px;color:var(--dim2);flex:0 0 auto;font-size:calc(9.5px * var(--fs,1));
     display:flex;align-items:center;gap:3px}
-  .gf-row select{flex:1;font-size:10px;padding:1px 2px;min-width:0}
+  .gf-row select{flex:1;font-size:calc(10px * var(--fs,1));padding:1px 2px;min-width:0}
   /* ★ R66：列表行里的进度条 —— 贴在行底，从名称栏右侧拉到最右。
      行内空间已经很紧（10px 字 + 下拉框），所以只用 2px 细线；
      精确数值放 title，鼠标悬停才看。 */
@@ -996,44 +996,44 @@
   /* 条满 = 就绪 ⇒ 亮起来（这一下就是"期待感"） */
   .gf-row .pg.rdy > b,.fb-row .pg.rdy > b{animation:pgReady 1s ease-in-out infinite}
   @keyframes pgReady{0%,100%{opacity:.75}50%{opacity:1}}
-  .gf-stack{font-size:9.5px;color:var(--gold);padding-left:47px}
-  .prio{display:inline-flex;align-items:center;gap:1px;font-size:9.5px;color:#9aa5b8;
+  .gf-stack{font-size:calc(9.5px * var(--fs,1));color:var(--gold);padding-left:47px}
+  .prio{display:inline-flex;align-items:center;gap:1px;font-size:calc(9.5px * var(--fs,1));color:#9aa5b8;
     background:#161c26;border:1px solid #ffffff12;border-radius:3px;
     padding:0 3px;margin:1px 2px 1px 0}
-  .prio b{cursor:pointer;color:#5a6478;font-size:9px;padding:0 1px;user-select:none}
+  .prio b{cursor:pointer;color:#5a6478;font-size:calc(9px * var(--fs,1));padding:0 1px;user-select:none}
   .prio b:hover{color:var(--gold)}
   /* ★ Round 24：法宝面板改为「只显示已装 + 折叠切换」（用户选 B） */
-  .fb-slot{display:flex;gap:4px;align-items:baseline;font-size:10.5px;padding:3px 0}
-  .fb-slot .lb{color:#66708a;font-size:9.5px;flex:0 0 auto}
+  .fb-slot{display:flex;gap:4px;align-items:baseline;font-size:calc(10.5px * var(--fs,1));padding:3px 0}
+  .fb-slot .lb{color:#66708a;font-size:calc(9.5px * var(--fs,1));flex:0 0 auto}
   .fb-swap{margin-top:3px}
-  .fb-swap summary{font-size:10px;color:#66708a;cursor:pointer;padding:2px 0;
+  .fb-swap summary{font-size:calc(10px * var(--fs,1));color:#66708a;cursor:pointer;padding:2px 0;
     list-style:none;user-select:none}
   .fb-swap summary::-webkit-details-marker{display:none}
   .fb-swap summary:before{content:"▸ ";color:var(--gold)}
   .fb-swap[open] summary:before{content:"▾ "}
   .fb-swap summary:hover{color:var(--paper)}
 
-  .fb-row{display:flex;gap:3px;align-items:center;font-size:10px;padding:3px 0}
+  .fb-row{display:flex;gap:3px;align-items:center;font-size:calc(10px * var(--fs,1));padding:3px 0}
   .fb-row .nm{flex:1;cursor:pointer;padding:1px 3px;border-radius:3px;
-    border:1px solid transparent;font-size:10px}
+    border:1px solid transparent;font-size:calc(10px * var(--fs,1))}
   .fb-row .nm.on{background:#1a2230;border-color:var(--gold)}
-  .fb-row .nm .wx{font-size:9.5px;margin-left:3px}
-  .fb-stack{font-size:9.5px;color:var(--gold);padding-left:3px}
+  .fb-row .nm .wx{font-size:calc(9.5px * var(--fs,1));margin-left:3px}
+  .fb-stack{font-size:calc(9.5px * var(--fs,1));color:var(--gold);padding-left:3px}
   /* ★ R72：道具位（消耗品）—— 重点是让【数量】一眼可读，它才是玩家真正在管理的东西 */
   .fb-item-box{margin-top:4px;padding-top:4px;border-top:1px dashed #ffffff1a}
   .fb-row .nm .itn{font-style:normal;margin-left:4px;color:#d9c48a;font-weight:600}
   /* 吃空了要看得出来 —— 否则玩家只会觉得"这符没效果" */
   .fb-row .nm .itn.empty{color:#7a5b52}
-  .fb-row .nm .itn.empty:after{content:" 已空";font-weight:400;font-size:9px}
-  .lg-rule{display:flex;gap:3px;align-items:center;font-size:10px;padding:3px 0}
-  .lg-rule select{flex:1;font-size:10px;min-width:0}
+  .fb-row .nm .itn.empty:after{content:" 已空";font-weight:400;font-size:calc(9px * var(--fs,1))}
+  .lg-rule{display:flex;gap:3px;align-items:center;font-size:calc(10px * var(--fs,1));padding:3px 0}
+  .lg-rule select{flex:1;font-size:calc(10px * var(--fs,1));min-width:0}
 
   /* 传承池条目（★ 新增：可花荣誉点提取） */
-  .pool-it{display:flex;align-items:baseline;gap:4px;font-size:10px;padding:4px 0;
+  .pool-it{display:flex;align-items:baseline;gap:4px;font-size:calc(10px * var(--fs,1));padding:4px 0;
     border-top:1px solid var(--line2)}
   .pool-it .nm{flex:1;color:var(--txt);overflow:hidden;text-overflow:ellipsis;
     white-space:nowrap}
-  .pool-it button{flex:0 0 auto;font-size:9px;padding:1px 4px}
+  .pool-it button{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:1px 4px}
 
   /* ★ Boss（Round 29）：复用 AOE 系统，只是【更大 + 金边 + 会呼吸】
      ★ Round 38：26→36px（用户要求"Boss 要更难看不清一点"= 更醒目），
@@ -1050,7 +1050,7 @@
       filter:drop-shadow(0 0 14px #c9a227cc)}}
   .mob.boss .hpbar{top:-9px;height:3px}
   .mob.boss .bossTag{position:absolute;left:50%;top:-15px;transform:translateX(-50%);
-    font-size:9px;color:var(--gold);white-space:nowrap;letter-spacing:1px;
+    font-size:calc(9px * var(--fs,1));color:var(--gold);white-space:nowrap;letter-spacing:1px;
     text-shadow:0 1px 3px #000;z-index:2}
   /* Boss 出场：一次性闪屏 */
   #battleWrap.boss-in::after{content:'';position:absolute;inset:0;z-index:9;
@@ -1064,26 +1064,26 @@
 .gf-cd-box{margin-top:3px}
 
 /* ★ 门规（训话的上锁版 · Round 34）*/
-.rl-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:4px;display:flex;justify-content:space-between}
+.rl-hd{font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:4px;display:flex;justify-content:space-between}
 .rl-hd .n{color:#5d574c}
-.rl-row{display:flex;gap:5px;align-items:baseline;font-size:10px;padding:2px 0}
+.rl-row{display:flex;gap:5px;align-items:baseline;font-size:calc(10px * var(--fs,1));padding:2px 0}
 .rl-row .ax{color:var(--gold);flex:0 0 auto}
 .rl-row .v{color:var(--paper);flex:0 0 auto}
-.rl-row .by{color:#5d574c;font-size:9px;flex:1;text-align:right}
-.rl-row button{font-size:9px;padding:0 4px;background:transparent;border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;cursor:pointer}
+.rl-row .by{color:#5d574c;font-size:calc(9px * var(--fs,1));flex:1;text-align:right}
+.rl-row button{font-size:calc(9px * var(--fs,1));padding:0 4px;background:transparent;border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;cursor:pointer}
 .rl-row button:hover{border-color:#c0604f;color:#e08a72}
 .rl-row.neg .ax{color:#c08070}
 .rl-row.neg button:hover{border-color:var(--gold);color:var(--gold)}
-.rl-add{font-size:10px;color:#5d574c;margin-top:3px}
-.rl-add button{font-size:9px;padding:1px 5px;margin-left:4px;background:transparent;border:1px solid #c9a22755;border-radius:2px;color:var(--gold);cursor:pointer}
+.rl-add{font-size:calc(10px * var(--fs,1));color:#5d574c;margin-top:3px}
+.rl-add button{font-size:calc(9px * var(--fs,1));padding:1px 5px;margin-left:4px;background:transparent;border:1px solid #c9a22755;border-radius:2px;color:var(--gold);cursor:pointer}
 .rl-add button:hover{background:#1a2230;border-color:var(--gold)}
-.rl-note{font-size:9px;color:#5d574c;margin-top:4px;line-height:1.6}
+.rl-note{font-size:calc(9px * var(--fs,1));color:#5d574c;margin-top:4px;line-height:1.6}
 
 /* ★ 重新开始（Round 30）*/
-.rs-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:4px}
-.rs-warn{font-size:9.5px;color:#c0604f;line-height:1.5;margin-bottom:6px}
+.rs-hd{font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:4px}
+.rs-warn{font-size:calc(9.5px * var(--fs,1));color:#c0604f;line-height:1.5;margin-bottom:6px}
 .rs-row{display:flex;gap:6px}
-.rs-row button{flex:1;font-size:10px;padding:4px 0;background:transparent;border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer}
+.rs-row button{flex:1;font-size:calc(10px * var(--fs,1));padding:4px 0;background:transparent;border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer}
 .rs-row button:hover{border-color:#ffffff44;color:var(--paper)}
 .rs-row button#btnReset{border-color:#c0604f55;color:#c08070}
 .rs-row button#btnReset:hover{border-color:#c0604f;background:#2a1414;color:#e08a72}
@@ -1091,65 +1091,65 @@
 @keyframes rsArmed{from{opacity:.75}to{opacity:1}}
 
 /* ★ 编年史（Round 35）*/
-.cr-empty{color:#5d574c;font-size:11px;margin:6px 0}
+.cr-empty{color:#5d574c;font-size:calc(11px * var(--fs,1));margin:6px 0}
 .cr-ch{margin:0 0 12px;padding:0 0 10px;border-bottom:1px solid #ffffff0f}
 .cr-ch:last-child{border-bottom:none}
-.cr-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:5px;gap:6px}
+.cr-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:calc(11px * var(--fs,1));margin-bottom:5px;gap:6px}
 .cr-hd b{color:var(--gold);font-weight:400;letter-spacing:1px;flex:0 0 auto}
-.cr-grow{font-size:9.5px;color:#8fd8b8;text-align:right}
+.cr-grow{font-size:calc(9.5px * var(--fs,1));color:#8fd8b8;text-align:right}
 .cr-body{padding-left:2px}
-.cr-li{font-size:10.5px;color:#9a9284;line-height:1.75;padding:1px 0;font-variant-numeric:tabular-nums}
+.cr-li{font-size:calc(10.5px * var(--fs,1));color:#9a9284;line-height:1.75;padding:1px 0;font-variant-numeric:tabular-nums}
 .cr-li.cr-break{color:var(--paper)}
 .cr-li.cr-myth{color:#c9a227}
 .cr-li.cr-legend{color:#b08ad0}
 .cr-li.cr-ascend{color:#ffd85c}
 .cr-li.cr-bad{color:#c08070}
 .cr-li.cr-dujie{color:#8fd8b8}
-.cr-ft{font-size:9.5px;color:#5d574c;margin-top:5px}
+.cr-ft{font-size:calc(9.5px * var(--fs,1));color:#5d574c;margin-top:5px}
 .cr-sect{margin-top:14px;padding-top:10px;border-top:1px solid #ffffff1a}
-.cr-sect-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:5px}
-.cr-si{font-size:10px;color:#7e7768;line-height:1.8;font-variant-numeric:tabular-nums}
+.cr-sect-hd{font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:5px}
+.cr-si{font-size:calc(10px * var(--fs,1));color:#7e7768;line-height:1.8;font-variant-numeric:tabular-nums}
 .cr-si.cr-rank{color:var(--gold)}
 .cr-si.cr-rule{color:#8fd8b8}
 .cr-si.cr-neg{color:#c08070}
 .cr-si.cr-recruit{color:#66708a}
 
 /* ★ 宝库处置策略（Round 27） */
-  .vp-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:4px}
-  .vp-row{display:flex;align-items:center;gap:3px;padding:2px 0;font-size:10px}
-  .vp-row .q{width:30px;flex:0 0 auto;font-size:10px}
-  .vp-row button{font-size:9px;padding:1px 4px;background:transparent;
+  .vp-hd{font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:4px}
+  .vp-row{display:flex;align-items:center;gap:3px;padding:2px 0;font-size:calc(10px * var(--fs,1))}
+  .vp-row .q{width:30px;flex:0 0 auto;font-size:calc(10px * var(--fs,1))}
+  .vp-row button{font-size:calc(9px * var(--fs,1));padding:1px 4px;background:transparent;
     border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;cursor:pointer}
   .vp-row button:hover{border-color:#ffffff33;color:var(--paper)}
   .vp-row button.on{background:#1a2230;border-color:var(--gold);color:var(--gold)}
-  .vp-stat{font-size:9.5px;color:#5d574c;margin-top:4px}
+  .vp-stat{font-size:calc(9.5px * var(--fs,1));color:#5d574c;margin-top:4px}
 
   /* ★ 徽记（神话传承的封印开关 · Round 25） */
   .pool-it.sealed{opacity:.72}
   .pool-it.sealed .nm{text-decoration:line-through;text-decoration-color:#5d574c}
-  .seal-b{font-size:10px;padding:0 3px;margin-right:2px;
+  .seal-b{font-size:calc(10px * var(--fs,1));padding:0 3px;margin-right:2px;
     background:transparent;border:1px solid #ffffff1a;border-radius:2px;
     color:#c9a227;cursor:pointer;line-height:1.4}
   .seal-b:hover{border-color:var(--gold)}
 
   /* ★ 日志的【第几代】标签（Round 24） */
   .lg .gen-tag{display:inline-block;min-width:26px;margin-right:5px;padding:0 3px;
-    border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;font-size:9px;
+    border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;font-size:calc(9px * var(--fs,1));
     font-weight:400;text-align:center;vertical-align:1px}
-  .lg.gen-sep{color:var(--gold);font-size:10px;letter-spacing:3px;
+  .lg.gen-sep{color:var(--gold);font-size:calc(10px * var(--fs,1));letter-spacing:3px;
     margin:5px 0 3px;text-align:center;opacity:.75}
 
   /* ★ 弟子名册（Round 22） */
-  .rs-row{display:flex;align-items:baseline;gap:5px;font-size:10px;padding:3px 0;
+  .rs-row{display:flex;align-items:baseline;gap:5px;font-size:calc(10px * var(--fs,1));padding:3px 0;
     border-top:1px solid var(--line2)}
-  .rs-row .role{width:26px;flex:0 0 auto;font-size:9.5px}
+  .rs-row .role{width:26px;flex:0 0 auto;font-size:calc(9.5px * var(--fs,1))}
   .rs-row .role.front{color:var(--gold)}
   .rs-row .role.back{color:#7fb8f0}
   .rs-row .role.idle{color:var(--dim2)}
   .rs-row .nm{color:var(--txt);flex:0 0 auto}
-  .rs-row .tal{color:#9aa5b8;font-size:9.5px}
+  .rs-row .tal{color:#9aa5b8;font-size:calc(9.5px * var(--fs,1))}
   .rs-row .life{flex:1;text-align:right;color:#8c8574;font-variant-numeric:tabular-nums}
-  .rs-row .post{color:#c9a86e;font-size:9.5px}
+  .rs-row .post{color:#c9a86e;font-size:calc(9.5px * var(--fs,1))}
 
   /* ★ 弟子头像（AI 生成，assets/弟子/）
      角色多为浅色袍 ⇒ 深底上会"隐形"，必须给圆盘衬托。
@@ -1174,7 +1174,7 @@
   }
   .rs-row.has-av{align-items:center;padding:5px 0}
   /* ★ 灵根小标：色点 + 灵根档位 */
-  .rs-row .lg{flex:0 0 auto;font-size:9px;padding:0 3px;border-radius:2px;
+  .rs-row .lg{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:0 3px;border-radius:2px;
     border:1px solid #ffffff1a;color:#9a9284;white-space:nowrap;
     display:inline-flex;align-items:center;gap:2px}
   .rs-row .lg i{display:inline-block;width:6px;height:6px;border-radius:50%;
@@ -1183,41 +1183,41 @@
     .rs-row .av img{animation:none}
   }
 
-  .rs-fac{display:flex;align-items:baseline;gap:4px;font-size:9.5px;padding:2px 0;color:var(--dim)}
+  .rs-fac{display:flex;align-items:baseline;gap:4px;font-size:calc(9.5px * var(--fs,1));padding:2px 0;color:var(--dim)}
   .rs-fac .fn{width:52px;color:#9aa5b8}
   .rs-fac .fp{color:var(--gold);font-variant-numeric:tabular-nums}
   .rs-fac .fo{flex:1;text-align:right;color:#66708a}
 
   /* ★ 锻造 / 训话 / 模板（Round 18） */
-  .fg-row{display:flex;align-items:baseline;gap:5px;font-size:10.5px;padding:4px 0;
+  .fg-row{display:flex;align-items:baseline;gap:5px;font-size:calc(10.5px * var(--fs,1));padding:4px 0;
     border-top:1px solid var(--line2)}
   .fg-row .nm{flex:1;color:var(--txt)}
-  .fg-row .ct{color:var(--dim2);font-size:9.5px}
-  .fg-row button{flex:0 0 auto;font-size:9px;padding:1px 6px}
+  .fg-row .ct{color:var(--dim2);font-size:calc(9.5px * var(--fs,1))}
+  .fg-row button{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:1px 6px}
   .fg-row button:disabled{opacity:.3;cursor:default}
-  .cs-hd{font-size:10px;color:var(--gold);letter-spacing:2px;margin-bottom:4px}
-  .cs-row{display:flex;align-items:baseline;gap:4px;font-size:10px;padding:3px 0;
+  .cs-hd{font-size:calc(10px * var(--fs,1));color:var(--gold);letter-spacing:2px;margin-bottom:4px}
+  .cs-row{display:flex;align-items:baseline;gap:4px;font-size:calc(10px * var(--fs,1));padding:3px 0;
     border-top:1px solid var(--line2)}
   .cs-row .lb{width:26px;color:#9aa5b8;flex:0 0 auto}
-  .cs-row select{flex:1;font-size:9.5px;min-width:0}
-  .cs-row button{flex:0 0 auto;font-size:9px;padding:1px 5px}
+  .cs-row select{flex:1;font-size:calc(9.5px * var(--fs,1));min-width:0}
+  .cs-row button{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:1px 5px}
   .cs-row button:disabled{opacity:.3;cursor:default}
-  .cs-row .ct{color:var(--dim2);font-size:9px;flex:0 0 auto}
+  .cs-row .ct{color:var(--dim2);font-size:calc(9px * var(--fs,1));flex:0 0 auto}
   .sp-row{display:flex;gap:4px;flex-wrap:wrap;padding:3px 0}
-  .sp-row button{font-size:10px;padding:3px 8px;flex:0 0 auto}
+  .sp-row button{font-size:calc(10px * var(--fs,1));padding:3px 8px;flex:0 0 auto}
   .sp-row button.on{border-color:var(--gold);color:#e0c464;background:#c9a22722}
-  .sp-axis{display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0;color:var(--dim)}
+  .sp-axis{display:flex;align-items:center;gap:6px;font-size:calc(10px * var(--fs,1));padding:2px 0;color:var(--dim)}
   .sp-axis input{flex:1;accent-color:#c9a227}
   .sp-axis b{color:var(--gold);font-weight:400;width:24px;text-align:right}
-  .tm-row{display:flex;align-items:center;gap:4px;font-size:10px;padding:3px 0;
+  .tm-row{display:flex;align-items:center;gap:4px;font-size:calc(10px * var(--fs,1));padding:3px 0;
     border-top:1px solid var(--line2)}
   .tm-row .nm{width:30px;color:#9aa5b8;flex:0 0 auto}
-  .tm-row select{flex:0 0 auto;font-size:9.5px;padding:0 2px}
-  .tm-row .ax{color:var(--dim2);font-size:9px}
+  .tm-row select{flex:0 0 auto;font-size:calc(9.5px * var(--fs,1));padding:0 2px}
+  .tm-row .ax{color:var(--dim2);font-size:calc(9px * var(--fs,1))}
 
   /* ============ 录 · 日志 ============ */
   #logBox{padding:0}
-  .lg{font-size:11px;padding:6px 0;border-bottom:1px solid var(--line2);
+  .lg{font-size:calc(11px * var(--fs,1));padding:6px 0;border-bottom:1px solid var(--line2);
     color:#9a9284;display:flex;gap:8px}
   .lg.sys{color:var(--dim)}
   .lg.ok{color:var(--green)} .lg.warn{color:var(--gold)} .lg.bad{color:var(--red)}
@@ -1227,28 +1227,28 @@
   #reportPanel{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;
     background:linear-gradient(180deg,#141517f2,#0c0d0ef7);padding:16px 18px;
     overflow-y:auto;backdrop-filter:blur(2px)}
-  .rp-hd{font-size:12px;color:var(--gold);margin-bottom:8px;
+  .rp-hd{font-size:calc(12px * var(--fs,1));color:var(--gold);margin-bottom:8px;
     padding-bottom:6px;border-bottom:1px solid #c9a22733}
-  #reportBody{font:14px/2 "WenKai","KaiTi","Songti SC",serif;color:#e8e0cc;text-indent:2em}
+  #reportBody{font:calc(14px * var(--fs,1))/2 "WenKai","KaiTi","Songti SC",serif;color:#e8e0cc;text-indent:2em}
   #reportBody p{margin:6px 0}
   #reportBody b{color:var(--gold)}
-  .rp-master{font-size:12px;color:var(--gold);margin:0 0 10px;letter-spacing:.5px;text-indent:0}
+  .rp-master{font-size:calc(12px * var(--fs,1));color:var(--gold);margin:0 0 10px;letter-spacing:.5px;text-indent:0}
   .rp-elders{margin:10px 0 12px;padding:10px 0;border-top:1px solid #ffffff14;border-bottom:1px solid #ffffff14;text-indent:0}
-  .rp-elders-hd{font-size:10px;color:var(--dim);letter-spacing:2px;margin-bottom:6px}
-  .rp-el{font-size:10.5px;color:#9a9284;line-height:1.85;margin:3px 0}
+  .rp-elders-hd{font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:6px}
+  .rp-el{font-size:calc(10.5px * var(--fs,1));color:#9a9284;line-height:1.85;margin:3px 0}
   .rp-el b{color:var(--paper);font-weight:400;letter-spacing:.5px}
   .rp-el-quiet{color:#5d574c;font-style:italic}
   .cr-handover{color:#c8b08a}
-  .rp-offline{font-size:11px;color:#9fb0c8;margin:0 0 10px;padding:6px 9px;text-indent:0;
+  .rp-offline{font-size:calc(11px * var(--fs,1));color:#9fb0c8;margin:0 0 10px;padding:6px 9px;text-indent:0;
     background:#ffffff0a;border-radius:4px;line-height:1.7;letter-spacing:.3px}
   .rp-offline b{color:var(--paper);font-weight:400}
   .arc-ep{color:#c9a227}
-  #btnCloseRp{float:right;flex:0 0 auto;width:auto;padding:2px 10px;font-size:11px}
+  #btnCloseRp{float:right;flex:0 0 auto;width:auto;padding:2px 10px;font-size:calc(11px * var(--fs,1))}
 
   /* 报错 */
   #bootErr{position:absolute;left:0;right:0;top:0;z-index:40;
     background:#3a1e1e;border-bottom:1px solid var(--cinnabar);
-    padding:8px 12px;font-size:11px;color:#f0c0c0}
+    padding:8px 12px;font-size:calc(11px * var(--fs,1));color:#f0c0c0}
 </style>
 </head>
 <body>
@@ -1459,14 +1459,14 @@
         <div class="sec">
           <div class="sec-hd">
             <span>弟子名册</span>
-            <span id="rosterStat" style="color:#8c8574;font-size:10px"></span>
+            <span id="rosterStat" style="color:#8c8574;font-size:calc(10px * var(--fs,1))"></span>
           </div>
           <div id="rosterBox"></div>
         </div>
         <div class="sec">
           <div class="sec-hd">
             <span>擂台战报</span>
-            <span id="pvpStat" style="color:#8c8574;font-size:10px"></span>
+            <span id="pvpStat" style="color:#8c8574;font-size:calc(10px * var(--fs,1))"></span>
           </div>
           <div id="pvpBox"></div>
         </div>
@@ -1531,8 +1531,8 @@
           </div>
 
         <div class="sec">
-          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
-            门装模板 <span style="color:var(--dim2);font-size:9.5px">（弟子出去后按这个挑装备）</span></div>
+          <div style="font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+            门装模板 <span style="color:var(--dim2);font-size:calc(9.5px * var(--fs,1))">（弟子出去后按这个挑装备）</span></div>
           <div id="tmplBox"></div>
         </div>
 </div>
@@ -1557,7 +1557,7 @@
         <div id="logBox"></div>
 
         <div class="sec">
-          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">历代弟子</div>
+          <div style="font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:6px">历代弟子</div>
           <div id="genList"></div>
         </div>
 </div>
@@ -1565,16 +1565,16 @@
 <!-- ★★ Round 54：议事堂 —— BD 打法倾向（R180 定案） -->
 <div data-fac="hall" style="display:none">
         <div class="sec">
-          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+          <div style="font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:6px">
             打法倾向 · <span id="biasNow" style="color:var(--gold)"></span></div>
           <div id="biasBox"></div>
-          <div style="font-size:10px;color:var(--dim2);line-height:1.8;margin-top:8px">
+          <div style="font-size:calc(10px * var(--fs,1));color:var(--dim2);line-height:1.8;margin-top:8px">
             定个方向，弟子按这个方向配装。<br>
             行为（打多深、几时撤）仍在 <b>山门 · 训话</b> 上定 —— 两者独立。
           </div>
           <!-- ★ 派遣历练（R55）：不点人，给【依据】 -->
-          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin:14px 0 6px">
-            派遣历练 · <span style="color:var(--dim2);font-size:10px">按依据从新招里派</span></div>
+          <div style="font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin:14px 0 6px">
+            派遣历练 · <span style="color:var(--dim2);font-size:calc(10px * var(--fs,1))">按依据从新招里派</span></div>
           <div id="dispatchBox"></div>
         </div>
 </div>
@@ -1619,7 +1619,7 @@
      （原来在宗门大殿，和史册馆挤在一起） -->
 <div data-fac="gate" style="display:none">
         <div class="sec">
-          <div style="font-size:10.5px;color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+          <div style="font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:6px">
             训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
           <div id="speechBox"></div>
           <!-- ★ 门规（训话的上锁版 · Round 34） -->
