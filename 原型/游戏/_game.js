@@ -7819,7 +7819,11 @@ function wanderHero(dt) {
     //   ⇒ 改成在 [-R, +R] 的方形里各自独立取均匀随机
     const _r = P.WANDER_RADIUS;
     let tx = home.x + (Math.random() * 2 - 1) * _r;
-    let ty = home.y + (Math.random() * 2 - 1) * _r * 0.78;
+    // ★★ Round 52：去掉 `* 0.78`
+    //   ⚠️ 原来是"纵向范围小一些"，但实测 #arena = 382×380（几乎 1:1）
+    //      ⇒ 归一化 x/y 对应的像素几乎相等 ⇒ 加 0.78 反而把走位压成【横向矩形】
+    //   ⇒ 用户要"正方形"，这里必须和 x 用同一个系数
+    let ty = home.y + (Math.random() * 2 - 1) * _r;
 
     // ★ 避怪偏移：把目标点朝"远离怪群重心"的方向拉
     const w = G.crowdAvoid;
@@ -7885,7 +7889,8 @@ function wanderHero(dt) {
   //   ⇒ 改成对 x / y 各自独立夹紧（方形软边界）
   {
     const lim = P.WANDER_RADIUS + P.DASH_DIST + P.AVOID_STRENGTH;
-    const limY = lim * 0.78;                       // 场景高宽比：纵向范围小一些
+    // ★★ Round 52：实测 #arena = 382×380（1:1）⇒ 纵向不需要额外压缩
+    const limY = lim;
     const dx = G.heroX - home.x, dy = G.heroY - home.y;
     // 超出方形就软推回（保留一点弹性，不做硬钳）
     if (dx > lim)  G.heroX -= Math.min((dx - lim) * 2.5 * dt, dx - lim);
@@ -7895,7 +7900,9 @@ function wanderHero(dt) {
   }
   // 场地硬边界（画面内）
   G.heroX = Math.min(0.88, Math.max(0.12, G.heroX));
-  G.heroY = Math.min(0.80, Math.max(0.28, G.heroY));
+  // ★ Round 52：纵向硬边界放宽 —— 软边界是 ±0.275（home 0.56 → 0.285~0.835）
+  //   原来卡 0.28~0.80 会把上沿 0.80~0.835 切掉 ⇒ 视觉上又不成正方形
+  G.heroY = Math.min(0.835, Math.max(0.285, G.heroY));
   if (G.dodgeFlash > 0) G.dodgeFlash -= dt;
   // ★ Round 43：横幅播报计时（几秒后自动消失）
   if (BANNER_T > 0) {
