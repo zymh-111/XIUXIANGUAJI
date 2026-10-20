@@ -6,7 +6,6 @@
   "dir": "ltr",
   "start_url": "./index.html",
   "scope": "./",
-  "id": "/mijinglu/",
   "display": "standalone",
   "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "orientation": "portrait",

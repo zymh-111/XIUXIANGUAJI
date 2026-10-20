@@ -1,0 +1,1761 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- ★★ Round 54：PWA（可"添加到主屏幕"，离线可玩） -->
+<meta name="theme-color" content="#16171b" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="上班摸鱼挂机修仙 —— 有事挂机刷宝，没事看看装备调 BD。" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/png" sizes="32x32" href="assets/pwa/favicon-32.png" />
+<!-- iOS：加到主屏后全屏、状态栏半透明黑 -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="秘境录" />
+<link rel="apple-touch-icon" href="assets/pwa/apple-touch-icon.png" />
+<!-- 手机浏览器地址栏染色 -->
+<meta name="mobile-web-app-capable" content="yes" />
+<title>秘境录 · 挂机刷宝</title>
+<!--
+  ★ 布局依据：美术资源\极简竖窗_可点击.html（设计稿，当前主方案）
+    窗口 400×648 竖窗 · 取消面板方框 · 只留留白 + 一条 #ffffff14 细线
+    修仙感靠四样：霞鹜文楷 / 大面积留白 / 细分隔线 / 一枚朱砂印
+    配色收敛四个：墨 #0c0d0e · 纸白 #cfc8ba · 金 #c9a227 · 朱砂 #a8392c
+    四页签：境（战斗）· 装（部位+背包）· 宗（宗门/传承/功法/法宝）· 录（日志）
+-->
+<style>
+  @font-face{font-family:'WenKai';src:url('assets/字体/WenKai-Regular.woff2') format('woff2');font-display:swap}
+  @font-face{font-family:'WenKaiM';src:url('assets/字体/WenKai-Medium.woff2') format('woff2');font-display:swap}
+  @font-face{font-family:'Smiley';src:url('assets/字体/SmileySans-Oblique.woff2') format('woff2');font-display:swap}
+
+  :root{
+    /* ★ 四色收敛（设计稿定义）
+       ★ Round 38（用户要求："把 UI 界面的颜色搞的明亮艳丽一点，只是看着和角色不违和"）
+       量化依据：改前 UI 平均明度 50% / 饱和 32%；角色素材 明度 46~53% / 饱和 24~37%。
+       改法：整体【提亮 + 提饱和】，保持同一套色相（暖宣纸 + 金 + 朱），只加"亮度与艳度"。 */
+    --ink:#16171b; --paper:#eae2d0; --gold:#e8bd38; --cinnabar:#cc4636;
+    /* 派生色 */
+    --bg:#1b1c21; --line:#ffffff2e; --line2:#ffffff1f;
+    --dim:#9c9484; --dim2:#726b5e; --txt:#eee7d8; --bright:#f8f2e6;
+    --green:#6fd3ab; --red:#e0785f;
+    /* 品质色（保留，装备需要） */
+    --q0:#9aa3b6; --q1:#6fd8ba; --q2:#5b96dc; --q3:#bd72d8; --q4:#e8bd48;
+    --fs:1;            /* ★ Round 50：全站字体缩放（设置面板调）*/
+  
+  }
+  /* ★★ Round 54：移动端打磨
+     —— 目标是"在手机上玩起来不别扭"，不是重做界面 */
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{
+    /* 去掉双击缩放带来的 300ms 点击延迟（手机上按钮立刻响应）*/
+    touch-action:manipulation;
+    /* 禁止下拉刷新/橡皮筋（挂机游戏误触很烦）*/
+    overscroll-behavior:none;
+    /* 刘海屏：把内容留在安全区内 */
+    -webkit-text-size-adjust:100%;
+  }
+  body{
+    /* 长按不弹选择/放大镜 */
+    -webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;
+    overscroll-behavior:none;
+  }
+  /* 输入控件仍然允许选中（万一以后有改名/输入）*/
+  input,textarea{-webkit-user-select:text;user-select:text}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--paper); overflow:hidden;
+    font:calc(13px * var(--fs,1))/1.6 "WenKai","KaiTi","Songti SC",serif;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  /* ============ 窄窗 ============ */
+  /* ★★ Round 47：窗口加大（用户："把整个窗口改高"）
+     ⚠️ 原来固定 400×648 —— 地图受图比例限制只能 ~153px 高，占比上不去
+     ⇒ 加高到 760、加宽到 420：
+        宽 +20px ⇒ 地图按比例自然变高 ~8px
+        高 +112px ⇒ 建筑面板/名册/宗门现状都能多显示几行
+     ⚠️ 用 min(...,100%) 保证在矮视口里不溢出（body 是 flex 居中，溢出会被切） */
+  /* ★★ Round 54：安全区内边距（iPhone 刘海 / 底部手势条）*/
+  :root{
+    --sat:env(safe-area-inset-top,0px);
+    --sab:env(safe-area-inset-bottom,0px);
+    --sal:env(safe-area-inset-left,0px);
+    --sar:env(safe-area-inset-right,0px);
+  }
+  #win{
+    font-size:calc(13px * var(--fs,1));
+    /* ★★ Round 53：移动端适配 —— 宽度不再写死 420，而是「不超过屏宽」
+       ⚠️ 原来固定 420px：手机 375px 宽时浏览器会整体缩放到 73%
+          ⇒ 文字实际只剩 ~9.5px，读不清
+       ⇒ min(420px, 100vw)：窄屏铺满、宽屏保持 420 */
+    width:min(420px, 100vw); height:min(760px, 100%); position:relative;
+    border-radius:9px; overflow:hidden; background:var(--ink);
+    border:1px solid #ffffff17;
+    box-shadow:0 26px 70px #000000e0,0 0 0 1px #00000090;
+    display:flex; flex-direction:column;
+  }
+  #win .grain{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.04;
+    mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E")}
+
+  /* ★ Round 37 修复：原来没有 overflow 规则 —— 当固定高度子元素之和超过
+     #win 的 648px（把场景加高到 380px 后就会），内容会【溢出到手机框外】，
+     表现为"界面上莫名多出一些文字/和别的内容重叠"。
+     ⇒ 裁剪在 .screen 内，超出的部分由 .scroll 滚动承接。 */
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;z-index:1;
+    overflow:hidden}
+  .screen.on{display:flex}
+
+  /* ============ 顶部（世代 + 印章） ============ */
+  .top{display:flex;align-items:flex-start;justify-content:space-between;padding:15px 18px 0;flex:0 0 auto}
+  .gen{font-size:calc(11px * var(--fs,1));color:var(--dim);letter-spacing:2px;padding-top:3px}
+  .gen b{color:var(--paper);font-weight:400;font-size:calc(12px * var(--fs,1))}
+  /* ★★ Round 55：尺寸跟随 --fs
+     原来固定 26×26px，但字是 calc(9px * var(--fs)) ⇒ 135% 时 span 正好 26px
+     贴着边框（实测「超出box 0px」）—— 不算 bug 但很难看 ⇒ 让框也一起放大 */
+  .seal{width:calc(26px * var(--fs,1));height:calc(26px * var(--fs,1));border:1px solid var(--cinnabar);color:var(--cinnabar);
+    display:flex;align-items:center;justify-content:center;border-radius:2px;
+    opacity:.85;flex:0 0 auto}
+
+  /* ============ 音效开关（Round 60）============
+     为什么是「默认关闭」：这是上班摸鱼游戏 —— 打开页面就出声是灾难。
+     玩家必须显式点开；选择存 localStorage（`mijinglu_sfx`）。
+     `margin-left:auto` 把它跟右边的印章一起推到行尾（.top 是三段的 space-between）。 */
+  .sfx-btn{margin-left:auto;margin-right:7px;flex:0 0 auto;width:26px;height:26px;padding:0;
+    font:calc(13px * var(--fs,1))/1 inherit;background:transparent;border:1px solid #ffffff22;border-radius:2px;
+    color:#8c8574;cursor:pointer;opacity:.65;
+    display:flex;align-items:center;justify-content:center}@media (hover:hover){
+  .sfx-btn:hover{opacity:1;border-color:#ffffff44}}
+  .sfx-btn.on{opacity:.95;border-color:var(--gold);color:var(--gold);background:#c9a22712}
+  .seal span{writing-mode:vertical-rl;font-size:calc(9px * var(--fs,1));line-height:1.05;letter-spacing:1px}
+
+  /* ★ 事件横幅 */
+  #eventBar{margin:10px 18px 0;padding:7px 10px;border:1px solid var(--cinnabar);
+    border-radius:3px;font-size:calc(11px * var(--fs,1));letter-spacing:1px;color:#d9705f;
+    background:#a8392c14;display:flex;justify-content:space-between;align-items:baseline}
+  #eventBar b{color:var(--cinnabar);font-weight:400;letter-spacing:2px}
+  #eventBar .left{color:#8c8574;font-size:calc(10px * var(--fs,1))}
+
+  /* ============ 境 · 场景 ============ */
+  /* ★ Round 35：场景加高（用户选定"方案C"）246px → 380px，战斗区更宽敞 */
+  .scene{position:relative;isolation:isolate;margin:14px 18px 0;height:380px;border-radius:3px;
+    overflow:hidden;background:#0a0b0c;flex:0 0 auto}
+  /* ★ 亮度/饱和度放宽（原 .5/.42 把场景压得几乎看不见）
+     ★ Round 38：这批 .7/.5 是给【旧的低对比水墨背景】调的，会把新绘制的
+     五行秘境场地压灰 ⇒ 放宽到 .88/.78，并让 veil 轻一些（文字靠 sceneLabel
+     自己的半透明底 + .veil 底部渐变保持可读性）。 */
+  .scene img{width:100%;height:100%;object-fit:cover;object-position:center 30%;
+    filter:brightness(1.06) saturate(.95) contrast(1.02)}
+  .scene .veil{position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 42%,transparent 0%,rgba(8,9,10,.52) 100%),
+               linear-gradient(180deg,rgba(10,11,12,.34),rgba(10,11,12,.62))}
+  /* ★ Round 37 修复：sceneLabel 与 battleInfo 原来【都】绝对定位在场景底部
+     ⇒ 窄屏（400px 手机框）下必然重叠 —— "秘境·金煞谷·已入 12 息" 和战斗统计
+     糊成一行（截图可复现）。
+     ⇒ 现在：秘境名留在场景内左下（加半透明底），战斗数据移到场景【下方】独立一行。 */
+  .qilabel{position:absolute;z-index:3;left:12px;bottom:9px;font-size:calc(10.5px * var(--fs,1));
+    color:#8c8574;letter-spacing:1.5px;
+    background:#0a0b0ccc;border-radius:3px;padding:1px 6px}
+  .qilabel b{color:var(--gold);font-weight:400}
+  #battleInfo{margin:6px 18px 0;font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:.5px;
+    line-height:1.7;display:flex;flex-wrap:wrap;gap:0 12px;align-items:baseline;
+    flex:0 0 auto}
+  #battleInfo span{white-space:nowrap}
+  #battleInfo b{color:var(--paper);font-weight:400}
+  #battleInfo b.low{color:var(--red)}
+  #battleInfo .dim{color:var(--dim2)}
+
+  /* ★ 弟子数据控件（用户要求：境页面单独加个控件，点了才显示弟子详细数据） */
+  /* ★★ Round 40：境页的功能入口按钮（背包 / 当前弟子） */
+  .jing-acts{display:flex;gap:7px;padding:8px 18px 0;flex:0 0 auto}
+  .jing-acts button{flex:1;font-size:calc(11px * var(--fs,1));padding:7px 0;background:transparent;
+    border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;
+    font-family:inherit;letter-spacing:1px}@media (hover:hover){
+  .jing-acts button:hover{border-color:#ffffff44;color:var(--paper)}}
+  .jing-acts button.on{border-color:var(--gold);color:var(--gold);background:#c9a22714}
+
+  /* ★★ Round 40：滑出式抽屉 / 数据层（盖住场景，不占满屏）
+     用户选的是【滑出式抽屉盖住场景】—— 挂机时能看到自动换装，手动调整时也不占满屏
+     两者共用 .bd-hd（标题+收起按钮）与 .bd-body（滚动内容） */
+  /* 从顶部滑出 */
+  @keyframes bdSlide{from{transform:translateY(-14px);opacity:0}to{transform:translateY(0);opacity:1}}
+  /* ★★ Round 40/49：背包抽屉（滑出式，盖住场景）
+     ⚠️ 原来这条和 #disciplePanel 写成联合选择器，Round 49 删弟子面板时
+        整行被一起删掉了 ⇒ 抽屉失去定位/背景/层级。这里恢复（只留 bagDrawer） */
+  #bagDrawer{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;
+    display:none;flex-direction:column;background:#0d0e0f;
+    border-bottom:1px solid var(--line);box-shadow:0 10px 30px #000000cc}
+  #bagDrawer.on{display:flex;animation:bdSlide .18s ease-out}
+  .bd-hd{display:flex;justify-content:space-between;align-items:center;
+    padding:10px 18px;border-bottom:1px solid var(--line2);flex:0 0 auto;background:#101112}
+  .bd-hd b{font-size:calc(11.5px * var(--fs,1));color:var(--gold);font-weight:400;letter-spacing:2px}
+  .bd-hd .bd-wp{font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:.5px;
+    margin-left:auto;margin-right:10px}
+  .bd-hd .bd-wp b{color:#c8b08a;font-weight:400}
+  .bd-hd button{font-size:calc(11px * var(--fs,1));padding:4px 10px;background:transparent;
+    border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;font-family:inherit}@media (hover:hover){
+  .bd-hd button:hover{border-color:var(--gold);color:var(--gold)}}
+  .bd-body{flex:1 1 auto;overflow-y:auto;padding:0 0 14px}
+  @keyframes bdSlide{from{transform:translateY(-14px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+  .bd-hd b{font-size:calc(11.5px * var(--fs,1));color:var(--gold);font-weight:400;letter-spacing:2px}
+  .bd-hd .bd-wp{font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:.5px;
+    margin-left:auto;margin-right:10px}
+  .bd-hd .bd-wp b{color:#c8b08a;font-weight:400}
+  .bd-hd button{font-size:calc(11px * var(--fs,1));padding:4px 10px;background:transparent;
+    border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;font-family:inherit}@media (hover:hover){
+  .bd-hd button:hover{border-color:var(--gold);color:var(--gold)}}
+
+
+  /* 战斗角色（保留原有观感，缩到窄窗里） */
+  #battleWrap{position:absolute;inset:0;z-index:4}
+  /* ★ 主角 = 当前历练弟子（立绘换成 <img>），尺寸随场景加高一起放大
+     旧版是 34×46 的纯 CSS 小人；现在用 72×72 的弟子头像 */
+  #hero{position:absolute;left:50%;top:56%;width:72px;height:72px;
+    transform:translate(-50%,-50%);z-index:5;pointer-events:none;
+    transition:left .18s linear, top .18s linear}
+  /* ★★ R61：接地阴影 —— 用户报"人不在场景内"，主因就是【脚下没有任何接触点】。
+     注意：img 上原有的 drop-shadow 是"贴着人物轮廓的投影"，那是【浮】的证据不是落地的证据；
+     真正让人"踩在地上"的是一块被压扁的椭圆软阴影（和角色的呼吸/攻击动画解耦，不跟着动）。 */
+  #hero::before{content:'';position:absolute;left:50%;bottom:4px;
+    width:78%;height:15px;transform:translateX(-50%);
+    background:radial-gradient(ellipse at 50% 50%,
+      #000000a8 0%, #00000066 42%, #00000022 66%, #00000000 78%);
+    z-index:-1;pointer-events:none}
+  #hero img{width:100%;height:100%;display:block;
+    /* ★ 与名册头像同一套风格对齐（提亮 + 轻暖化） */
+    filter:brightness(1.25) sepia(.10) brightness(1.05)
+      drop-shadow(0 3px 5px #000000b3);
+    transform-origin:50% 82%;
+    animation:heroBreath 3.4s ease-in-out infinite}
+  @keyframes heroBreath{0%,100%{transform:scale(1) translateY(0)}
+    50%{transform:scale(1.025) translateY(-1.6px)}}
+  /* 动作钩子：加 class 即触发（攻击/受击/闪避） */
+  /* ★ R63：.34s 太长 —— 出手间隔真实只有 ~180ms，动画永远播不完就被下一次覆盖。
+     缩到 .3s 并做成"前冲+回位"，配合加长到 320ms 的弧光一起看。 */
+  #hero.attacking img{animation:heroAttack .3s cubic-bezier(.2,.9,.3,1)}
+  #hero.hurt img{animation:heroHurt .22s ease-out}
+  /* ★ R65：闪避原来只是 scale(1)→scale(.94)（缩 6%），基本看不出。
+     实测位移其实够（0.13 单位 ≈ 竞技场直径 13%），缺的是"动作量 + 时长"。
+     现在：深蹲蓄力 → 侧倾窜出 → 落地缓冲，真实 300ms（≥250ms 才看得清）。 */
+  #hero.dodge img{animation:heroDodge .3s cubic-bezier(.2,.85,.3,1)}
+  /* 闪避期间把位移过渡也拉长，让"滑出去"这段真的看得见（默认 .18s） */
+  #hero.dodge{transition:left .3s cubic-bezier(.2,.8,.3,1), top .3s cubic-bezier(.2,.8,.3,1)}
+  @keyframes heroAttack{
+    0%  {transform:scale(1)}
+    22% {transform:scale(1.09) translateY(-5px) rotate(-3.4deg)}
+    52% {transform:scale(1.02) translateY(-1px) rotate(-1deg)}
+    100%{transform:scale(1)}
+  }
+  @keyframes heroHurt{0%,100%{transform:translateX(0)}
+    28%{transform:translateX(-3.5px) rotate(1.6deg)}
+    62%{transform:translateX(3.5px) rotate(-1.2deg)}}
+  @keyframes heroDodge{
+    0%  {transform:scale(1) rotate(0)}
+    18% {transform:scale(.88,.94) translateY(4px) rotate(-6deg)}      /* 深蹲蓄力 */
+    46% {transform:scale(1.06,.92) translateY(-7px) rotate(-15deg)}   /* 侧倾窜出去 */
+    74% {transform:scale(.95,1.03) translateY(1px) rotate(-5deg)}     /* 落地缓冲 */
+    100%{transform:scale(1) rotate(0)}
+  }
+
+  /* ★ R65：闪避残影 —— 同一张立绘沿突进方向拖出，透明度递减 + 饱和度压低。
+     --dx/--dy 由 JS 按突进方向注入（负向 = 拖在身后），--i 越大越靠后。 */
+  .vfx-ghost{width:72px;height:72px;margin:-36px 0 0 -36px;z-index:4;
+    animation:vfxGhost .34s cubic-bezier(.1,.8,.3,1) both;
+    animation-delay:calc(var(--i,0) * 26ms)}
+  .vfx-ghost img{width:100%;height:100%;display:block;
+    filter:brightness(1.5) saturate(.35) blur(.3px);
+    opacity:.5;
+    transform:scale(calc(1 - var(--i,0) * 0.07))}
+  @keyframes vfxGhost{
+    0%  {opacity:0;  transform:translate(0,0) scale(.9)}
+    30% {opacity:.55}
+    100%{opacity:0;  transform:translate(var(--dx,0), var(--dy,0)) scale(1.04)}
+  }
+  /* ★★★ R76 恢复（⚠️ 这一块被 R50 的"修布局塌陷"整段删掉了，别再加回来又删一遍）
+     症状：游戏照常跑（击杀在涨、伤害数字在飘），但**场上一只怪都看不见**——
+     因为 `.mob` 只剩 `.mob.elite` / `.mob.hit` / `.mob.boss` 这些**修饰符**，
+     基础规则（绝对定位 + 16×16 尺寸）没了 ⇒ 元素退化成块级、宽撑满 382、高 0。
+     ⚠️ `_smoke.js` 的 924 项断言**一条都抓不到**（它们测逻辑不测 CSS），只有截图能看见。
+     同 R14 那次"重写 HTML 把这段写残了、宽高 0 ⇒ 完全看不见怪"是同一个坑，两次了。 */
+  #arena{position:absolute;inset:0}
+  .mob{position:absolute;width:16px;height:16px;border-radius:50%;
+    /* ★ R77：击退偏移由 CSS 变量注入（--kbx/--kby 由渲染层写）
+       ⚠️ 这是【纯表现】：怪真正的逻辑坐标 e.x/e.y 一个都没动。
+       transition 让"被打飞 → 滑回来"自己完成，不需要 JS 逐帧插值。 */
+    transform:translate(calc(-50% + var(--kbx,0px)), calc(-50% + var(--kby,0px)));
+    transition:left .28s linear, top .28s linear, opacity .15s,
+      transform .17s cubic-bezier(.2,.9,.3,1);z-index:3}
+  /* 贴图层：有 sprite 时用它，没有则退回纯色块（兜底样式在上面被覆盖） */
+  .mob .sprite{position:absolute;inset:0;background-repeat:no-repeat;
+    background-position:center;background-size:contain;
+    filter:drop-shadow(0 1px 2px #000000aa)}
+  /* 无贴图的怪（如域外天魔）：用回五行色块 */
+  .mob.nosprite{border-radius:50%;border:1px solid #ff6b5a;
+    background:radial-gradient(circle at 35% 32%,#ff9a8a,#b8332a)}
+  .mob.nosprite .sprite{display:none}
+  /* 精英：复用同一张 16px 源图放大到 24px，再叠三样标识（金环 / 金辉 / 头顶菱形） */
+  .mob.elite{width:24px;height:24px;z-index:4}
+  .mob.elite .sprite{
+    border:1.5px solid #e8bd38;
+    border-radius:6px;
+    box-shadow:0 0 7px #e8bd38aa, inset 0 0 5px #e8bd3866;
+    animation:elitePulse 1.6s ease-in-out infinite}
+  /* 头顶菱形：一眼区分精英 */
+  .mob.elite::after{content:'';position:absolute;left:50%;top:-6px;
+    transform:translateX(-50%) rotate(45deg);width:4px;height:4px;
+    background:#e8bd38;box-shadow:0 0 4px #e8bd38cc}
+  @keyframes elitePulse{0%,100%{box-shadow:0 0 5px #e8bd3888, inset 0 0 4px #e8bd3844}
+    50%{box-shadow:0 0 11px #e8bd38cc, inset 0 0 7px #e8bd3888}}
+  .mob.elite.nosprite{border-radius:5px;border:1px solid #ffc84a;
+    background:radial-gradient(circle at 35% 32%,#ffdf90,#c9871b)}
+  .mob.hit{filter:brightness(2.6)}
+
+  /* ★ R210：怪「扑击」—— 只有看得见的出手，才有"有来有回"
+     扑击时先向后蓄力、再向玩家方向一冲、然后弹回（380ms，见 P.MOB_LUNGE_MS）。
+     ⚠️ 这是纯表现：伤害积分不变（见 settleAway 之外 R210 的注释）。 */
+  .mob.lunge{animation:mobLunge .38s cubic-bezier(.3,.9,.35,1)}
+  @keyframes mobLunge{
+    0%  {transform:translate(-50%,-50%) scale(1,1)}
+    22% {transform:translate(-50%,-50%) scale(1.16,.86)}          /* 下蹲蓄力 */
+    46% {transform:translate(-50%,calc(-50% + 7px)) scale(.9,1.14)} /* 窜出去 */
+    100%{transform:translate(-50%,-50%) scale(1,1)}
+  }
+
+  /* ★ R66：弟子脚下的技能进度条（自走棋那种"还差多少才放"）
+     设计取舍：最多 3 条、每条 3px 高 ⇒ 总高仅 ~13px，不抢战场信息；
+     靠【颜色】区分是哪一条（功法按五类上色，法宝用五行色）。
+     满条(.rdy)会呼吸闪一下 —— 这一下才是"期待感"的来源。 */
+  #skillBar{position:absolute;left:50%;top:calc(100% - 3px);transform:translateX(-50%);
+    width:60px;display:flex;flex-direction:column;gap:2px;pointer-events:none}
+  #skillBar .sk{position:relative;display:block;height:3px;border-radius:2px;
+    background:#00000066;box-shadow:0 0 0 0.5px #ffffff1a;overflow:hidden}
+  #skillBar .sk > b{display:block;height:100%;width:0%;border-radius:2px;
+    background:var(--c,#c8b08a);box-shadow:0 0 4px var(--c,#c8b08a);transition:width .12s linear}
+  #skillBar .sk.rdy{animation:skReady .9s ease-in-out infinite}
+  @keyframes skReady{
+    0%,100%{box-shadow:0 0 0 0.5px #ffffff1a}
+    50%    {box-shadow:0 0 0 0.5px var(--c,#c8b08a),0 0 7px var(--c,#c8b08a)}
+  }
+
+  /* ============ 战斗特效（Round 61）============
+     问题：出手 4.68 次/秒 + 一次结算最多 11 个目标 ⇒ 过程压成 1 帧，
+     玩家只看到怪"凭空少了几只"。这里让「打 → 命中 → 死」摊开成可见的时间轴。
+     全部走 CSS 动画，不进 JS 主循环；坐标与怪物同一套（x*100%）。 */
+  .vfx{position:absolute;pointer-events:none;z-index:6}
+
+  /* 近战弧光：朝目标张开的月牙（不是实心扇形 —— 那看着像手电筒不像刀光）
+     做法：conic-gradient 切出角度范围 + radial-gradient 遮罩只留一圈 ⇒ 细月牙 */
+  /* ★ R64：扇面角由 --a 驱动（= 该武器【实际命中扇面角】的 2 倍），半径由 --sz
+     （= 真实 reach）驱动 ⇒ 弧光覆盖范围与"谁挨打"严格一致。
+     之前是写死 68° + 最多 reach 的 3 倍宽 ⇒ 看起来扫一大片、实际只掉一只血。 */
+  .vfx-arc{width:var(--sz,12%);aspect-ratio:1;margin:-0.5px 0 0 -0.5px;
+    transform-origin:0 50%;
+    background:conic-gradient(from calc(var(--a,80deg) * -0.5),
+      rgba(255,255,255,0) 0,
+      rgba(255,255,255,.45) calc(var(--a,80deg) * 0.22),
+      rgba(226,242,255,1) calc(var(--a,80deg) * 0.5),
+      rgba(255,255,255,.40) calc(var(--a,80deg) * 0.78),
+      rgba(255,255,255,0) var(--a,80deg));
+    /* ⚠️ 内半径太小 ⇒ 变成实心楔子（像手电筒）；太大 ⇒ 细到看不见。
+       实测 54→82% 这档：能看清是"一道月牙"、又不至于糊。 */
+    -webkit-mask:radial-gradient(circle at 0 50%,
+      transparent 0 52%, #000 66%, #000 80%, transparent 88%);
+    mask:radial-gradient(circle at 0 50%,
+      transparent 0 52%, #000 66%, #000 80%, transparent 88%);
+    filter:blur(0.4px) drop-shadow(0 0 3px #cfe6ffaa);
+    /* ★ R63：.2s → .32s（真实时间）。原来元素 86ms 就被删了，动画只播到 43% */
+    animation:vfxArc .32s cubic-bezier(.16,.9,.3,1) forwards}
+  @keyframes vfxArc{
+    0%  {opacity:0;  transform:rotate(var(--ang)) scale(.42)}
+    16% {opacity:1;  transform:rotate(var(--ang)) scale(.84)}
+    55% {opacity:.95}
+    100%{opacity:0;  transform:rotate(var(--ang)) scale(1.34)}
+  }
+
+  /* ============ 远程弹道（Round 71 重做）============
+     旧版是「22×3px 的渐变细条」当箭。问题**不在画得小，而在压根没有飞行过程**：
+     怪会一路贴到 P.MOB_REACH(0.055) 才停，而飞行时长是纯距离比例
+     ⇒ 打最近的怪只有 0.055×1250 = **69ms**、横向约 23px，一帧就过去了。
+     现在三件事一起做：弹丸换成真素材（内联 SVG）+ 一条看得见的弹道拖尾 + 命中炸开。
+     ⚠️ 全部时长走 _game.js 的 projFlyMs()（保底 200ms），与飘字/命中音同一个数。 */
+  .vfx-proj{margin:0;z-index:7;
+    /* 本体是白色"炽热"，五行色只走外发光（--wx）⇒ 与场上"发光体"的语言一致 */
+    filter:drop-shadow(0 0 3px var(--wx,#ffe9a8)) drop-shadow(0 0 7px var(--wx,#ffe9a8));
+    transform:rotate(var(--ang,0rad));
+    /* ★ 命中炸开：delay = 飞行时长（--burst），与位移**同时**结束 ⇒ 到点就"砰"
+       （fill-mode 是 forwards 而不是 both ⇒ 飞行期间这个动画完全不参与，
+         元素用的是上面那行 transform:rotate(--ang)，不会提前被缩放） */
+    animation:vfxProjHit .18s ease-out var(--burst,0ms) forwards}
+  .vfx-proj svg{display:block;width:100%;height:100%}
+  /* 箭：20×10，形状朝 +x。⚠️ 定位锚点放在【箭镞】（右边缘）而不是中心 ——
+     这样"飞到哪里"就是镞到哪里，镞正好落在怪身上；锚在中心会整体超出半个箭长。
+     ⚠️ 长度是量过的：飞行距离只有 21~88px（0.055~0.23 单位 × 382px 场宽），
+        第一版做成 26px ⇒ 箭自己就盖掉了前 26px 的弹道，拖尾基本看不见。
+        20px 是"还认得出是箭"与"别盖住弹道"之间的折中（实测 8× 放大下仍能分辨镞/杆/尾羽）。 */
+  .vfx-arrow{width:20px;height:10px;margin:-5px 0 0 -20px;transform-origin:100% 50%}
+  /* 法球：16×16，锚在中心（圆的中心就是它自己） */
+  .vfx-orb{width:16px;height:16px;margin:-8px 0 0 -8px;transform-origin:50% 50%}
+  @keyframes vfxProjHit{
+    0%  {opacity:1;transform:rotate(var(--ang,0rad)) scale(1)}
+    30% {opacity:1;transform:rotate(var(--ang,0rad)) scale(1.45)}
+    100%{opacity:0;transform:rotate(var(--ang,0rad)) scale(2.1)}
+  }
+
+  /* 弹道拖尾 —— 这行才是玩家嘴里"看得见的弹道"。
+     一条从出手点指向目标的细光带，用 scaleX(0→1) 长出来：
+     ⚠️ 用 scaleX 不用动 left/top —— 变形的进度是**线性**的，光带头部才会匀速，
+        与弹丸的 linear transition 严格同步（两边用的是同一个 projFlyMs）。
+     ⚠️ 渐变做成"22% 之后基本实心"而不是"只有头部亮"：因为弹丸本体就骑在这条带上、
+        会盖住靠头部的一段。实心带 ⇒ 露出来的那一段无论在哪都亮，观感才稳定。
+       （第一版把最亮处放在 100%（正被弹丸盖住）+ 中间只有 .16 透明度 ⇒ 8× 放大下几乎看不见。）
+     两段动画：① 长出来（--fly）② 命中后淡出（--fade），所以元素寿命必须 ≥ 两者之和。 */
+  .vfx-streak{height:4px;margin:-2px 0 0 0;z-index:6;transform-origin:0 50%;
+    background:linear-gradient(90deg,
+      rgba(255,255,255,0) 0%,
+      var(--wx,#ffe9a8) 22%,
+      #ffffff 60%,
+      #ffffff 100%);
+    opacity:.85;
+    filter:drop-shadow(0 0 3px var(--wx,#ffe9a8)) drop-shadow(0 0 8px var(--wx,#ffe9a8));
+    animation:vfxStreak var(--fly,300ms) linear forwards,
+              vfxStreakOut var(--fade,300ms) linear var(--fly,300ms) forwards}
+  @keyframes vfxStreak{
+    from{transform:rotate(var(--ang,0rad)) scaleX(0)}
+    to  {transform:rotate(var(--ang,0rad)) scaleX(1)}
+  }
+  @keyframes vfxStreakOut{from{opacity:.85}to{opacity:0}}
+
+  /* 死亡消散：怪不再"凭空消失"，而是被打碎、淡出、缩下去 */
+  /* ★ R63：.26s → .42s（真实时间）。原来 112ms 就被删了，碎裂完全没播出来 */
+  .mob.dying{animation:mobDie .42s ease-out forwards;z-index:2}
+  @keyframes mobDie{
+    0%  {opacity:1;filter:brightness(2.6)}
+    20% {opacity:1;transform:translate(-50%,-50%) scale(1.22);
+         filter:brightness(3.2) saturate(.5)}
+    55% {opacity:.85;transform:translate(-50%,-50%) scale(.92) rotate(4deg);
+         filter:brightness(2.2) saturate(.35)}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(.44) rotate(12deg);
+         filter:brightness(1.4) saturate(.15)}
+  }
+
+  /* ============ 法宝 / 功法 / 突破 特效（Round 62）============
+     设计：不给 6 件法宝各画一套（又慢又乱），而是
+     【三类原型 × 五行色】+ 名字横幅。玩家靠"色 + 形状 + 名字"识别发生了什么。
+       ring  扩散圆环   —— 护体 / 治疗 / 回气
+       rays  放射光线   —— 攻击型法宝 / 攻伐释放型
+       flash 全屏闪+大环 —— 底牌（金乌焚世 ×6 / 突破 / Boss 级）
+     --wx 由 JS 按五行色注入。 */
+  .vfx-skill{left:0;top:0;width:0;height:0;z-index:8}
+  .vfx-skill.big{z-index:9}
+
+  /* ==========================================================================
+     ★★ R77：六种「视觉签名」—— 每个功法有自己的形状，不再全是"一圈光"
+     每种都按【起手 0-90ms → 命中 90-340ms → 余韵 →900ms】编排：
+       ::before = 命中主特效（快、亮、结束得早）
+       ::after  = 起手/余韵（延迟一点出现，负责"还有残留"）
+     ⚠️ 这一段全是形状与时长，不参与任何数值。
+     ========================================================================== */
+
+  /* ① 切痕 slash —— 一道锐利亮线横着扫过（剑 / 枪：直线穿透） */
+  .vfx-slash::before{
+    content:'';position:absolute;left:0;top:0;
+    width:240px;height:5px;margin:-2.5px 0 0 -120px;border-radius:3px;
+    background:linear-gradient(90deg,transparent,var(--wx,#dfe9ff) 18%,
+      #fff 50%,var(--wx,#dfe9ff) 82%,transparent);
+    box-shadow:0 0 14px var(--wx,#dfe9ff),0 0 34px var(--wx,#dfe9ff) inset;
+    animation:vfxSlash .58s cubic-bezier(.1,.9,.2,1) forwards}
+  .vfx-slash::after{
+    content:'';position:absolute;left:0;top:0;width:150px;height:2px;
+    margin:-1px 0 0 -75px;border-radius:2px;
+    background:linear-gradient(90deg,transparent,#fff,transparent);
+    animation:vfxSlash2 .9s cubic-bezier(.1,.9,.2,1) forwards}
+  @keyframes vfxSlash{
+    0%  {opacity:0;transform:rotate(var(--aim,0deg)) scaleX(.1)}
+    12% {opacity:1;transform:rotate(var(--aim,0deg)) scaleX(1.15)}
+    40% {opacity:.9;transform:rotate(var(--aim,0deg)) scaleX(1.3)}
+    100%{opacity:0;transform:rotate(var(--aim,0deg)) scaleX(1.45)}
+  }
+  @keyframes vfxSlash2{
+    0%,10%{opacity:0;transform:rotate(var(--aim,0deg)) scaleX(.2)}
+    20%{opacity:.85;transform:rotate(var(--aim,0deg)) scaleX(1)}
+    100%{opacity:0;transform:rotate(var(--aim,0deg)) scaleX(1.2) translateY(6px)}
+  }
+
+  /* ② 爆环 burst —— 环从中心炸开（杖 / 群攻） */
+  .vfx-burst::before{
+    content:'';position:absolute;left:0;top:0;
+    width:190px;height:190px;margin:-95px 0 0 -95px;border-radius:50%;
+    background:repeating-conic-gradient(from 0deg,
+      var(--wx,#c9a227) 0deg 3deg, transparent 3deg 22deg);
+    -webkit-mask:radial-gradient(circle,transparent 0 16%,#000 42%,transparent 78%);
+    mask:radial-gradient(circle,transparent 0 16%,#000 42%,transparent 78%);
+    animation:vfxRays .9s cubic-bezier(.12,.85,.25,1) forwards}
+  .vfx-burst::after{
+    content:'';position:absolute;left:0;top:0;
+    width:150px;height:150px;margin:-75px 0 0 -75px;border-radius:50%;
+    border:2px solid var(--wx,#c9a227);
+    box-shadow:0 0 14px var(--wx,#c9a227);
+    animation:vfxRing .9s cubic-bezier(.12,.85,.25,1) forwards;
+    animation-delay:60ms}
+  @keyframes vfxRays{
+    0%  {opacity:0;transform:scale(.3) rotate(-16deg)}
+    18% {opacity:1}
+    60% {opacity:.75}
+    100%{opacity:0;transform:scale(1.5) rotate(18deg)}
+  }
+  @keyframes vfxRing{
+    0%  {opacity:0;transform:scale(.14)}
+    14% {opacity:1}
+    62% {opacity:.8}
+    100%{opacity:0;transform:scale(1.7)}
+  }
+
+  /* ③ 残影 trail —— 三个渐隐分身往后拖（疾风 / 连击） */
+  .vfx-trail::before,.vfx-trail::after{
+    content:'';position:absolute;left:0;top:0;
+    width:46px;height:62px;margin:-31px 0 0 -23px;border-radius:45% 45% 40% 40%;
+    background:radial-gradient(ellipse at 50% 40%,var(--wx,#8fe3ff) 0%,transparent 72%);
+    filter:blur(2px);opacity:0}
+  .vfx-trail::before{animation:vfxTrailA .62s ease-out forwards}
+  .vfx-trail::after{animation:vfxTrailB .62s ease-out forwards;animation-delay:70ms}
+  @keyframes vfxTrailA{
+    0%  {opacity:.85;transform:translate(0,0) scale(1)}
+    100%{opacity:0;transform:translate(-30px,10px) scale(.8)}
+  }
+  @keyframes vfxTrailB{
+    0%  {opacity:.7;transform:translate(0,0) scale(.9)}
+    100%{opacity:0;transform:translate(26px,-8px) scale(.7)}
+  }
+
+  /* ④ 上升光点 rise —— 光从脚下往上飘（治疗 / 回气） */
+  .vfx-rise::before{
+    content:'';position:absolute;left:0;top:0;
+    width:34px;height:96px;margin:0 0 0 -17px;
+    background:linear-gradient(to top,transparent,var(--wx,#8fe3a0) 60%,#fff);
+    filter:blur(1.5px);
+    animation:vfxRise .95s cubic-bezier(.15,.9,.3,1) forwards}
+  .vfx-rise::after{
+    content:'';position:absolute;left:0;top:0;
+    width:6px;height:6px;border-radius:50%;background:#fff;
+    box-shadow:0 0 10px var(--wx,#8fe3a0),18px -6px 0 -1px var(--wx,#8fe3a0),
+      -16px 4px 0 -1px var(--wx,#8fe3a0),8px 10px 0 -2px var(--wx,#8fe3a0);
+    animation:vfxRiseDots 1s ease-out forwards}
+  @keyframes vfxRise{
+    0%  {opacity:0;transform:translateY(14px) scaleY(.4)}
+    20% {opacity:.9;transform:translateY(0) scaleY(1)}
+    100%{opacity:0;transform:translateY(-54px) scaleY(1.15)}
+  }
+  @keyframes vfxRiseDots{
+    0%  {opacity:0;transform:translateY(18px)}
+    25% {opacity:1}
+    100%{opacity:0;transform:translateY(-62px)}
+  }
+
+  /* ⑤ 球壳 shell —— 半透明球从内向外撑开（护体 / 减伤） */
+  .vfx-shell::before{
+    content:'';position:absolute;left:0;top:0;
+    width:132px;height:132px;margin:-66px 0 0 -66px;border-radius:50%;
+    border:2px solid var(--wx,#c9a227);
+    background:radial-gradient(circle,transparent 52%,var(--wx,#c9a227) 74%,transparent 82%);
+    box-shadow:0 0 18px var(--wx,#c9a227),inset 0 0 22px var(--wx,#c9a227);
+    animation:vfxShell .82s cubic-bezier(.2,.9,.3,1) forwards}
+  .vfx-shell::after{
+    content:'';position:absolute;left:0;top:0;
+    width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;
+    border:1px dashed var(--wx,#c9a227);opacity:.6;
+    animation:vfxShellIn .7s cubic-bezier(.2,.9,.3,1) forwards}
+  @keyframes vfxShell{
+    0%  {opacity:0;transform:scale(.72)}
+    26% {opacity:1;transform:scale(1.02)}
+    100%{opacity:0;transform:scale(1.16)}
+  }
+  @keyframes vfxShellIn{
+    0%  {opacity:.7;transform:scale(1.45) rotate(0deg)}
+    100%{opacity:0;transform:scale(.9) rotate(90deg)}
+  }
+
+  /* ⑥ 全闪 flash —— 底牌级才用（一局没几次，敢给大的） */
+  .vfx-flash::before{
+    content:'';position:absolute;left:0;top:0;
+    width:280px;height:280px;margin:-140px 0 0 -140px;border-radius:50%;
+    border:3px solid var(--wx,#ffe9a8);
+    box-shadow:0 0 26px var(--wx,#ffe9a8),inset 0 0 30px var(--wx,#ffe9a8);
+    animation:vfxRing .9s cubic-bezier(.12,.85,.25,1) forwards}
+  .vfx-flash::after{
+    content:'';position:fixed;left:0;right:0;top:0;bottom:0;
+    background:radial-gradient(circle at 50% 45%,var(--wx,#ffe9a8) 0%,
+      transparent 62%);
+    animation:vfxFlash .9s ease-out forwards;pointer-events:none}
+  @keyframes vfxFlash{0%{opacity:0}10%{opacity:.55}45%{opacity:.28}100%{opacity:0}}
+
+  /* 名字横幅：让玩家知道"刚才是哪个法宝/功法"（挂在特效容器里，跟着它一起消失） */
+  .vfx-name{position:absolute;left:0;top:-46px;transform:translateX(-50%);
+    white-space:nowrap;font-size:calc(12px * var(--fs,1));letter-spacing:2px;
+    color:var(--wx,#c9a227);text-shadow:0 0 8px #000,0 1px 2px #000;
+    padding:1px 7px;border:1px solid var(--wx,#c9a227);border-radius:2px;
+    background:#0c0d0ecc;animation:vfxName 1.15s cubic-bezier(.15,.9,.3,1) forwards}
+  .vfx-skill.big .vfx-name{font-size:calc(14px * var(--fs,1));top:-56px}
+  @keyframes vfxName{
+    0%  {opacity:0;transform:translateX(-50%) translateY(10px) scale(.88)}
+    14% {opacity:1;transform:translateX(-50%) translateY(0) scale(1.04)}
+    26% {transform:translateX(-50%) translateY(0) scale(1)}
+    78% {opacity:1}
+    100%{opacity:0;transform:translateX(-50%) translateY(-16px) scale(1)}
+  }
+
+  /* 顿帧：只暂停【关键帧动画】，不动过渡、不冻数值。
+     过渡（mob 的 left/top）由 JS 端"冻结期间不写坐标"来停，两处配合才不跳变。 */
+  #battleWrap.freeze .mob,
+  #battleWrap.freeze .vfx,
+  #battleWrap.freeze #hero img{animation-play-state:paused !important}
+  .mob .hpbar{position:absolute;left:50%;top:-6px;transform:translateX(-50%);
+    width:90%;height:2px;background:#00000090;overflow:hidden}
+  .mob .hpbar i{display:block;height:100%;width:100%;background:#ffffffcc}
+  /* 敌人在【场景之上】（否则会被 .veil 的暗角盖住） */
+  #battleWrap{z-index:4}
+  #battleBarWrap{position:absolute;left:0;right:0;bottom:0;height:1px;background:#ffffff1a}
+  #battleBar{height:100%;width:0;background:linear-gradient(90deg,#7d6118,#d9b84a)}
+  #battleWrap.breaking{box-shadow:inset 0 0 60px #c9a22766}
+
+  /* 飘字 */
+  .pop{position:absolute;font-size:calc(11px * var(--fs,1));pointer-events:none;z-index:9;
+    text-shadow:0 1px 3px #000}
+  .pop.crit{color:#e8cc72;font-size:calc(14px * var(--fs,1));font-weight:700}
+  .pop.ke{color:#7fd8bc;font-size:calc(15px * var(--fs,1));font-weight:800}
+  .pop.dmg{color:#d8d1c3} .pop.miss{color:#7e7768}
+  .pop.dodge{color:#63b394} .pop.break{color:#f0d080;font-size:calc(16px * var(--fs,1));font-weight:800}
+
+  /* ============ 修为条 ============ */
+  #qiWrap{margin:16px 18px 0;flex:0 0 auto}
+  #qiWrap .qi-lbl{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:calc(11px * var(--fs,1));color:var(--dim);letter-spacing:1px;margin-bottom:7px}
+  #qiWrap .qi-lbl b{color:var(--bright);font-size:calc(15px * var(--fs,1));letter-spacing:2px;font-weight:400}
+  #qiTierTxt{color:#8c8574;font-size:calc(11px * var(--fs,1))}
+  #qiBarOuter{height:1px;background:#ffffff1a;position:relative}
+  #qiBar{position:absolute;left:0;top:0;height:1px;width:0;
+    background:linear-gradient(90deg,#7d6118,#d9b84a);transition:width .25s}
+  #qiBar::after{content:'';position:absolute;right:-2px;top:-2px;width:5px;height:5px;
+    border-radius:50%;background:#d9b84a;box-shadow:0 0 7px #d9b84a}
+  #qiTxt{display:block;margin-top:7px;font-size:calc(10px * var(--fs,1));color:var(--dim2);
+    letter-spacing:1px;text-align:right;font-variant-numeric:tabular-nums}
+
+  /* ============ 属性行（.stat 风格） ============ */
+  #hud{padding:0 18px;margin-top:12px}
+  /* ★★ Round 49：HUD 顶部的弟子身份行（头像/名字/灵根/天赋）
+     —— 原来在"当前弟子"面板里，面板删掉后并进 HUD */
+  #hud .hud-disc{display:flex;align-items:center;gap:7px;
+    padding:5px 0 7px;margin-bottom:2px;border-bottom:1px solid var(--line2)}
+  #hud .hud-disc .av{flex:0 0 auto;width:26px;height:26px;border-radius:50%;
+    position:relative;overflow:hidden;background:radial-gradient(circle at 40% 32%,
+      #f2ece0 0%,#d5cdbe 72%,#b8ae9c 100%);box-shadow:0 0 0 1px #ffffff1c}
+  #hud .hud-disc .av img{position:absolute;left:0;top:0;width:100%;height:100%}
+  #hud .hud-disc .nm{flex:0 0 auto;color:var(--paper);font-size:calc(11.5px * var(--fs,1))}
+  #hud .hud-disc .lg{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:0 3px;border-radius:2px;
+    border:1px solid #ffffff1a;color:#9a9284;display:inline-flex;align-items:center;gap:2px}
+  #hud .hud-disc .lg i{display:inline-block;width:6px;height:6px;border-radius:50%}
+  #hud .hud-disc .tal{flex:0 0 auto;color:#c9a86e;font-size:calc(10px * var(--fs,1))}   /* Round 39：滚动交给父层 .scroll（原来双滚动）*/
+  #hud .stat{display:flex;justify-content:space-between;align-items:baseline;
+    padding:7px 0;border-top:1px solid var(--line2);font-size:calc(12px * var(--fs,1))}
+  #hud .stat .k{color:var(--dim);letter-spacing:2px;font-size:calc(11px * var(--fs,1));
+    flex:0 0 auto;white-space:nowrap}   /* ★ R59：.v 侧加了图标后，标签不许被挤换行 */
+  #hud .stat .v{color:var(--bright);font-variant-numeric:tabular-nums;letter-spacing:1px}
+  #hud .stat .v.gold{color:var(--gold)} #hud .stat .v.low{color:var(--red)}
+  #hud .stat .v small{color:#6d675b;font-size:calc(10.5px * var(--fs,1));margin-left:5px;letter-spacing:0}
+
+  /* ============ 按钮（细边 · 无方框感） ============ */
+  .btns{display:flex;gap:7px;padding:12px 18px 0;flex:0 0 auto;flex-wrap:wrap}
+  button{flex:1;padding:8px 10px;border:1px solid #ffffff2b;border-radius:4px;
+    cursor:pointer;background:#ffffff0a;color:#b9c2d0;font-size:calc(12px * var(--fs,1));
+    font-family:"WenKai",serif;letter-spacing:1px;transition:.15s;white-space:nowrap}@media (hover:hover){
+  button:hover{border-color:#ffffff66;color:#fff}}
+  button.primary{border-color:var(--gold);color:#e0c464;background:#c9a22722}@media (hover:hover){
+  button.primary:hover{background:#c9a22733}}
+  button.danger{border-color:var(--cinnabar);color:#d9705f;background:#a8392c1a}
+  button.wide{flex-basis:100%}
+
+  /* ============ 底部页签 ============ */
+  .nav{display:flex;border-top:1px solid var(--line);flex:0 0 auto;margin-top:auto}
+  .nav div{flex:1;text-align:center;padding:13px 0 14px;font-size:calc(12.5px * var(--fs,1));
+    color:var(--dim2);letter-spacing:4px;cursor:pointer;position:relative;
+    user-select:none;transition:color .16s}@media (hover:hover){
+  .nav div:hover{color:#8c8574}}
+  .nav div.on{color:var(--gold)}
+  .nav div.on::before{content:'';position:absolute;top:-1px;left:50%;transform:translateX(-50%);
+    width:22px;height:1px;background:var(--gold)}
+
+  /* ============ 滚动区 ============ */
+  .scroll{flex:1 1 auto;overflow-y:auto;padding:0 18px 12px}
+  .scroll::-webkit-scrollbar{width:3px}
+  .scroll::-webkit-scrollbar-thumb{background:#ffffff1f}
+
+  /* ============ 装 · 身体分区 ============ */
+  #zones{position:relative}
+  .zone{border:1px dashed #ffffff1f;border-radius:3px;position:relative}
+  .zone .zname{font-size:calc(10px * var(--fs,1));color:var(--dim2);padding:3px 5px;letter-spacing:1px;
+    display:flex;justify-content:space-between;align-items:baseline}
+  .zone .zname em{font-style:normal;color:var(--gold);font-variant-numeric:tabular-nums}
+
+  /* ============ 装 · 经络图（还原原始设计）============
+     布局：左右两栏放 6 个部位格，中间是经络图人体（剪影 + 穴位）
+     每个部位格内部仍是【网格拼装】（保持 Backpack Hero 玩法不变） */
+  .body-area{position:relative;margin:12px 18px 0;flex:0 0 auto;
+    display:grid;grid-template-columns:1fr 186px 1fr;gap:8px;align-items:start}
+  /* #zones 作为子网格铺满 3 列，内部再分左右两栏 ——
+     这样左栏的格子不会把右栏挤出去 */
+  #zones{grid-column:1/4;display:grid;grid-template-columns:1fr 186px 1fr;
+    gap:8px 8px;align-items:start;position:relative;z-index:2}
+  /* 引线：从部位格指向人体对应位置（纯装饰，不挡点击） */
+  .leaders{position:absolute;inset:0;width:100%;height:100%;
+    pointer-events:none;z-index:1;overflow:visible}
+  /* 人体：跨 3 列，放最底层当背景 */
+  .fig-wrap{position:absolute;left:50%;top:0;transform:translateX(-50%);
+    width:220px;height:340px;pointer-events:none;z-index:0}
+  .fig-glow{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:210px;height:300px;
+    background:radial-gradient(ellipse at 50% 42%,#c9a22738 0%,#c9a22718 38%,transparent 70%)}
+  .fig-sil,.fig-pts{position:absolute;left:50%;top:4px;transform:translateX(-50%);
+    height:332px;width:auto}
+  .fig-sil{filter:drop-shadow(1px 0 0 #d9b84ab3) drop-shadow(-1px 0 0 #d9b84ab3)
+    drop-shadow(0 1px 0 #d9b84ab3) drop-shadow(0 -1px 0 #d9b84ab3)}
+  .fig-pts{opacity:.92}
+  /* 灵气粒子 */
+  .fig-qi{position:absolute;inset:0;width:100%;height:100%;
+    animation:qiBreath 5.5s ease-in-out infinite}
+  @keyframes qiBreath{0%,100%{opacity:.5}50%{opacity:1}}
+
+  /* 部位格：左右两栏 */
+  .ztile{position:relative;z-index:2;min-width:0}
+  .ztile.left{grid-column:1}.ztile.right{grid-column:3}
+  .ztile .zh{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:4px;white-space:nowrap}
+  .ztile .zh b{color:#bbb4a6;font-weight:400;font-size:calc(11px * var(--fs,1))}
+  .ztile .zh em{font-style:normal;color:var(--dim2);font-variant-numeric:tabular-nums;font-size:calc(9.5px * var(--fs,1))}
+  .ztile .zh em.full{color:var(--gold)}
+  /* 格内网格（沿用原有 cell / it 视觉，只是格子变小） */
+  .zg{display:grid;gap:2px;justify-content:start}
+  .zg .cell{width:14px;height:14px;border:1px solid var(--line2);border-radius:2px;
+    display:flex;align-items:center;justify-content:center;font-size:calc(8px * var(--fs,1));
+    overflow:hidden;position:relative}
+  .zg .cell.item{border-width:1px;border-style:solid}
+  .zg .cell.empty{border-style:dashed;border-color:#ffffff0d}
+  .zg .cell.dragover{border-color:var(--gold);background:#c9a2270f}
+
+  /* ============ 背包 / 掉落 ============ */
+  .flt{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:calc(11px * var(--fs,1));
+    color:var(--dim);padding:7px 0;border-top:1px solid var(--line2)}
+  select{background:#141517;color:var(--paper);border:1px solid #ffffff1f;
+    border-radius:3px;font-size:calc(11px * var(--fs,1));padding:2px 4px;font-family:"WenKai",serif}
+  label{display:inline-flex;align-items:center;gap:3px;font-size:calc(11px * var(--fs,1))}
+  #bagList{max-height:none}
+  .bag-i{display:flex;align-items:baseline;gap:7px;padding:7px 0;
+    border-top:1px solid var(--line2);font-size:calc(12px * var(--fs,1));cursor:pointer;position:relative}
+  .bag-i .q{flex:0 0 auto;font-size:calc(10.5px * var(--fs,1));letter-spacing:1px}
+  .bag-i .nm{flex:1;color:var(--txt);letter-spacing:1px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .bag-i .nm b{font-weight:400;color:var(--bright)}
+  .bag-i .dim{color:var(--dim2);font-size:calc(10.5px * var(--fs,1))}
+  .bag-i .af{font-size:calc(9.5px * var(--fs,1));color:#8a95a8;letter-spacing:-0.5px}
+  .bag-i .sg{font-size:calc(9.5px * var(--fs,1));color:var(--gold)}
+  .bag-i .sz{font-size:calc(10px * var(--fs,1));color:var(--dim2);font-variant-numeric:tabular-nums}
+  .bag-i .up{color:var(--green);font-size:calc(11px * var(--fs,1));font-variant-numeric:tabular-nums}
+  .bag-i .down{color:var(--red);font-size:calc(11px * var(--fs,1));font-variant-numeric:tabular-nums}
+  .bag-i .same{color:var(--dim2);font-size:calc(11px * var(--fs,1))}
+  .bag-i.good{background:#63b3940a}
+  .bag-i.spec{border-left:2px dashed;padding-left:7px;margin-left:-9px}
+  .bag-i.spec .nm b{font-weight:600}
+  .spec-desc{font-size:calc(9.5px * var(--fs,1));max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #cmpBox{font-size:calc(11px * var(--fs,1));color:var(--dim)}
+
+  /* ============ 宗 · 宗门地图（AI 生成 · 三档图） ============
+     阶位 → 用图：0/1 档1（素）· 2/3 档2（金顶）· 4 档3（仙门）
+     同图 + 滤镜递进 ⇒ 升阶时"越来越灵气充盈" */
+  /* ★★ Round 44：地图加大（用户："宗门地图页面扩大一点"）
+     ⚠️ #win 是固定 400×648 —— 地图底图本身是 16:9，再放大就会挤压下面
+        ⇒ 只能小幅加宽（18px→10px 边距）并给底图一点纵向填充，兼顾不出屏 */
+  /* ★★ Round 50：地图加大 —— 从"按宽度铺满"（376×161）改成"按高度铺满"（420×230）
+     · 底图 364×156（比例 2.333），左右两侧是山体、建筑都在中间 ≈70% ⇒ 允许横向裁掉
+     · 【纵向不裁】⇒ 顶上那排建筑（后楼 + 双塔）完整可见
+     · 新增 .map-in 包裹层：热点按 % 定位于包裹层（= 图片本身）
+       ⇒ 无论横向裁掉多少，热点都不会错位（这是 Round 43 踩过坑的地方）
+     · 用户："能不能让这个宗门全景占比变大一些" */
+  .sect-map{position:relative;margin:0 -18px 0;overflow:hidden;
+    background:#141518;flex:0 0 auto;
+    height:230px;display:flex;justify-content:center;
+    border-top:1px solid var(--line2);border-bottom:1px solid var(--line2)}
+  .sect-map .map-in{position:relative;height:100%;flex:0 0 auto}
+  .sect-map .mimg{display:block;height:100%;width:auto;
+    transition:filter .35s ease}
+  #sectSpots{position:absolute;inset:0}
+  /* 阶位越高越"灵气充盈"（同图滤镜递进）
+     ⚠️ 地图是「宗」页签的主视觉，基准亮度不能太低，否则建筑看不清 */
+  .sect-map.r0 .mimg{filter:brightness(.80) saturate(.58)}
+  .sect-map.r1 .mimg{filter:brightness(.86) saturate(.66)}
+  .sect-map.r2 .mimg{filter:brightness(.94) saturate(.76)}
+  .sect-map.r3 .mimg{filter:brightness(1.02) saturate(.86)}
+  .sect-map.r4 .mimg{filter:brightness(1.12) saturate(1.00)}
+  .sect-map.r4::after{content:'';position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 42%,#c9a22726 0%,transparent 62%);
+    animation:sectGlow 4.5s ease-in-out infinite}
+  @keyframes sectGlow{0%,100%{opacity:.55}50%{opacity:1}}
+
+  /* 建筑热点（hover 金色光圈 + 名字标签） */
+  .spot{position:absolute;cursor:pointer;border-radius:5px}
+  .spot .ring{position:absolute;inset:0;border:1px solid transparent;border-radius:5px;
+    transition:all .16s ease;pointer-events:none}
+  .spot .tag{position:absolute;left:50%;top:0;transform:translate(-50%,-108%);
+    font-size:calc(9px * var(--fs,1));color:#e6ded0;background:#0c0d0ef0;border:1px solid #ffffff30;
+    border-radius:3px;padding:1px 4px;white-space:nowrap;opacity:0;
+    transition:opacity .16s;pointer-events:none;z-index:9}
+  /* ★★ Round 50：顶上那排建筑（y=2%）的标签原本被 overflow:hidden 裁掉了
+     —— 用户："上面的建筑都看不到名字了"
+     ⇒ y 很小的热点，标签改放到【热点下方】 */
+  .spot.tag-b .tag{top:100%;transform:translate(-50%,8%)}@media (hover:hover){
+  .spot:hover .ring,.spot.on .ring{border-color:#e8cc72;
+    box-shadow:0 0 0 2px #c9a22755,0 0 18px 5px #c9a22770,inset 0 0 22px #c9a22738;
+    background:#c9a2271c}}@media (hover:hover){
+  .spot:hover .tag,.spot.on .tag{opacity:1}}@media (hover:hover){
+  .spot:hover{z-index:8}}
+  /* ★ Round 40：中路后楼 =「录」（宗门史册）—— 用朱色描边区分于普通设施，
+     提示"这是档案/编年，不是可升级的设施" */
+  .spot.arch .ring{border:1px dashed #cc463688}@media (hover:hover){
+  .spot.arch:hover .ring,.spot.arch.on .ring{border-style:solid;border-color:#e0785f;
+    box-shadow:0 0 0 2px #cc463655,0 0 18px 5px #cc463670,inset 0 0 22px #cc463638;
+    background:#cc46361c}}
+  .spot.arch .tag{color:#f0b2a2;border-color:#cc463666}
+
+  /* 选中建筑的功能面板 */
+  .bldg-panel{padding:9px 0 4px;border-top:1px solid var(--line2);margin-top:8px}
+  .bldg-panel .bh{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+  .bldg-panel .bh img{width:26px;height:26px;object-fit:contain;
+    filter:drop-shadow(0 1px 2px #000000aa)}
+  .bldg-panel .bh b{color:var(--bright);font-weight:400;font-size:calc(12px * var(--fs,1));letter-spacing:1px}
+  .bldg-panel .bh em{font-style:normal;display:block;font-size:calc(9px * var(--fs,1));color:var(--dim2)}
+  .bldg-panel .bp{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+    font-size:calc(10px * var(--fs,1));padding:3px 0;border-top:1px solid var(--line2)}
+  .bldg-panel .bp>span{color:var(--dim);flex:0 0 auto}
+  .bldg-panel .bp>b{color:var(--txt);font-weight:400;text-align:right}
+  .bldg-panel .bp>b.g{color:var(--gold);letter-spacing:1px}
+  .bldg-panel .bp>b.lock{color:var(--red)}
+  .bldg-panel .bp>b.none{color:var(--dim2);font-size:calc(9.5px * var(--fs,1))}
+  .bldg-panel .bbtn{margin-top:6px;text-align:right}
+  .bldg-panel .bbtn button{font:calc(10px * var(--fs,1)) inherit;padding:3px 9px;background:#c9a22722;
+    border:1px solid var(--gold);border-radius:3px;color:#e0c464;cursor:pointer}
+  .bldg-panel .bbtn button:disabled{opacity:.35;border-color:#ffffff22;
+    background:transparent;color:#8c8574;cursor:default}
+
+  /* ============ 录 · 史册馆容器（Round 37） ============
+     #archiveBox 默认隐藏；点「宗」页的中路后楼后跳到「录」并显示。
+     内容由 #archiveBody 承载（渲染逻辑在别处实现）。 */
+  /* ★ Round 40：史册 / 生平 切换（原来靠底部「录」页签，现在并进宗页） */
+  .arc-tabs{display:flex;gap:6px;margin:2px 0 8px}
+  .arc-tabs button{flex:1;font-size:calc(10.5px * var(--fs,1));padding:5px 0;background:transparent;
+    border:1px solid #ffffff1c;border-radius:3px;color:#8c8574;cursor:pointer;
+    font-family:inherit;letter-spacing:2px}
+  .arc-tabs button.on{border-color:var(--gold);color:var(--gold);background:#c9a22712}
+
+  #archiveBox{padding-bottom:6px}
+  #archiveBox .arc-hd{font-size:calc(11px * var(--fs,1));color:var(--gold);letter-spacing:3px;
+    padding-bottom:7px;margin-bottom:8px;border-bottom:1px solid var(--line2);
+    display:flex;justify-content:space-between;align-items:baseline}
+  #archiveBox .arc-hd em{font-style:normal;font-size:calc(10px * var(--fs,1));color:var(--dim2);
+    letter-spacing:1px}
+  #archiveBox .arc-sec{font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;
+    margin:10px 0 4px}
+  #archiveBox .arc-item{display:flex;gap:9px;padding:6px 0;
+    border-bottom:1px solid var(--line2);font-size:calc(10.5px * var(--fs,1));align-items:baseline}
+  #archiveBox .arc-item .g{flex:0 0 auto;color:var(--gold);font-size:calc(10px * var(--fs,1));
+    letter-spacing:1px;font-variant-numeric:tabular-nums}
+  #archiveBox .arc-item .b{flex:1;min-width:0;color:var(--txt);line-height:1.6}
+  #archiveBox .arc-item .b i{font-style:normal;color:var(--dim2)}
+  #archiveBox .arc-item .b b{color:var(--gold);font-weight:400}
+  #archiveBox .arc-empty{font-size:calc(10px * var(--fs,1));color:#5d574c;padding:8px 0}
+  /* ★ Round 53：生平卷（三幕 + 墓志）/ 宗门本纪 */
+  .bio-act{font-size:calc(10.5px * var(--fs,1));color:var(--txt);line-height:1.75;margin:2px 0;text-indent:0}
+  .bio-act span{color:var(--gold);font-size:calc(9.5px * var(--fs,1));letter-spacing:2px;margin-right:6px}
+  .bio-act i{font-style:italic;color:var(--dim2)}
+  .bio-epi{font-size:calc(10.5px * var(--fs,1));color:#c8b08a;line-height:1.75;margin:6px 0 2px;text-indent:0;
+    padding-left:8px;border-left:2px solid #c9a22755}
+  .sect-vol{padding:2px 0 8px}
+  .arc-item .g em{display:block;font-style:normal;font-size:calc(9.5px * var(--fs,1));color:var(--dim2);letter-spacing:0}
+  .arc-item.bio-in{border-left:2px solid #6f9a6f;padding-left:8px}
+  .arc-item.bio-dead{border-left:2px solid #a8594f;padding-left:8px}
+  .arc-item.bio-hand{border-left:2px solid #8a8f96;padding-left:8px}
+  .arc-item.bio-asc{border-left:2px solid #d9b95c;padding-left:8px}
+  .bio-raw{margin:4px 0 10px}
+  .bio-raw summary{font-size:calc(9.5px * var(--fs,1));color:#5d574c;cursor:pointer;letter-spacing:1px}
+
+  .sect-banner{position:relative;isolation:isolate;margin:14px 18px 0;height:156px;
+    border-radius:3px;overflow:hidden;background:#0a0b0c;flex:0 0 auto}
+  .sect-banner img{width:100%;height:100%;object-fit:cover;object-position:center 45%;
+    filter:brightness(.78) saturate(.62) contrast(1.03)}
+  .sect-banner .veil{position:absolute;inset:0;pointer-events:none;z-index:1;
+    background:radial-gradient(ellipse at 50% 45%,transparent 0%,rgba(8,9,10,.60) 100%),
+               linear-gradient(180deg,rgba(10,11,12,.34),rgba(10,11,12,.82))}
+  .sect-banner .bn{position:absolute;left:14px;bottom:10px;z-index:2;
+    font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:2px}
+  .sect-banner .bn b{color:var(--gold);font-weight:400;font-size:calc(12px * var(--fs,1))}
+  .sect-banner .bnr{position:absolute;right:14px;bottom:10px;z-index:2;
+    font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:1px;text-align:right;line-height:1.6}
+  .sect-banner .bnr b{color:var(--paper);font-weight:400}
+
+  /* ★ Round 41：三列竖窗 → 自适应
+     ⚠️ 原来 .vwin-t 用 writing-mode:vertical-rl（竖排标题），因为三列挤在 400px 里
+        每列只剩 ~128px，横排标题放不下 ⇒ 标题竖着、内容被压扁
+     ⇒ 改成：能放下就 3 列，放不下自动换 2 列 / 1 列；标题恢复横排 */
+  /* ★ Round 41：区块容器与会话标题（原来内联重复 9 次 / 5 次）
+     统一间距与分隔线 —— 以后再调区块节奏只改这里 */
+  /* ★★ Round 42：常驻状态栏（宗页顶部，进设施页也不隐藏）*/
+  #zongBar{display:flex;gap:12px;align-items:baseline;padding:5px 12px 0;
+    font-size:calc(10.5px * var(--fs,1));color:#8c8574;letter-spacing:1px;flex:0 0 auto}
+  #zongBar b{color:var(--gold);font-weight:400;font-variant-numeric:tabular-nums}
+  /* 设施页 */
+  /* ★★ Round 44：设施页升级区（复用 .bldg-panel 的 .bp 行）
+     ⚠️ .bp 原来是 flex-column（标签一行、值一行）—— 在建筑面板里是那样，
+        但搬到设施页顶部后应该左右对齐才好读 */
+  #facUpBox .bp{display:flex;justify-content:space-between;align-items:baseline;
+    gap:10px;padding:4px 0;border-bottom:1px solid #ffffff0f;font-size:calc(11px * var(--fs,1))}
+  #facUpBox .bp:last-child{border-bottom:0}
+  #facUpBox .bp > span{flex:0 0 auto;color:var(--dim2)}
+  #facUpBox .bp > b{flex:1 1 auto;text-align:right;font-weight:400;color:var(--paper)}
+  #facUpBox .bp > b.g{color:var(--gold)}
+  #facUpBox .bp > b.none{color:#5d574c;font-size:calc(10px * var(--fs,1))}
+  #facUpBox .bbtn{margin-top:8px}
+  #facUpBox .bbtn button{width:100%;font-size:calc(11px * var(--fs,1));padding:7px 0}
+  #facPage .fac > *{margin-left:18px;margin-right:18px}
+  #facPage .fac > .sec{margin-left:0;margin-right:0}
+
+  /* ★★ Round 43：横幅播报（擂台战果 / 宗门大事）
+     用户："就像正常网游一个横幅播报一下，保存到史册馆的生平就行" */
+  #evBanner{position:absolute;left:12px;right:12px;top:8px;z-index:60;
+    display:none;padding:7px 12px;border-radius:3px;
+    background:#0d0e0fee;border:1px solid var(--gold);
+    color:var(--gold);font-size:calc(11px * var(--fs,1));letter-spacing:1px;text-align:center;
+    box-shadow:0 4px 16px #000000aa;pointer-events:none}
+  #evBanner.on{display:block;animation:evbIn .22s ease-out}
+  @keyframes evbIn{from{transform:translateY(-10px);opacity:0}to{transform:translateY(0);opacity:1}}
+  #evBanner b{color:var(--paper);font-weight:400}
+
+  .sec{margin-top:14px;border-top:1px solid var(--line2);padding-top:9px}
+  .sec:first-of-type{margin-top:10px}
+  .sec-hd{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:7px}
+  .sec-hd .sub{color:var(--dim2);font-size:calc(9.5px * var(--fs,1));letter-spacing:1px}
+  .sec-hd b{color:var(--gold);font-weight:400}
+  /* 区块标题左侧金色短线：让 14 个区块不再糊成一片 */
+  .sec-hd > span:first-child{position:relative;padding-left:9px}
+  .sec-hd > span:first-child::before{content:"";position:absolute;left:0;top:50%;
+    width:2px;height:10px;margin-top:-5px;background:var(--gold);opacity:.55;
+    border-radius:1px}
+
+  /* ★★ Round 41：三列窄窗 → 单列堆叠
+     ⚠️ 走过的弯路：先试过"自适应 3 列/2 列"——但没用。
+        真正的问题是【子元素按宽栏设计】：
+          .sc-head（宗门名 + 荣誉一行）、.sc-pool（历代/传承池/遗落/直传一行）
+        塞进 ~128px 窄窗后，每行都被拆成 2~3 行
+        （截图里"荣誉 0（距 中等宗门 还差 30）"横跨三行，非常难读）
+     ⇒ 单列堆叠，宽度 = 整页宽（约 360px），不再换行。
+        三个窗都保留（它们是不同区块），只是不再并排。 */
+  .vwin-row{display:flex;flex-direction:column;gap:9px;padding:8px 0 0}
+  .vwin{min-width:0;border:1px solid var(--line2);border-radius:3px;
+    padding:9px 10px 10px;position:relative;background:#ffffff05}
+  .vwin-t{font-size:calc(10.5px * var(--fs,1));color:var(--gold);letter-spacing:2px;
+    padding-bottom:5px;margin-bottom:7px;border-bottom:1px solid var(--line2);
+    font-weight:400;display:flex;justify-content:space-between;align-items:baseline}
+  .vwin-b{min-width:0;font-size:calc(11px * var(--fs,1))}
+  /* ★ Round 41：单列堆叠后的保险 —— 这两个在窄窗里会逐字换行 */
+  .vwin .lg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vwin .lc{flex-direction:row;justify-content:space-between;align-items:baseline;
+    gap:8px;padding:4px 0;border-bottom:1px solid #ffffff0d}
+  .vwin .lc:last-child{border-bottom:0}
+  .vwin .lc .hint{flex:1 1 100%}
+  .vwin .lc > span:first-child{flex:0 0 auto}
+  .vwin .lc > b{flex:0 0 auto}
+  .sc-head{display:flex;flex-direction:column;gap:2px;font-size:calc(10.5px * var(--fs,1))}
+  .sc-head .rank{color:var(--gold);font-weight:400;letter-spacing:1px}
+  /* 设施图标（AI 生成 · assets/宗门/设施_*.webp） */
+  .sc-up .sc-icon{flex:0 0 auto;width:24px;height:24px;object-fit:contain;
+    align-self:center;filter:drop-shadow(0 1px 2px #000000aa)}
+  .sc-head .honor{color:#c9a227;font-size:calc(10px * var(--fs,1))}
+  .sc-pool{font-size:calc(9.5px * var(--fs,1));color:var(--dim2);margin-top:3px;line-height:1.6}
+  /* ★★ Round 48：当前宗门 buff（替代原来的设施升级列表）
+     ⚠️ 4 个有建筑的升级项已在各自建筑页能升 ⇒ 这里只显示"现在生效的加成" */
+  /* ★★ Round 50：显示设置行（字号） */
+  .fs-row{display:flex;align-items:center;gap:8px;font-size:calc(11px * var(--fs,1));padding:6px 0}
+  .fs-row .k{color:var(--dim2)}
+  .fs-row .v{color:var(--gold);min-width:44px;text-align:center;
+    font-variant-numeric:tabular-nums}
+  .fs-row button{font-size:calc(11px * var(--fs,1));padding:3px 9px;background:transparent;
+    border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer;
+    font-family:inherit}@media (hover:hover){
+  .fs-row button:hover{border-color:var(--gold);color:var(--gold)}}
+
+  .sc-sec{font-size:calc(9.5px * var(--fs,1));color:var(--dim2);letter-spacing:2px;
+    margin:8px 0 3px;padding-top:6px;border-top:1px solid var(--line2)}
+  .sc-buff{display:flex;align-items:baseline;gap:7px;font-size:calc(10.5px * var(--fs,1));
+    padding:3px 0;border-bottom:1px dashed #ffffff0d}
+  .sc-buff:last-child{border-bottom:0}
+  .sc-buff > b{flex:0 0 auto;color:#9aa5b8;font-weight:400}
+  .sc-buff > .v{flex:1 1 auto;text-align:right;color:var(--gold);
+    font-variant-numeric:tabular-nums}
+  .sc-buff > .lv{flex:0 0 auto;color:#6ea8fe;font-size:calc(9.5px * var(--fs,1))}
+  .sc-buff > .t{flex:0 0 auto;color:var(--dim2);font-size:calc(9.5px * var(--fs,1))}
+  .sc-buff.none{color:#5d574c;font-size:calc(10px * var(--fs,1));border-bottom:0}
+  .sc-up{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:calc(10px * var(--fs,1));
+    padding:4px 0;border-top:1px solid var(--line2)}
+  /* ★ 去掉 width:100% —— 否则设施名独占一行，把图标挤到上一行 */
+  .sc-up .nm{color:#9aa5b8;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
+  .sc-up .lv{color:#6ea8fe;font-size:calc(9.5px * var(--fs,1));flex:0 0 auto}
+  .sc-up .dsc{flex:1 1 100%;color:var(--dim2);font-size:calc(9.5px * var(--fs,1));overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .sc-up button{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:1px 5px;border-radius:3px}
+  .sc-up button:disabled{opacity:.35;cursor:default}
+  .lc{display:flex;flex-direction:column;gap:1px;padding:3px 0;font-size:calc(10.5px * var(--fs,1))}
+  .lc b{font-variant-numeric:tabular-nums;font-weight:400}
+  .lc b.gold{color:var(--gold)} .lc b.ok{color:var(--green)} .lc b.bad{color:var(--red)}
+  .lc .hint{font-size:calc(9.5px * var(--fs,1));color:var(--dim2)}
+  /* ============ 通用行内图标（Round 59 · 图标接入）============
+     源图：assets/{宗门,器物,五行,法宝,功法}/*.webp（28px + 56px@2x，透明底）
+     生成管线：_tools/icon_slice.py（四宫格 → 去背 → 归一 → 缩尺寸）
+     这里只负责「行内小图标」；宗门设施面板那颗 26px 的见 .bldg-panel .bh img。
+     都用 srcset 挂 @2x ⇒ 高分屏取 56px 那张，边缘不糊。 */
+  .ico{display:inline-block;object-fit:contain;vertical-align:-0.2em;
+    filter:drop-shadow(0 1px 1.5px #000000aa)}
+  .ico12{width:12px;height:12px}
+  .ico14{width:14px;height:14px}
+  .ico16{width:16px;height:16px}
+  .ico20{width:20px;height:20px}
+  /* 设施页标题里那颗（#facName 的 innerHTML 由 openFacility 拼） */
+  .fac-hd-ico{width:22px;height:22px;object-fit:contain;vertical-align:middle;
+    margin-right:4px;margin-top:-2px;filter:drop-shadow(0 1px 2px #000000aa)}
+  .gf-row{display:flex;gap:3px;align-items:center;font-size:calc(10px * var(--fs,1));padding:3px 0}
+  .gf-row .tp{width:44px;color:var(--dim2);flex:0 0 auto;font-size:calc(9.5px * var(--fs,1));
+    display:flex;align-items:center;gap:3px}
+  .gf-row select{flex:1;font-size:calc(10px * var(--fs,1));padding:1px 2px;min-width:0}
+  /* ★ R66：列表行里的进度条 —— 贴在行底，从名称栏右侧拉到最右。
+     行内空间已经很紧（10px 字 + 下拉框），所以只用 2px 细线；
+     精确数值放 title，鼠标悬停才看。 */
+  .gf-row,.fb-row{position:relative;padding-bottom:5px}
+  .gf-row .pg,.fb-row .pg{position:absolute;left:47px;right:0;bottom:1px;height:2px;
+    border-radius:1px;background:#ffffff14;overflow:hidden;display:block}
+  .fb-row .pg{left:4px}
+  .gf-row .pg > b,.fb-row .pg > b{display:block;height:100%;border-radius:1px;
+    background:var(--c,#c8b08a);box-shadow:0 0 3px var(--c,#c8b08a)}
+  /* 条满 = 就绪 ⇒ 亮起来（这一下就是"期待感"） */
+  .gf-row .pg.rdy > b,.fb-row .pg.rdy > b{animation:pgReady 1s ease-in-out infinite}
+  @keyframes pgReady{0%,100%{opacity:.75}50%{opacity:1}}
+  .gf-stack{font-size:calc(9.5px * var(--fs,1));color:var(--gold);padding-left:47px}
+  .prio{display:inline-flex;align-items:center;gap:1px;font-size:calc(9.5px * var(--fs,1));color:#9aa5b8;
+    background:#161c26;border:1px solid #ffffff12;border-radius:3px;
+    padding:0 3px;margin:1px 2px 1px 0}
+  .prio b{cursor:pointer;color:#5a6478;font-size:calc(9px * var(--fs,1));padding:0 1px;user-select:none}@media (hover:hover){
+  .prio b:hover{color:var(--gold)}}
+  /* ★ Round 24：法宝面板改为「只显示已装 + 折叠切换」（用户选 B） */
+  .fb-slot{display:flex;gap:4px;align-items:baseline;font-size:calc(10.5px * var(--fs,1));padding:3px 0}
+  .fb-slot .lb{color:#66708a;font-size:calc(9.5px * var(--fs,1));flex:0 0 auto}
+  .fb-swap{margin-top:3px}
+  .fb-swap summary{font-size:calc(10px * var(--fs,1));color:#66708a;cursor:pointer;padding:2px 0;
+    list-style:none;user-select:none}
+  .fb-swap summary::-webkit-details-marker{display:none}
+  .fb-swap summary:before{content:"▸ ";color:var(--gold)}
+  .fb-swap[open] summary:before{content:"▾ "}@media (hover:hover){
+  .fb-swap summary:hover{color:var(--paper)}}
+
+  .fb-row{display:flex;gap:3px;align-items:center;font-size:calc(10px * var(--fs,1));padding:3px 0}
+  .fb-row .nm{flex:1;cursor:pointer;padding:1px 3px;border-radius:3px;
+    border:1px solid transparent;font-size:calc(10px * var(--fs,1))}
+  .fb-row .nm.on{background:#1a2230;border-color:var(--gold)}
+  .fb-row .nm .wx{font-size:calc(9.5px * var(--fs,1));margin-left:3px}
+  .fb-stack{font-size:calc(9.5px * var(--fs,1));color:var(--gold);padding-left:3px}
+  /* ★ R72：道具位（消耗品）—— 重点是让【数量】一眼可读，它才是玩家真正在管理的东西 */
+  .fb-item-box{margin-top:4px;padding-top:4px;border-top:1px dashed #ffffff1a}
+  .fb-row .nm .itn{font-style:normal;margin-left:4px;color:#d9c48a;font-weight:600}
+  /* 吃空了要看得出来 —— 否则玩家只会觉得"这符没效果" */
+  .fb-row .nm .itn.empty{color:#7a5b52}
+  .fb-row .nm .itn.empty:after{content:" 已空";font-weight:400;font-size:calc(9px * var(--fs,1))}
+  .lg-rule{display:flex;gap:3px;align-items:center;font-size:calc(10px * var(--fs,1));padding:3px 0}
+  .lg-rule select{flex:1;font-size:calc(10px * var(--fs,1));min-width:0}
+
+  /* 传承池条目（★ 新增：可花荣誉点提取） */
+  .pool-it{display:flex;align-items:baseline;gap:4px;font-size:calc(10px * var(--fs,1));padding:4px 0;
+    border-top:1px solid var(--line2)}
+  .pool-it .nm{flex:1;color:var(--txt);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
+  .pool-it button{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:1px 4px}
+
+  /* ★ Boss（Round 29）：复用 AOE 系统，只是【更大 + 金边 + 会呼吸】
+     ★ Round 38：26→36px（用户要求"Boss 要更难看不清一点"= 更醒目），
+       并在贴图外圈加金环 —— 一眼能和精英/小怪区分 */
+  .mob.boss{width:36px !important;height:36px !important;
+    animation:bossBreath 1.4s ease-in-out infinite;z-index:8}
+  .mob.boss .sprite{border-radius:50%;
+    box-shadow:0 0 0 1.5px #c9a227cc, 0 0 12px #c9a22788}
+  .mob.boss.nosprite{border-radius:5px;border:2px solid var(--gold) !important;
+    box-shadow:0 0 10px #c9a22788, inset 0 0 6px #c9a22744}
+  @keyframes bossBreath{0%,100%{transform:translate(-50%,-50%) scale(1);
+      filter:drop-shadow(0 0 6px #c9a22766)}
+    50%{transform:translate(-50%,-50%) scale(1.10);
+      filter:drop-shadow(0 0 14px #c9a227cc)}}
+  .mob.boss .hpbar{top:-9px;height:3px}
+  .mob.boss .bossTag{position:absolute;left:50%;top:-15px;transform:translateX(-50%);
+    font-size:calc(9px * var(--fs,1));color:var(--gold);white-space:nowrap;letter-spacing:1px;
+    text-shadow:0 1px 3px #000;z-index:2}
+  /* Boss 出场：一次性闪屏 */
+  #battleWrap.boss-in::after{content:'';position:absolute;inset:0;z-index:9;
+    background:radial-gradient(ellipse at 50% 50%, #c9a22755, transparent 70%);
+    animation:bossFlash .8s ease-out forwards;pointer-events:none}
+  @keyframes bossFlash{from{opacity:1}to{opacity:0}}
+
+/* ★ 功法面板的稳定子容器（Round 24）*/
+.gf-main{display:block}
+.gf-prio-box{display:flex;align-items:baseline;gap:4px;flex-wrap:wrap}
+.gf-cd-box{margin-top:3px}
+
+/* ★ 门规（训话的上锁版 · Round 34）*/
+.rl-hd{font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:4px;display:flex;justify-content:space-between}
+.rl-hd .n{color:#5d574c}
+.rl-row{display:flex;gap:5px;align-items:baseline;font-size:calc(10px * var(--fs,1));padding:2px 0}
+.rl-row .ax{color:var(--gold);flex:0 0 auto}
+.rl-row .v{color:var(--paper);flex:0 0 auto}
+.rl-row .by{color:#5d574c;font-size:calc(9px * var(--fs,1));flex:1;text-align:right}
+.rl-row button{font-size:calc(9px * var(--fs,1));padding:0 4px;background:transparent;border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;cursor:pointer}@media (hover:hover){
+.rl-row button:hover{border-color:#c0604f;color:#e08a72}}
+.rl-row.neg .ax{color:#c08070}@media (hover:hover){
+.rl-row.neg button:hover{border-color:var(--gold);color:var(--gold)}}
+.rl-add{font-size:calc(10px * var(--fs,1));color:#5d574c;margin-top:3px}
+.rl-add button{font-size:calc(9px * var(--fs,1));padding:1px 5px;margin-left:4px;background:transparent;border:1px solid #c9a22755;border-radius:2px;color:var(--gold);cursor:pointer}@media (hover:hover){
+.rl-add button:hover{background:#1a2230;border-color:var(--gold)}}
+.rl-note{font-size:calc(9px * var(--fs,1));color:#5d574c;margin-top:4px;line-height:1.6}
+
+/* ★ 重新开始（Round 30）*/
+.rs-hd{font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:4px}
+.rs-warn{font-size:calc(9.5px * var(--fs,1));color:#c0604f;line-height:1.5;margin-bottom:6px}
+.rs-row{display:flex;gap:6px}
+.rs-row button{flex:1;font-size:calc(10px * var(--fs,1));padding:4px 0;background:transparent;border:1px solid #ffffff22;border-radius:3px;color:#8c8574;cursor:pointer}@media (hover:hover){
+.rs-row button:hover{border-color:#ffffff44;color:var(--paper)}}
+.rs-row button#btnReset{border-color:#c0604f55;color:#c08070}@media (hover:hover){
+.rs-row button#btnReset:hover{border-color:#c0604f;background:#2a1414;color:#e08a72}}
+.rs-row button#btnReset.armed{border-color:#e05555;background:#3a1414;color:#ff8a6a;animation:rsArmed .5s infinite alternate}
+@keyframes rsArmed{from{opacity:.75}to{opacity:1}}
+
+/* ★ 编年史（Round 35）*/
+.cr-empty{color:#5d574c;font-size:calc(11px * var(--fs,1));margin:6px 0}
+.cr-ch{margin:0 0 12px;padding:0 0 10px;border-bottom:1px solid #ffffff0f}
+.cr-ch:last-child{border-bottom:none}
+.cr-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:calc(11px * var(--fs,1));margin-bottom:5px;gap:6px}
+.cr-hd b{color:var(--gold);font-weight:400;letter-spacing:1px;flex:0 0 auto}
+.cr-grow{font-size:calc(9.5px * var(--fs,1));color:#8fd8b8;text-align:right}
+.cr-body{padding-left:2px}
+.cr-li{font-size:calc(10.5px * var(--fs,1));color:#9a9284;line-height:1.75;padding:1px 0;font-variant-numeric:tabular-nums}
+.cr-li.cr-break{color:var(--paper)}
+.cr-li.cr-myth{color:#c9a227}
+.cr-li.cr-legend{color:#b08ad0}
+.cr-li.cr-ascend{color:#ffd85c}
+.cr-li.cr-bad{color:#c08070}
+.cr-li.cr-dujie{color:#8fd8b8}
+.cr-ft{font-size:calc(9.5px * var(--fs,1));color:#5d574c;margin-top:5px}
+.cr-sect{margin-top:14px;padding-top:10px;border-top:1px solid #ffffff1a}
+.cr-sect-hd{font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:5px}
+.cr-si{font-size:calc(10px * var(--fs,1));color:#7e7768;line-height:1.8;font-variant-numeric:tabular-nums}
+.cr-si.cr-rank{color:var(--gold)}
+.cr-si.cr-rule{color:#8fd8b8}
+.cr-si.cr-neg{color:#c08070}
+.cr-si.cr-recruit{color:#66708a}
+
+/* ★ 宝库处置策略（Round 27） */
+  .vp-hd{font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:4px}
+  .vp-row{display:flex;align-items:center;gap:3px;padding:2px 0;font-size:calc(10px * var(--fs,1))}
+  .vp-row .q{width:30px;flex:0 0 auto;font-size:calc(10px * var(--fs,1))}
+  .vp-row button{font-size:calc(9px * var(--fs,1));padding:1px 4px;background:transparent;
+    border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;cursor:pointer}@media (hover:hover){
+  .vp-row button:hover{border-color:#ffffff33;color:var(--paper)}}
+  .vp-row button.on{background:#1a2230;border-color:var(--gold);color:var(--gold)}
+  .vp-stat{font-size:calc(9.5px * var(--fs,1));color:#5d574c;margin-top:4px}
+
+  /* ★ 徽记（神话传承的封印开关 · Round 25） */
+  .pool-it.sealed{opacity:.72}
+  .pool-it.sealed .nm{text-decoration:line-through;text-decoration-color:#5d574c}
+  .seal-b{font-size:calc(10px * var(--fs,1));padding:0 3px;margin-right:2px;
+    background:transparent;border:1px solid #ffffff1a;border-radius:2px;
+    color:#c9a227;cursor:pointer;line-height:1.4}@media (hover:hover){
+  .seal-b:hover{border-color:var(--gold)}}
+
+  /* ★ 日志的【第几代】标签（Round 24） */
+  .lg .gen-tag{display:inline-block;min-width:26px;margin-right:5px;padding:0 3px;
+    border:1px solid #ffffff1a;border-radius:2px;color:#8c8574;font-size:calc(9px * var(--fs,1));
+    font-weight:400;text-align:center;vertical-align:1px}
+  .lg.gen-sep{color:var(--gold);font-size:calc(10px * var(--fs,1));letter-spacing:3px;
+    margin:5px 0 3px;text-align:center;opacity:.75}
+
+  /* ★ 弟子名册（Round 22） */
+  .rs-row{display:flex;align-items:baseline;gap:5px;font-size:calc(10px * var(--fs,1));padding:3px 0;
+    border-top:1px solid var(--line2)}
+  .rs-row .role{width:26px;flex:0 0 auto;font-size:calc(9.5px * var(--fs,1))}
+  .rs-row .role.front{color:var(--gold)}
+  .rs-row .role.back{color:#7fb8f0}
+  .rs-row .role.idle{color:var(--dim2)}
+  .rs-row .nm{color:var(--txt);flex:0 0 auto}
+  .rs-row .tal{color:#9aa5b8;font-size:calc(9.5px * var(--fs,1))}
+  .rs-row .life{flex:1;text-align:right;color:#8c8574;font-variant-numeric:tabular-nums}
+  .rs-row .post{color:#c9a86e;font-size:calc(9.5px * var(--fs,1))}
+
+  /* ★ 弟子头像（AI 生成，assets/弟子/）
+     角色多为浅色袍 ⇒ 深底上会"隐形"，必须给圆盘衬托。
+     圆盘配色由 JS 按弟子 id 分配（--c1 亮部 / --c2 暗部），同代弟子各不相同 */
+  .rs-row .av{flex:0 0 auto;width:42px;height:42px;align-self:center;
+    border-radius:50%;position:relative;flex-shrink:0;
+    background:radial-gradient(circle at 40% 32%,
+      var(--c1,#f2ece0) 0%, var(--c2,#d5cdbe) 72%, var(--c2,#b8ae9c) 100%);
+    box-shadow:0 0 0 1px #ffffff1c, inset 0 -2px 3px #00000030, 0 1px 3px #00000055}
+  .rs-row .av img{position:absolute;left:0;top:0;width:100%;height:100%;
+    user-select:none;pointer-events:none;transform-origin:50% 82%;
+    will-change:transform;animation:avBob 2.2s ease-in-out infinite;
+    /* ★ Round 38 风格对齐：弟子素材偏暗（实测明度 46%）且是冷色（色相 200~240°），
+       与 UI 的暖宣纸调（--paper 明度 50% / 色相 40°）不搭。
+       brightness 提亮 + 少量 sepia 往暖色靠 ⇒ 实测 明度 46%→49%、饱和 24%→27%，
+       更接近 UI 基准，且保留角色原本的色彩关系（素材文件不动）。 */
+    filter:brightness(1.25) sepia(.10) brightness(1.05)
+      drop-shadow(0 1px 2px #000000aa)}
+  @keyframes avBob{
+    0%,100%{transform:translateY(0)   scale(1)}
+    50%    {transform:translateY(-2.5px) scale(1.03)}
+  }
+  .rs-row.has-av{align-items:center;padding:5px 0}
+  /* ★ 灵根小标：色点 + 灵根档位 */
+  .rs-row .lg{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:0 3px;border-radius:2px;
+    border:1px solid #ffffff1a;color:#9a9284;white-space:nowrap;
+    display:inline-flex;align-items:center;gap:2px}
+  .rs-row .lg i{display:inline-block;width:6px;height:6px;border-radius:50%;
+    font-style:normal}
+  @media (prefers-reduced-motion: reduce){
+    .rs-row .av img{animation:none}
+  }
+
+  .rs-fac{display:flex;align-items:baseline;gap:4px;font-size:calc(9.5px * var(--fs,1));padding:2px 0;color:var(--dim)}
+  .rs-fac .fn{width:52px;color:#9aa5b8}
+  .rs-fac .fp{color:var(--gold);font-variant-numeric:tabular-nums}
+  .rs-fac .fo{flex:1;text-align:right;color:#66708a}
+
+  /* ★ 锻造 / 训话 / 模板（Round 18） */
+  .fg-row{display:flex;align-items:baseline;gap:5px;font-size:calc(10.5px * var(--fs,1));padding:4px 0;
+    border-top:1px solid var(--line2)}
+  .fg-row .nm{flex:1;color:var(--txt)}
+  .fg-row .ct{color:var(--dim2);font-size:calc(9.5px * var(--fs,1))}
+  .fg-row button{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:1px 6px}
+  .fg-row button:disabled{opacity:.3;cursor:default}
+  .cs-hd{font-size:calc(10px * var(--fs,1));color:var(--gold);letter-spacing:2px;margin-bottom:4px}
+  .cs-row{display:flex;align-items:baseline;gap:4px;font-size:calc(10px * var(--fs,1));padding:3px 0;
+    border-top:1px solid var(--line2)}
+  .cs-row .lb{width:26px;color:#9aa5b8;flex:0 0 auto}
+  .cs-row select{flex:1;font-size:calc(9.5px * var(--fs,1));min-width:0}
+  .cs-row button{flex:0 0 auto;font-size:calc(9px * var(--fs,1));padding:1px 5px}
+  .cs-row button:disabled{opacity:.3;cursor:default}
+  .cs-row .ct{color:var(--dim2);font-size:calc(9px * var(--fs,1));flex:0 0 auto}
+  .sp-row{display:flex;gap:4px;flex-wrap:wrap;padding:3px 0}
+  .sp-row button{font-size:calc(10px * var(--fs,1));padding:3px 8px;flex:0 0 auto}
+  .sp-row button.on{border-color:var(--gold);color:#e0c464;background:#c9a22722}
+  .sp-axis{display:flex;align-items:center;gap:6px;font-size:calc(10px * var(--fs,1));padding:2px 0;color:var(--dim)}
+  .sp-axis input{flex:1;accent-color:#c9a227}
+  .sp-axis b{color:var(--gold);font-weight:400;width:24px;text-align:right}
+  .tm-row{display:flex;align-items:center;gap:4px;font-size:calc(10px * var(--fs,1));padding:3px 0;
+    border-top:1px solid var(--line2)}
+  .tm-row .nm{width:30px;color:#9aa5b8;flex:0 0 auto}
+  .tm-row select{flex:0 0 auto;font-size:calc(9.5px * var(--fs,1));padding:0 2px}
+  .tm-row .ax{color:var(--dim2);font-size:calc(9px * var(--fs,1))}
+
+  /* ============ 录 · 日志 ============ */
+  #logBox{padding:0}
+  .lg{font-size:calc(11px * var(--fs,1));padding:6px 0;border-bottom:1px solid var(--line2);
+    color:#9a9284;display:flex;gap:8px}
+  .lg.sys{color:var(--dim)}
+  .lg.ok{color:var(--green)} .lg.warn{color:var(--gold)} .lg.bad{color:var(--red)}
+  .lg.break{color:#f0d080;font-weight:600}
+
+  /* ============ 挂机报告（浮层） ============ */
+  #reportPanel{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;
+    background:linear-gradient(180deg,#141517f2,#0c0d0ef7);padding:16px 18px;
+    overflow-y:auto;backdrop-filter:blur(2px)}
+  .rp-hd{font-size:calc(12px * var(--fs,1));color:var(--gold);margin-bottom:8px;
+    padding-bottom:6px;border-bottom:1px solid #c9a22733}
+  #reportBody{font:calc(14px * var(--fs,1))/2 "WenKai","KaiTi","Songti SC",serif;color:#e8e0cc;text-indent:2em}
+  #reportBody p{margin:6px 0}
+  #reportBody b{color:var(--gold)}
+  .rp-master{font-size:calc(12px * var(--fs,1));color:var(--gold);margin:0 0 10px;letter-spacing:.5px;text-indent:0}
+  .rp-elders{margin:10px 0 12px;padding:10px 0;border-top:1px solid #ffffff14;border-bottom:1px solid #ffffff14;text-indent:0}
+  .rp-elders-hd{font-size:calc(10px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:6px}
+  .rp-el{font-size:calc(10.5px * var(--fs,1));color:#9a9284;line-height:1.85;margin:3px 0}
+  .rp-el b{color:var(--paper);font-weight:400;letter-spacing:.5px}
+  .rp-el-quiet{color:#5d574c;font-style:italic}
+  .cr-handover{color:#c8b08a}
+  .rp-offline{font-size:calc(11px * var(--fs,1));color:#9fb0c8;margin:0 0 10px;padding:6px 9px;text-indent:0;
+    background:#ffffff0a;border-radius:4px;line-height:1.7;letter-spacing:.3px}
+  .rp-offline b{color:var(--paper);font-weight:400}
+  .arc-ep{color:#c9a227}
+  #btnCloseRp{float:right;flex:0 0 auto;width:auto;padding:2px 10px;font-size:calc(11px * var(--fs,1))}
+
+  /* 报错 */
+  #bootErr{position:absolute;left:0;right:0;top:0;z-index:40;
+    background:#3a1e1e;border-bottom:1px solid var(--cinnabar);
+    padding:8px 12px;font-size:calc(11px * var(--fs,1));color:#f0c0c0}
+</style>
+</head>
+<body>
+
+<div id="win">
+  <div class="grain"></div>
+
+  <div id="bootErr" style="display:none"></div>
+
+  <!-- ==================== 境 ==================== -->
+  <div class="screen on" data-v="jing">
+    <div class="top">
+      <div class="gen" id="genLabel">第一代</div>
+      <button id="btnSfx" class="sfx-btn" type="button">🔇</button>
+      <div class="seal"><span>秘境</span></div>
+    </div>
+
+    <!-- ★ 事件横幅（域外天魔入侵中 / 比武擂台预告） -->
+    <div id="eventBar" style="display:none"></div>
+
+    <!-- 场景（含战斗） -->
+    <div id="evBanner"></div>
+
+    <div class="scene">
+      <img src="assets/asian-mountain-forest-bg__sprite_northWindShrineBG.webp" alt="">
+      <div class="veil"></div>
+      <div id="battleWrap">
+        <div id="hero">
+          <div class="hpwrap"><i id="heroHp"></i></div>
+          <img id="heroImg" src="assets/弟子/弟子_2@2x.webp" alt="">
+          <!-- ★ R66：技能进度条（自走棋那种"还差多少才放"）—— 内容由 renderSkillBar() 填，
+               挂在弟子脚下而不是面板里，因为挂机时玩家看的是战场、不是背包抽屉 -->
+          <div id="skillBar"></div>
+        </div>
+        <div id="arena"></div>
+        <div id="battleBarWrap"><div id="battleBar"></div></div>
+      </div>
+      <div class="qilabel" id="sceneLabel">秘境 · <b>待入</b></div>
+    </div>
+
+    <!-- ★ 战斗数据（Round 37：从场景内挪出来，避免和秘境名重叠） -->
+    <div id="battleInfo"></div>
+
+    <!-- ★ 弟子数据控件（默认收起；点了才展开详细数据） -->
+    <!-- ⚠️⚠️ Round 39 修复：「境」页原来【没有 .scroll 包裹】（其他三页都有）
+         ⇒ #win 是固定 400×648，本页内容算下来 ~796px ⇒ 溢出 148px
+         ⇒ 溢出部分【把底部导航栏直接顶出可视区】（用户报："看不到下面的界面跳转键位"）
+         ⇒ 加上 .scroll（flex:1 1 auto + overflow-y:auto），导航栏就固定在底部了 -->
+        <!-- ★ Round 40：境页的功能入口（用户："境有几个按键，一个可以开背包…另一个可以查看当前弟子的各项数据"）
+         ⚠️ 境页【不放弟子名册】—— 名册是宗门的事务（用户："这东西是宗门才该有的"） -->
+    <div class="jing-acts">
+      <button id="btnBag">背包</button>
+    </div>
+
+<div class="scroll">
+    <!-- 修为条 -->
+    <div id="qiWrap">
+      <div class="qi-lbl">
+        <b id="qiRealm">炼气期</b>
+        <span id="qiTierTxt"></span>
+      </div>
+      <div id="qiBarOuter"><div id="qiBar"></div></div>
+      <span id="qiTxt"></span>
+    </div>
+
+    <!-- 属性（.stat 风格） -->
+    <div id="hud"></div>
+
+    <div class="btns">
+      <button id="btnRun" class="primary">进入秘境</button>
+      <button id="btnFast">快进 12 秒</button>
+      <button id="btnExtract" class="danger">提前交接传承</button>
+    </div>
+
+    </div><!-- /.scroll -->
+
+    <!-- ★ Round 40：背包抽屉（原「装」页搬进来）
+         用户选的是【滑出式抽屉盖住场景】—— 挂机时能看到自动换装，手动调整时也不占满屏 -->
+    <div id="bagDrawer">
+      <div class="bd-hd">
+        <b>背包 · 经络图</b>
+        <!-- ★ R79（用户要求）：武器属性进背包 —— 战场状态行只说"这局发生了什么"，
+             武器这种"查一下"的信息放这里，翻装备时顺手就能看到 -->
+        <span id="bagWeapon" class="bd-wp"></span>
+        <button id="btnCloseBag">收起 ▾</button>
+      </div>
+      <div class="bd-body">
+<!-- ★ 装 · 经络图（还原原始设计：人体 + 左右 6 个部位格）
+                   每个部位格内部仍是网格拼装，drag & drop 玩法不变 -->
+              <div class="body-area">
+                <div class="fig-wrap">
+                  <div class="fig-glow"></div>
+                  <img class="fig-sil" src="assets/经络图_剪影.webp" alt="">
+                  <img class="fig-pts" src="assets/经络图_穴位.webp" alt="">
+                  <svg class="fig-qi" viewBox="0 0 220 340" aria-hidden="true">
+                    <g fill="#d9b84a">
+                      <circle cx="72" cy="86" r="1.7" opacity=".50"/>
+                      <circle cx="150" cy="118" r="1.3" opacity=".36"/>
+                      <circle cx="66" cy="176" r="1.5" opacity=".44"/>
+                      <circle cx="158" cy="208" r="1.8" opacity=".48"/>
+                      <circle cx="80" cy="266" r="1.3" opacity=".34"/>
+                      <circle cx="146" cy="296" r="1.5" opacity=".40"/>
+                      <circle cx="110" cy="60" r="1.2" opacity=".30"/>
+                      <circle cx="110" cy="322" r="1.6" opacity=".42"/>
+                      <circle cx="90" cy="130" r="1.1" opacity=".28"/>
+                      <circle cx="136" cy="250" r="1.1" opacity=".28"/>
+                    </g>
+                  </svg>
+                </div>
+                <div id="zones"></div>
+                <!-- 引线：从左右部位格指向人体对应部位（viewBox 按 body-area 实际宽度 364 估） -->
+                <svg class="leaders" viewBox="0 0 364 356" fill="none" preserveAspectRatio="none">
+                  <g stroke="#ffffff1c" stroke-width="1">
+                    <path d="M96,26 L152,44"/>
+                    <path d="M96,140 L142,130"/>
+                    <path d="M96,252 L128,192"/>
+                    <path d="M268,252 L232,110"/>
+                    <path d="M268,300 L236,246"/>
+                    <path d="M268,344 L228,290"/>
+                  </g>
+                </svg>
+              </div>
+              <div class="btns" style="padding:10px 18px 0">
+                <button id="btnClear">全部卸下</button>
+                <button id="btnEquipAll" class="primary">一键穿上所有提升</button>
+                <button id="btnScrap">分解无提升</button>
+              </div>
+              <div class="sec">
+                <div class="sec-hd" style="margin-bottom:4px">
+                  <span>掉落</span><span>素材 <b id="mats" style="color:var(--gold);font-weight:400">0</b></span>
+                </div>
+                <div class="flt">
+                  <span>自动分解低于</span>
+                  <select id="fltQ">
+                    <option value="0">不分解</option>
+                    <option value="1">精良</option>
+                    <option value="2">史诗</option>
+                    <option value="3">传奇</option>
+                  </select>
+                  <label><input type="checkbox" id="fltUp"> 只看有提升</label>
+                  <select id="sortBy">
+                    <option value="score">按提升</option>
+                    <option value="q">按品质</option>
+                    <option value="slot">按部位</option>
+                  </select>
+                </div>
+                <!-- ★ 功法 / 法宝（Round 24：从「宗」页移来，用户要求） -->
+                <div style="margin-top:10px;border-top:1px solid var(--line2);padding-top:8px">
+                  <div class="vwin-t" style="margin-bottom:3px">功法</div>
+                  <div id="gongfaBox"></div>
+                </div>
+                <div style="margin-top:10px;border-top:1px solid var(--line2);padding-top:8px">
+                  <div class="vwin-t" style="margin-bottom:3px">法宝</div>
+                  <div id="fabaoBox"></div>
+                </div>
+        
+                <div id="cmpBox"></div>
+                <div id="bagList"></div>
+              </div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <div class="on" data-go="jing">境</div>
+      <div data-go="zong">宗</div>
+    </div>
+  </div>
+
+  <!-- ==================== 宗（原「承」页 → 宗门） ==================== -->
+  <div class="screen" data-v="zong">
+    <div class="top">
+      <div class="gen">宗门 · <b id="sectName">小宗门</b></div>
+      <button id="btnSfx2" class="sfx-btn" type="button">🔇</button>
+      <div class="seal"><span>宗门</span></div>
+    </div>
+    <!-- ★★ Round 42：常驻状态栏（不管在首屏还是设施页都能看到全局信息）
+         用户："进设施页后，荣誉/弟子数这类全局信息还要不要常驻可见" → 常驻 -->
+    <div id="zongBar">
+      <span>第 <b id="zbGen">1</b> 代</span>
+      <span>弟子 <b id="zbDisc">0</b></span>
+      <span>荣誉 <b id="zbHonor">0</b></span>
+      <span>素材 <b id="zbMat">0</b></span>
+    </div>
+    <div class="scroll" id="zongScroll">
+
+      <!-- ★★ Round 42：首屏内容（地图 + 名册 + 擂台）—— 进设施页时整体隐藏 -->
+      <div id="zongHome">
+
+        <div class="sect-map" id="sectMap">
+          <div class="map-in" id="sectMapIn">
+            <img class="mimg" id="sectMapImg"
+                 src="assets/宗门/宗门_档1_素.webp"
+                 srcset="assets/宗门/宗门_档1_素@2x.webp 2x" alt="">
+            <div id="sectSpots"></div>
+          </div>
+        </div>
+        <div id="sectPanel" style="margin:0 18px"></div>
+
+        <!-- ★★ Round 42：宗门现状卡
+             ⚠️ zongGap 原来放在 #sectPanel 里面 —— 但 renderSectPanel() 会整个重写
+                #sectPanel 的 innerHTML ⇒ 那个 <em> 立刻被冲掉，"距下一阶"跑到了设施面板末尾。
+                必须把卡片容器放在 #sectPanel 【外面】。 -->
+        <div class="sec" style="margin-left:18px;margin-right:18px">
+          <div class="sec-hd"><span>当前宗门 buff</span><em id="zongGap" class="sub"></em></div>
+          <div id="sectBox"></div>
+        </div>
+
+      <!-- ★ Round 42：点地图建筑 ⇒ 整页替换
+           （用户："其他设施信息都应该点击地图建筑以后出现新的页面包含对应信息"） -->
+<!-- ★★ Round 42：不属于任何设施的，留在首屏 -->
+        <div class="sec">
+          <div class="sec-hd">
+            <span>弟子名册</span>
+            <span id="rosterStat" style="color:#8c8574;font-size:calc(10px * var(--fs,1))"></span>
+          </div>
+          <div id="rosterBox"></div>
+        </div>
+        <div class="sec">
+          <div class="sec-hd">
+            <span>擂台战报</span>
+            <span id="pvpStat" style="color:#8c8574;font-size:calc(10px * var(--fs,1))"></span>
+          </div>
+          <div id="pvpBox"></div>
+        </div>
+
+        <!-- ★ 重置 / 导出存档（Round 42：留在首屏底部） -->
+        <div class="sec">
+          <div id="resetBox"></div>
+          <!-- ★★ Round 50：显示设置（用户："可以调节字体大小"） -->
+          <div class="sec-hd" style="margin-top:12px"><span>显示设置</span></div>
+          <div class="fs-row">
+            <span class="k">字号</span>
+            <button id="fsMinus">A−</button>
+            <span id="fsLbl" class="v">100%</span>
+            <button id="fsPlus">A＋</button>
+            <span class="k" style="margin-left:8px">（整体缩放）</span>
+          </div>
+          <!-- ★ R77：震屏开关 —— 挂机要长时间盯着，嫌晃的人可以关掉 -->
+          <div class="fs-row" style="margin-top:6px">
+            <span class="k">震屏</span>
+            <button id="shakeBtn">开</button>
+            <span class="k" style="margin-left:8px">（放技能时的画面抖动）</span>
+          </div>
+        </div>
+
+      </div><!-- /#zongHome -->
+
+      <div id="facPage" style="display:none">
+        <div class="sec-hd" style="margin:2px 0 8px">
+          <span id="facName">设施</span>
+          <button id="btnFacBack">返回宗门 ▸</button>
+        </div>
+        <!-- ★★ Round 44：该设施的升级项（用户："宗门现状下面的各设施的升级情况
+             直接搬到对应建筑的页面"）—— 由 renderFacilityUpgrade() 填 -->
+        <div id="facUpBox" class="sec" style="margin-top:0"></div>
+        <div class="fac" data-fac="forge" style="display:none"></div>   <!-- 锻造部 -->
+        <div class="fac" data-fac="train" style="display:none"></div>   <!-- 传功阁 -->
+        <div class="fac" data-fac="script" style="display:none"></div>   <!-- 藏经阁 -->
+        <div class="fac" data-fac="vault" style="display:none"></div>   <!-- 宝库 -->
+        <div class="fac" data-fac="legacy" style="display:none"></div>   <!-- 传承殿 -->
+        <div class="fac" data-fac="life" style="display:none"></div>   <!-- 延寿丹房 -->
+        <div class="fac" data-fac="arch" style="display:none"></div>   <!-- 宗门大殿（史册馆） -->
+        <div class="fac" data-fac="hall" style="display:none"></div>   <!-- 议事堂 -->
+        <div class="fac" data-fac="gate" style="display:none"></div>   <!-- 山门 -->
+      </div>
+
+<!-- ★★ Round 42：以下是【设施页的内容】—— JS 按当前设施把对应块搬进 #facPage 的壳里
+     保留在同一父级（初始隐藏）⇒ 所有 getElementById 照旧能拿到，渲染代码不用改 -->
+
+<div data-fac="forge" style="display:none">
+        <div class="sec">
+          <div class="sec-hd">
+            <span>锻造部</span>
+            <span>素材 <b id="sectMat" style="color:var(--gold);font-weight:400">0</b></span>
+          </div>
+          <div id="forgeBox"></div>
+          <!-- ★ 铸造四层（Round 19）：重铸 / 转移 / 定向 -->
+          <div id="castBox" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:7px"></div>
+        </div>
+
+        <div class="sec">
+          <div id="vaultPolicyBox"></div>
+          </div>
+
+        <div class="sec">
+          <div style="font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+            门装模板 <span style="color:var(--dim2);font-size:calc(9.5px * var(--fs,1))">（弟子出去后按这个挑装备）</span></div>
+          <div id="tmplBox"></div>
+        </div>
+</div>
+
+<div data-fac="script" style="display:none">
+</div>
+
+<!-- ★★ Round 50：宗门大殿 = 史册馆
+     ⚠️ 原来这块挂在 hall 里 —— 而 hall 是【议事堂】（后楼右塔）
+        ⇒ 用户报："议事堂里面怎么是宗门史册"；同时点【宗门大殿】却进了藏经阁（硬编码 bug） -->
+<div data-fac="arch" style="display:none">
+
+        <div id="archiveBox">
+                    <div id="archiveBody"></div>
+        </div>
+
+              <div class="arc-tabs">
+          <button id="arcTabHis" class="on">史册</button>
+          <button id="arcTabLog">生平</button>
+        </div>
+
+        <div id="logBox"></div>
+
+        <div class="sec">
+          <div style="font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:6px">历代弟子</div>
+          <div id="genList"></div>
+        </div>
+</div>
+
+<!-- ★★ Round 54：议事堂 —— BD 打法倾向（R180 定案） -->
+<div data-fac="hall" style="display:none">
+        <div class="sec">
+          <div style="font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+            打法倾向 · <span id="biasNow" style="color:var(--gold)"></span></div>
+          <div id="biasBox"></div>
+          <div style="font-size:calc(10px * var(--fs,1));color:var(--dim2);line-height:1.8;margin-top:8px">
+            定个方向，弟子按这个方向配装。<br>
+            行为（打多深、几时撤）仍在 <b>山门 · 训话</b> 上定 —— 两者独立。
+          </div>
+          <!-- ★ 派遣历练（R55）：不点人，给【依据】 -->
+          <div style="font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin:14px 0 6px">
+            派遣历练 · <span style="color:var(--dim2);font-size:calc(10px * var(--fs,1))">按依据从新招里派</span></div>
+          <div id="dispatchBox"></div>
+        </div>
+</div>
+
+<div data-fac="vault" style="display:none">
+        <div class="sec">
+          <div class="sec-hd">
+            <span>传承池</span>
+            <span>共 <b id="honorTxt" style="color:var(--gold);font-weight:400">0</b> 件</span>
+          </div>
+          <div id="poolList"></div>
+        </div>
+</div>
+
+<div data-fac="legacy" style="display:none">
+          <div class="vwin">
+            <div class="vwin-t">传承</div>
+            <div id="legacyBox" class="vwin-b">
+              <div class="lg-rule">
+                <select id="legacyRule">
+                  <option value="power">均衡</option>
+                  <option value="weapon">武器</option>
+                  <option value="small">小件</option>
+                  <option value="speed">速度</option>
+                  <option value="quality">品质</option>
+                </select>
+              </div>
+            </div>
+          </div>
+</div>
+
+<div data-fac="life" style="display:none">
+          <div class="vwin">
+            <div class="vwin-t">给赠</div>
+            <div id="giftBox" class="vwin-b"></div>
+          </div>
+</div>
+
+<!-- ★ Round 42：#sectBox 已在首屏（宗门现状卡），train 壳留空 -->
+<!-- ★★ Round 46：山门 —— 门规 + 训话
+     用户："把门规整到山门上"
+     （原来在宗门大殿，和史册馆挤在一起） -->
+<div data-fac="gate" style="display:none">
+        <div class="sec">
+          <div style="font-size:calc(10.5px * var(--fs,1));color:var(--dim);letter-spacing:2px;margin-bottom:6px">
+            训话 · <span id="speechNow" style="color:var(--gold)"></span></div>
+          <div id="speechBox"></div>
+          <!-- ★ 门规（训话的上锁版 · Round 34） -->
+          <div id="ruleBox" style="margin-top:10px"></div>
+        </div>
+</div>
+
+<div data-fac="train" style="display:none"></div>
+
+    </div><!-- /.scroll -->
+
+    <div class="nav">
+      <div data-go="jing">境</div>
+      <div class="on" data-go="zong">宗</div>
+    </div>
+  </div>
+
+  <!-- 挂机报告（浮层，默认隐藏） -->
+  <div id="reportPanel" style="display:none">
+    <div class="rp-hd"><b>你不在的时候</b><button id="btnCloseRp">知道了</button></div>
+    <div id="reportBody"></div>
+  </div>
+</div>
+
+<script>
+// ============ 页签切换（含 hash 深链：#jing / #zhuang / #zong / #lu）============
+function goTab(v){
+  document.querySelectorAll('#win .screen').forEach(function(s){
+    s.classList.toggle('on', s.getAttribute('data-v') === v);
+  });
+}
+document.querySelectorAll('#win .nav div').forEach(function(d){
+  d.addEventListener('click', function(){
+    var v = d.getAttribute('data-go');
+    goTab(v);
+    try { history.replaceState(null, '', '#' + v); } catch (e) { }
+  });
+});
+(function(){
+  var views = ['jing','zong'];   // ★ Round 40：只两个页签
+  var h = location.hash.replace('#','');
+  if (views.indexOf(h) >= 0) goTab(h);
+  // ★ Round 40：旧链接兼容（装/录 已并入）
+  else if (h === 'zhuang' || h === 'cheng') goTab('jing');
+  else if (h === 'lu') goTab('zong');
+})();
+</script>
+<!-- ★ 缓存修复（Round 37）：
+     原来写的是 <script src="_game.js?v=1791884750"> —— 版本号硬编码、永不变化，
+     浏览器按"URL 未变"永久缓存 _game.js
+     ⇒ 本地改了代码却看不到效果（改了弟子立绘/地图/面板都像是"没生效"）。
+     现在改成每次加载都带一个新的时间戳，开发期保证拿到最新代码。
+     若将来要发布，可改回固定版本号以利用缓存。 -->
+<script>
+  document.write('<script src="_game.js?t=' + Date.now() + '"><\/script>');
+</script>
+<!-- ★★ Round 54：Service Worker（PWA 离线缓存）
+     ⚠️ 只有 https 或 localhost 才能注册；直接双击 html（file://）会失败 —— 这是正常的，
+        失败时静默跳过，不影响游戏。 -->
+<script>
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  // file:// 下注册必然失败，直接跳过（避免控制台报错吓人）
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' &&
+      location.hostname !== '127.0.0.1') {
+    return;
+  }
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      // 有新版本在等：下次打开自动生效（用户不用手动清缓存）
+      reg.addEventListener('updatefound', function () {
+        var w = reg.installing;
+        if (!w) return;
+        w.addEventListener('statechange', function () {
+          if (w.state === 'installed' && navigator.serviceWorker.controller) {
+            if (typeof banner === 'function') banner('已更新到新版本，下次打开生效', 'sys');
+          }
+        });
+      });
+    }).catch(function () { /* 静默：离线缓存只是加分项 */ });
+  });
+})();
+</script>
+</body>
+</html>

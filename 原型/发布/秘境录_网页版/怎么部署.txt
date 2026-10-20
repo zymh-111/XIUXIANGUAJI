@@ -1,0 +1,42 @@
+秘境录 · 网页版部署说明
+================================================================
+
+【第一步】把本文件夹里的【全部内容】上传到服务器的网站目录。
+          建议单独放一个子目录，例如：
+              /srv/www/mijinglu/
+          最终访问地址形如：
+              https://你的域名/mijinglu/index.html
+
+【第二步】配 MIME 和缓存（不配也能玩，但会有坑）
+          · nginx  → 见 nginx.conf.txt（拷进 server{} 块）
+          · Apache → .htaccess 已放在本目录，确保 AllowOverride All
+          最关键的三条：
+            1. woff2 / webp / mp3 的 MIME 要对（错了字体和音效静默不加载）
+            2. sw.js 必须 no-cache（否则改了不生效）
+            3. index.html 也要 no-cache
+
+【第三步】开 HTTPS
+          · Service Worker 只在 HTTPS / localhost 下工作
+          · 纯 http 也能玩，但【没有离线】【不能添加到主屏】
+          · 免费证书：Let's Encrypt  certbot --nginx -d 你的域名
+
+【第四步】手机打开
+          Android Chrome / iOS Safari 打开上面那个地址
+          → 浏览器菜单 → 「添加到主屏幕」（iOS 是"共享 → 添加到主屏幕"）
+          → 桌面出现「秘」图标，点开全屏、可离线
+
+【自检清单】（打不开时按这个顺序查）
+  □ https://你的域名/mijinglu/index.html       能出画面
+  □ https://你的域名/mijinglu/manifest.json    返回 JSON（不是 404，不是 HTML）
+  □ https://你的域名/mijinglu/sw.js            返回 JS（不是 404）
+  □ https://你的域名/mijinglu/_precache.json   返回 JSON，里面有 files 数组
+  □ 浏览器 F12 → Application → Manifest        没有红色报错
+  □ 浏览器 F12 → Application → Service Workers 状态 activated
+  □ 字体看着是【楷体风】（不是宋体/黑体）⇒ woff2 MIME 对了
+
+【常见问题】
+  · 画面出来了但字是宋体 → woff2 的 MIME 配错，或 assets/字体/ 没上传
+  · 能玩但不能"添加到主屏" → 没有 HTTPS，或 manifest.json 404
+  · 改了代码看不到变化 → sw.js 被缓存了，必须 no-cache
+  · 音效没声音 → 正常，手机必须先点一下屏幕（自动播放限制）
+  · 存档在浏览器里 → 换手机/清缓存会丢。这是网页版的固有局限

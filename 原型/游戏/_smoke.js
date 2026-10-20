@@ -4004,6 +4004,66 @@ chk('★ 读档后门规的轴/值/署名都对',
 // ============================================================
 // ============================================================
 // ============================================================
+// ============================================================
+hdr('测试 59：网页版部署包（Round 56）');
+const _FS8 = require('fs');
+const _WEB8 = 'D:/游戏资料库/原型/发布/秘境录_网页版/';
+
+// ---- ① manifest 不许有绝对 id（部署到子目录会失效）----
+chk('★ manifest 没有绝对路径的 id', (function () {
+  try {
+    const m = JSON.parse(_FS8.readFileSync('D:/游戏资料库/原型/游戏/manifest.json', 'utf8'));
+    if (m.id === undefined) return true;              // 省略最稳
+    return typeof m.id === 'string' && m.id.indexOf('/') !== 0;
+  } catch (e) { return false; }
+})());
+chk('★ manifest 的 start_url / scope 都是相对路径', (function () {
+  try {
+    const m = JSON.parse(_FS8.readFileSync('D:/游戏资料库/原型/游戏/manifest.json', 'utf8'));
+    return /^\.\//.test(m.start_url) && /^\.\//.test(m.scope);
+  } catch (e) { return false; }
+})());
+
+// ---- ② 网页版包必须存在且干净 ----
+chk('★ 网页版包已生成', _FS8.existsSync(_WEB8 + 'index.html'));
+chk('★ 网页版包不含桌面版文件', (function () {
+  const forbid = ['启动.bat', '_launcher.py', '_shell.py', '玩之前看这里.txt', '秘境录.exe'];
+  return forbid.every(function (f) { return !_FS8.existsSync(_WEB8 + f); });
+})());
+chk('★ 网页版包六件齐全', (function () {
+  const need = ['index.html', '_game.js', 'manifest.json', 'sw.js', '_precache.json'];
+  return need.every(function (f) { return _FS8.existsSync(_WEB8 + f); }) &&
+         _FS8.existsSync(_WEB8 + 'assets');
+})());
+
+// ---- ③ 自包含：不许引用目录外 ----
+chk('★ 网页版 index.html 无 ../ 引用', (function () {
+  const h = _FS8.readFileSync(_WEB8 + 'index.html', 'utf8');
+  return ['src="../', 'href="../', 'url("../'].every(function (p) { return h.indexOf(p) < 0; });
+})());
+
+// ---- ④ 离线清单与实际文件对得上 ----
+chk('★ 离线清单每项都存在', (function () {
+  try {
+    const pc = JSON.parse(_FS8.readFileSync(_WEB8 + '_precache.json', 'utf8'));
+    const lost = pc.files.filter(function (f) {
+      const rel = (f.indexOf('./') === 0) ? f.slice(2) : f;
+      return !_FS8.existsSync(_WEB8 + rel);
+    });
+    return pc.files.length > 200 && lost.length === 0;
+  } catch (e) { return false; }
+})());
+
+// ---- ⑤ 部署文档 + 服务器配置片段 ----
+chk('★ 根目录有部署说明', _FS8.existsSync('D:/游戏资料库/部署到服务器.md'));
+chk('★ 网页版包含 nginx 配置', _FS8.existsSync(_WEB8 + 'nginx.conf.txt'));
+chk('★ 网页版包含 Apache 配置', _FS8.existsSync(_WEB8 + '.htaccess'));
+chk('★ nginx 配置里 sw.js 是 no-cache', (function () {
+  try {
+    const c = _FS8.readFileSync(_WEB8 + 'nginx.conf.txt', 'utf8');
+    return /sw\.js/.test(c) && /no-cache/.test(c);
+  } catch (e) { return false; }
+})());
 hdr('测试 58：CSS 结构完整性 + 移动端 hover 隔离（Round 55）');
 const _H7 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
 const _ST7 = _H7.indexOf('<style>');
