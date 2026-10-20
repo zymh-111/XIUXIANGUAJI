@@ -4003,6 +4003,60 @@ chk('★ 读档后门规的轴/值/署名都对',
 // ============================================================
 // ============================================================
 // ============================================================
+// ============================================================
+hdr('测试 58：CSS 结构完整性 + 移动端 hover 隔离（Round 55）');
+const _H7 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
+const _ST7 = _H7.indexOf('<style>');
+const _SE7 = _H7.indexOf('</style>');
+const _CSS7 = _H7.slice(_ST7 + 7, _SE7);
+
+// ---- ① 花括号必须平衡 ----
+//   ⚠️ 这条是踩过坑才加的：Round 55 用正则删一段占位块时少删了一个 `}`，
+//      导致后面的规则全被吞掉 —— 而 node --check / 900+ 断言一条都抓不到
+//      （CSS 语法错误不报错，浏览器只会静默丢弃后续规则）
+chk('★ CSS 花括号平衡', (function () {
+  var d = 0, neg = 0;
+  for (var i = 0; i < _CSS7.length; i++) {
+    if (_CSS7[i] === '{') d++;
+    else if (_CSS7[i] === '}') { d--; if (d < 0) { neg++; d = 0; } }
+  }
+  return d === 0 && neg === 0;
+})());
+
+// ---- ② :hover 必须被 @media (hover:hover) 隔离 ----
+chk('★ :hover 规则全部隔离到有鼠标的设备', (function () {
+  // 统计「在 @media (hover:hover) 之外出现的 :hover 选择器」
+  var stripped = _CSS7.replace(/@media \(hover: ?hover\)\{[^{}]*\{[^{}]*\}[^{}]*\}/g, '');
+  // 上面只能去掉单层简单规则；用更稳的办法：逐行看
+  var lines = _CSS7.split('\n');
+  var depth = 0, inHover = 0, bare = 0;
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i];
+    var op = (ln.match(/\{/g) || []).length;
+    var cl = (ln.match(/\}/g) || []).length;
+    if (/@media \(hover: ?hover\)/.test(ln)) inHover += op;
+    var hits = (ln.match(/:hover/g) || []).length;
+    // 排除 @media (hover:hover) 自己的那个 :hover
+    if (/@media \(hover: ?hover\)/.test(ln)) hits -= 1;
+    if (hits > 0 && inHover <= 0) bare += hits;
+    depth += op - cl;
+    if (inHover > 0 && depth <= 0) inHover = 0;
+  }
+  return bare === 0;
+})());
+
+// ---- ③ 印章跟随字号（原来固定 26px，135% 时字贴边）----
+chk('★ .seal 尺寸跟随 --fs', /\.seal\{width:calc\(26px \* var\(--fs,1\)\)/.test(_CSS7));
+
+// ---- ④ 关键规则没被 @media 意外吞掉 ----
+chk('★ 关键规则仍在顶层（body/html/#win）', 
+  /html,body\{margin:0;height:100%\}/.test(_CSS7) &&
+  /#win\{[^}]*width:min\(420px/.test(_CSS7));
+chk('★ input/textarea 仍可选中', /input,textarea\{-webkit-user-select:text/.test(_CSS7));
+
+// ---- ⑤ 移动端关键属性 ----
+chk('★ 有 --sat/--sab 安全区变量', /--sat:env\(safe-area-inset-top/.test(_CSS7));
+chk('★ 有 touch-action:manipulation', /touch-action:manipulation/.test(_CSS7));
 hdr('测试 57：PWA 移动版（Round 54）');
 const _H6 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
 const _J6 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8');
