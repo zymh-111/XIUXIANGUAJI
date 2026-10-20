@@ -60,8 +60,23 @@ mk(PKG + '/assets');
 // ---- ① index.html：重写路径 ----
 let h = fs.readFileSync(SRC + '/index.html', 'utf8');
 
-// 字体：删掉 @font-face（避免 404 请求），让 CSS fallback 生效
-h = h.replace(/\s*@font-face\{[^}]*\}\s*/g, '\n');
+// 字体：★★ Round 54 起**不再删除 @font-face**
+//   以前删掉是因为原路径指向 `../../美术资源/02_字体/`（游戏目录【外面】）
+//   ⇒ 发布包里必然 404 ⇒ 只能退回系统兜底字体（等于发布包的字体一直是错的）
+//   现在改成：字体已裁剪成 woff2 放进 `assets/字体/`，随包发布 ⇒ 可以正常引用了。
+//   ⚠️ 只有真的缺文件时才退化成删除（避免 404）。
+{
+  const _fontDir = SRC + '/assets/字体';
+  const _need = ['WenKai-Regular.woff2', 'WenKai-Medium.woff2', 'SmileySans-Oblique.woff2'];
+  const _missing = _need.filter(function (f) { return !fs.existsSync(_fontDir + '/' + f); });
+  if (_missing.length) {
+    console.log('  ⚠️ 缺裁剪字体 ' + _missing.join(',') + ' ⇒ 删掉 @font-face 退回系统字体');
+    console.log('     修法：python _tools/subset_fonts.py');
+    h = h.replace(/\s*@font-face\{[^}]*\}\s*/g, '\n');
+  } else {
+    console.log('  ✅ 字体齐全，保留 @font-face（assets/字体/ 3 个 woff2）');
+  }
+}
 // 背景图：改成包内相对路径
 h = h.replace(/\.\.\/\.\.\/美术资源\/04_水墨背景\//g, 'assets/');
 // 脚本：去掉 ?v= 查询串（file:// 下更稳）
@@ -82,6 +97,17 @@ copy(SRC + '/_game.js', PKG + '/_game.js');
 for (const _lf of ['启动.bat', '_launcher.py', '_shell.py', '玩之前看这里.txt']) {
   if (fs.existsSync(SRC + '/' + _lf)) { copy(SRC + '/' + _lf, PKG + '/' + _lf); console.log('  ✅ 启动器已打包：' + _lf); }
   else console.log('  ⚠️ 缺文件（发布包里不会有）：' + _lf);
+}
+
+// ---- ②之三 PWA 三件套（Round 54）----
+//   用户选的是"手机浏览器 + 添加到主屏"这条线。
+//   ⚠️ 三个文件缺一个都会让 PWA 失效，而且【不会有报错】：
+//      · manifest.json 缺 → 不能"添加到主屏幕"
+//      · sw.js 缺        → 不能离线
+//      · _precache.json 缺 → SW 装上了但离线内容是空的（最隐蔽）
+for (const _pf of ['manifest.json', 'sw.js', '_precache.json']) {
+  if (fs.existsSync(SRC + '/' + _pf)) { copy(SRC + '/' + _pf, PKG + '/' + _pf); console.log('  ✅ PWA 已打包：' + _pf); }
+  else console.log('  ❌ 缺 PWA 文件（PWA 会失效）：' + _pf + '  —— 先跑 node _tools/make_pwa.js');
 }
 
 // ---- ③ 背景图（拷进来，因为它是画面的一部分）----
@@ -155,7 +181,11 @@ console.log('  ' + (missing.length ? '❌ 缺失资源：' + missing.join(', ') 
 //   只打印"缺资源"却照样 exit 0 ⇒ **一个坏包看起来像"打包成功"**。
 //   实际踩过一次：发布目录只剩 assets/，index.html 和启动器全没了。
 // ============================================================
-const MUST = ['index.html', '_game.js', '启动.bat', '_launcher.py', '_shell.py', '玩之前看这里.txt'];
+const MUST = ['index.html', '_game.js', '启动.bat', '_launcher.py', '_shell.py', '玩之前看这里.txt',
+  // ★ Round 54：PWA 三件套 + 裁剪字体（缺一个都"看起来正常"但实际坏掉）
+  'manifest.json', 'sw.js', '_precache.json',
+  'assets/字体/WenKai-Regular.woff2', 'assets/pwa/icon-192.png', 'assets/pwa/icon-512.png',
+  'assets/pwa/icon-maskable-512.png', 'assets/pwa/apple-touch-icon.png'];
 const absent = MUST.filter(f => !fs.existsSync(PKG + '/' + f));
 if (absent.length || bad.length || missing.length) {
   console.log('');

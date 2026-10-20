@@ -9059,6 +9059,54 @@ function shakeLoad() {
   setNoShake(v);
 }
 
+// ★★ Round 54：移动端两件事
+//   ① 音频解锁：iOS/Android 都要求"用户手势之后"才允许播放
+//      做法：第一次 pointerdown/click 时，把预热过的音效各播一次静音版
+//   ② 长按屏蔽：手机上长按会弹"复制/打开链接"菜单，挂机游戏误触很烦
+(function initMobile() {
+  let unlocked = false;
+  function unlock() {
+    if (unlocked) return;
+    unlocked = true;
+    window.__audioUnlocked = true;
+    try {
+      // 用极短静音触发一次播放，把 Audio 元素"激活"
+      Object.keys(SFX_FILES).slice(0, 6).forEach(function (k) {
+        const names = SFX_FILES[k];
+        if (!names || !names.length) return;
+        try {
+          const a = new Audio('assets/音效/' + names[0] + '.mp3');
+          a.volume = 0;                  // 静音，用户听不见
+          a.muted = true;
+          const p = a.play();
+          if (p && p.catch) p.catch(function () { });
+        } catch (e) { }
+      });
+    } catch (e) { }
+    document.removeEventListener('pointerdown', unlock, true);
+    document.removeEventListener('touchstart', unlock, true);
+    document.removeEventListener('keydown', unlock, true);
+  }
+  document.addEventListener('pointerdown', unlock, true);
+  document.addEventListener('touchstart', unlock, true);
+  document.addEventListener('keydown', unlock, true);
+
+  // 长按菜单：只屏蔽游戏区域（不禁全局，方便以后有输入框）
+  document.addEventListener('contextmenu', function (e) {
+    const t = e.target;
+    if (t && t.tagName && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+    e.preventDefault();
+  }, { passive: false });
+
+  // 移动端双击缩放：阻止（配合 CSS 的 touch-action:manipulation）
+  let lastTouch = 0;
+  document.addEventListener('touchend', function (e) {
+    const now = Date.now();
+    if (now - lastTouch <= 300) e.preventDefault();
+    lastTouch = now;
+  }, { passive: false });
+})();
+
 function log(msg, cls) {
   // ★ Round 24（用户要求）：记录【第几代弟子】，让「录」页能分辨是谁的生平
   //   "这个录记得标出是第几代弟子的记录"

@@ -3,6 +3,19 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- ★★ Round 54：PWA（可"添加到主屏幕"，离线可玩） -->
+<meta name="theme-color" content="#16171b" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="上班摸鱼挂机修仙 —— 有事挂机刷宝，没事看看装备调 BD。" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/png" sizes="32x32" href="assets/pwa/favicon-32.png" />
+<!-- iOS：加到主屏后全屏、状态栏半透明黑 -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="秘境录" />
+<link rel="apple-touch-icon" href="assets/pwa/apple-touch-icon.png" />
+<!-- 手机浏览器地址栏染色 -->
+<meta name="mobile-web-app-capable" content="yes" />
 <title>秘境录 · 挂机刷宝</title>
 <!--
   ★ 布局依据：美术资源\极简竖窗_可点击.html（设计稿，当前主方案）
@@ -12,9 +25,9 @@
     四页签：境（战斗）· 装（部位+背包）· 宗（宗门/传承/功法/法宝）· 录（日志）
 -->
 <style>
-  @font-face{font-family:'WenKai';src:url('../../美术资源/02_字体/LXGWWenKai-Regular.ttf') format('truetype');font-display:swap}
-  @font-face{font-family:'WenKaiM';src:url('../../美术资源/02_字体/LXGWWenKai-Medium.ttf') format('truetype');font-display:swap}
-  @font-face{font-family:'Smiley';src:url('../../美术资源/02_字体/SmileySans_得意黑/SmileySans-Oblique.ttf') format('truetype');font-display:swap}
+  @font-face{font-family:'WenKai';src:url('assets/字体/WenKai-Regular.woff2') format('woff2');font-display:swap}
+  @font-face{font-family:'WenKaiM';src:url('assets/字体/WenKai-Medium.woff2') format('woff2');font-display:swap}
+  @font-face{font-family:'Smiley';src:url('assets/字体/SmileySans-Oblique.woff2') format('woff2');font-display:swap}
 
   :root{
     /* ★ 四色收敛（设计稿定义）
@@ -31,7 +44,30 @@
     --fs:1;            /* ★ Round 50：全站字体缩放（设置面板调）*/
   
   }
-  *{box-sizing:border-box}
+  /* ★★ Round 54：移动端打磨
+     —— 目标是"在手机上玩起来不别扭"，不是重做界面 */
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{
+    /* 去掉双击缩放带来的 300ms 点击延迟（手机上按钮立刻响应）*/
+    touch-action:manipulation;
+    /* 禁止下拉刷新/橡皮筋（挂机游戏误触很烦）*/
+    overscroll-behavior:none;
+    /* 刘海屏：把内容留在安全区内 */
+    -webkit-text-size-adjust:100%;
+  }
+  body{
+    /* 长按不弹选择/放大镜 */
+    -webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;
+    overscroll-behavior:none;
+  }
+  /* 输入控件仍然允许选中（万一以后有改名/输入）*/
+  input,textarea{-webkit-user-select:text;user-select:text}
+  /* 手机上 :hover 会"粘住"（点完按钮一直保持高亮）
+     ⇒ 只在真有鼠标的设备上启用 hover 效果 */
+  @media (hover:none){
+    *:hover{/* 交给下方具体规则复位 */}
+  }
   html,body{margin:0;height:100%}
   body{
     background:var(--bg); color:var(--paper); overflow:hidden;
@@ -46,6 +82,13 @@
         宽 +20px ⇒ 地图按比例自然变高 ~8px
         高 +112px ⇒ 建筑面板/名册/宗门现状都能多显示几行
      ⚠️ 用 min(...,100%) 保证在矮视口里不溢出（body 是 flex 居中，溢出会被切） */
+  /* ★★ Round 54：安全区内边距（iPhone 刘海 / 底部手势条）*/
+  :root{
+    --sat:env(safe-area-inset-top,0px);
+    --sab:env(safe-area-inset-bottom,0px);
+    --sal:env(safe-area-inset-left,0px);
+    --sar:env(safe-area-inset-right,0px);
+  }
   #win{
     font-size:calc(13px * var(--fs,1));
     /* ★★ Round 53：移动端适配 —— 宽度不再写死 420，而是「不超过屏宽」
@@ -1688,6 +1731,33 @@ document.querySelectorAll('#win .nav div').forEach(function(d){
      若将来要发布，可改回固定版本号以利用缓存。 -->
 <script>
   document.write('<script src="_game.js?t=' + Date.now() + '"><\/script>');
+</script>
+<!-- ★★ Round 54：Service Worker（PWA 离线缓存）
+     ⚠️ 只有 https 或 localhost 才能注册；直接双击 html（file://）会失败 —— 这是正常的，
+        失败时静默跳过，不影响游戏。 -->
+<script>
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  // file:// 下注册必然失败，直接跳过（避免控制台报错吓人）
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' &&
+      location.hostname !== '127.0.0.1') {
+    return;
+  }
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      // 有新版本在等：下次打开自动生效（用户不用手动清缓存）
+      reg.addEventListener('updatefound', function () {
+        var w = reg.installing;
+        if (!w) return;
+        w.addEventListener('statechange', function () {
+          if (w.state === 'installed' && navigator.serviceWorker.controller) {
+            if (typeof banner === 'function') banner('已更新到新版本，下次打开生效', 'sys');
+          }
+        });
+      });
+    }).catch(function () { /* 静默：离线缓存只是加分项 */ });
+  });
+})();
 </script>
 </body>
 </html>

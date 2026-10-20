@@ -4002,6 +4002,74 @@ chk('★ 读档后门规的轴/值/署名都对',
 // ============================================================
 // ============================================================
 // ============================================================
+// ============================================================
+hdr('测试 57：PWA 移动版（Round 54）');
+const _H6 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
+const _J6 = require('fs').readFileSync('D:/游戏资料库/原型/游戏/_game.js', 'utf8');
+const _FS6 = require('fs');
+const _GAME6 = 'D:/游戏资料库/原型/游戏/';
+
+// ---- ① PWA 三件套必须存在 ----
+chk('★ manifest.json 存在且可解析', (function () {
+  try {
+    const m = JSON.parse(_FS6.readFileSync(_GAME6 + 'manifest.json', 'utf8'));
+    return m.name && m.short_name && m.display === 'standalone' &&
+           Array.isArray(m.icons) && m.icons.length >= 3 && m.start_url;
+  } catch (e) { return false; }
+})());
+chk('★ sw.js 存在', _FS6.existsSync(_GAME6 + 'sw.js'));
+chk('★ _precache.json 存在且清单自洽', (function () {
+  try {
+    const p = JSON.parse(_FS6.readFileSync(_GAME6 + '_precache.json', 'utf8'));
+    if (!p.files || p.files.length < 100) return false;
+    // 核心文件必须在清单里
+    const need = ['./index.html', './_game.js', './manifest.json'];
+    return need.every(function (f) { return p.files.indexOf(f) >= 0; });
+  } catch (e) { return false; }
+})());
+
+// ---- ② index.html 必须挂上 manifest / theme-color / apple 图标 ----
+chk('★ 挂了 manifest 链接', /rel="manifest"\s+href="manifest\.json"/.test(_H6));
+chk('★ 有 theme-color', /name="theme-color"/.test(_H6));
+chk('★ 有 apple-touch-icon', /rel="apple-touch-icon"/.test(_H6));
+chk('★ 注册了 serviceWorker', /serviceWorker\.register/.test(_H6));
+chk('★ 注册前检查协议（file:// 不报错）', /location\.protocol !== 'https:'/.test(_H6));
+
+// ---- ③ 图标文件真的在 ----
+chk('★ PWA 图标齐全', (function () {
+  const need = ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png'];
+  return need.every(function (f) { return _FS6.existsSync(_GAME6 + 'assets/pwa/' + f); });
+})());
+
+// ---- ④ 字体：必须本地化 + 必须是 woff2 + 不能引用目录外 ----
+chk('★ @font-face 指向本地 assets/字体/', (function () {
+  const m = _H6.match(/@font-face\{[^}]*\}/g) || [];
+  return m.length >= 3 && m.every(function (x) { return x.indexOf('assets/字体/') >= 0 && x.indexOf('.woff2') >= 0; });
+})());
+chk('★ 字体不再指向 ../../美术资源（目录外）', _H6.indexOf('../../美术资源/02_字体') < 0);
+chk('★ 裁剪字体文件存在', (function () {
+  const need = ['WenKai-Regular.woff2', 'WenKai-Medium.woff2', 'SmileySans-Oblique.woff2'];
+  return need.every(function (f) { return _FS6.existsSync(_GAME6 + 'assets/字体/' + f); });
+})());
+chk('★ 字体体积合理（每个 < 1 MB，原 24 MB）', (function () {
+  const dir = _GAME6 + 'assets/字体/';
+  try {
+    return _FS6.readdirSync(dir).filter(function (f) { return /\.woff2$/.test(f); })
+      .every(function (f) { return _FS6.statSync(dir + f).size < 1024 * 1024; });
+  } catch (e) { return false; }
+})());
+
+// ---- ⑤ 移动端 CSS ----
+chk('★ #win 宽度响应式（min(420px,100vw)）', /width:min\(420px,\s*100vw\)/.test(_H6));
+chk('★ 有 touch-action:manipulation（去 300ms 延迟）', /touch-action:manipulation/.test(_H6));
+chk('★ 有 -webkit-tap-highlight-color', /-webkit-tap-highlight-color/.test(_H6));
+chk('★ 有 overscroll-behavior（防下拉刷新）', /overscroll-behavior/.test(_H6));
+chk('★ 有安全区变量（刘海屏）', /--sat:env\(safe-area-inset-top/.test(_H6));
+
+// ---- ⑥ 移动端 JS ----
+chk('★ 有音频手势解锁', /__audioUnlocked/.test(_J6) && /document\.addEventListener\('pointerdown', unlock/.test(_J6));
+chk('★ 屏蔽长按菜单（contextmenu）', /addEventListener\('contextmenu'/.test(_J6) && /e\.preventDefault\(\)/.test(_J6));
+chk('★ 保留输入框的选中能力', /INPUT\|TEXTAREA/.test(_J6));
 hdr('测试 56：宗门现状 = 当前宗门 buff（Round 48）');
 //
 //   用户："如果有其他入口就把这里的删了，然后这里主要显示当前宗门buff（比如余韵什么的）"
