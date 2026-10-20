@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#16171b" />
+<title>doublemoon</title>
+<style>
+  :root{
+    --ink:#16171b; --ink2:#1b1c21; --paper:#eae2d0; --gold:#e8bd38;
+    --line:#ffffff1f; --dim:#9c9484; --dim2:#726b5e;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{touch-action:manipulation;overscroll-behavior:none;-webkit-text-size-adjust:100%}
+  body{
+    margin:0; min-height:100vh; background:var(--ink2); color:var(--paper);
+    font:15px/1.7 "LXGW WenKai","KaiTi","STKaiti","Songti SC",serif;
+    -webkit-user-select:none; user-select:none;
+    display:flex; align-items:center; justify-content:center; padding:24px 18px;
+  }
+  .wrap{width:100%; max-width:520px}
+  .hd{display:flex; align-items:baseline; justify-content:space-between;
+      padding-bottom:12px; border-bottom:1px solid var(--line); margin-bottom:22px}
+  .hd h1{margin:0; font-size:19px; font-weight:400; letter-spacing:3px}
+  .hd em{font-style:normal; font-size:11px; color:var(--dim2); letter-spacing:1px}
+  .sec{font-size:11px; color:var(--dim2); letter-spacing:3px; margin:0 0 10px}
+  a.card{
+    display:block; text-decoration:none; color:inherit;
+    padding:16px 18px; margin-bottom:10px;
+    background:#101113; border:1px solid var(--line); border-radius:4px;
+    transition:border-color .18s ease, background .18s ease;
+  }
+  @media (hover:hover){ a.card:hover{border-color:var(--gold); background:#15161a} }
+  a.card:active{border-color:var(--gold); background:#15161a}
+  .card .t{display:flex; align-items:baseline; justify-content:space-between; gap:10px}
+  .card .t b{font-size:15.5px; font-weight:400; color:var(--paper)}
+  .card .t span{font-size:11px; color:var(--dim2)}
+  .card .d{margin-top:5px; font-size:12px; color:var(--dim); line-height:1.6}
+  .card .u{margin-top:9px; font-size:10.5px; color:var(--gold); letter-spacing:1px; opacity:.85}
+  .empty{padding:18px; border:1px dashed var(--line); border-radius:4px;
+         color:var(--dim2); font-size:12px; text-align:center}
+  .ft{margin-top:26px; padding-top:14px; border-top:1px solid var(--line);
+      font-size:10.5px; color:var(--dim2); line-height:1.9}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hd">
+    <h1>doublemoon</h1>
+    <em>项目</em>
+  </div>
+
+  <p class="sec">已部署</p>
+  <div id="list"></div>
+
+  <div class="ft">
+    服务器：阿里云 · Ubuntu 24.04 · nginx<br>
+    各项目同一域名下用路径区分，互不影响
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   项目清单：以后新增项目，在这里加一行即可
+   （路径要和 nginx 里的 location 对应）
+   ============================================================ */
+var PROJECTS = [
+  {
+    name: '秘境录',
+    sub: '挂机修仙',
+    desc: '上班摸鱼挂机修仙 —— 有事挂机刷宝，没事看看装备调 BD。',
+    url: '/game/'
+  },
+  {
+    name: 'FateDomination',
+    sub: 'FATE',
+    desc: '另一会话部署的项目。',
+    url: '/fate/'
+  }
+];
+
+(function () {
+  var box = document.getElementById('list');
+  if (!PROJECTS.length) { box.innerHTML = '<div class="empty">还没有项目</div>'; return; }
+  box.innerHTML = PROJECTS.map(function (p) {
+    return '<a class="card" href="' + p.url + '">' +
+      '<div class="t"><b>' + p.name + '</b><span>' + p.sub + '</span></div>' +
+      '<div class="d">' + p.desc + '</div>' +
+      '<div class="u">' + location.host + p.url + ' →</div>' +
+      '</a>';
+  }).join('');
+})();
+
+/* 清理旧 Service Worker
+   秘境录以前在根路径（scope "/"），现在挪到 /game/（scope "/game/"）。
+   访问过旧地址的浏览器会残留一个 scope="/" 的 SW，这里把它注销掉，
+   免得它继续拦截请求、加载旧的缓存内容。 */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function (rs) {
+    rs.forEach(function (r) {
+      try {
+        var sc = r.scope.replace(location.origin, '') || '/';
+        if (sc === '/') r.unregister();
+      } catch (e) { }
+    });
+  }).catch(function () { });
+}
+</script>
+</body>
+</html>

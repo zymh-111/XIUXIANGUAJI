@@ -1727,6 +1727,35 @@ document.querySelectorAll('#win .nav div').forEach(function(d){
      ⇒ 本地改了代码却看不到效果（改了弟子立绘/地图/面板都像是"没生效"）。
      现在改成每次加载都带一个新的时间戳，开发期保证拿到最新代码。
      若将来要发布，可改回固定版本号以利用缓存。 -->
+<!-- ★★ Round 60：存档跨域名迁移
+    为什么需要：localStorage 按【域名】隔离。
+      https://doublemoon.com.cn  和  https://game.doublemoon.com.cn  是两个不同 origin
+      => 把游戏挪到子域名时，旧存档不会跟过去。
+    做法：旧域名的门户页把存档编码进 URL 的 # 片段（fragment 不会发给服务器，
+          所以不受代理/长度限制影响，9KB 的存档 = 22KB 链接完全够用），
+          这里在 _game.js 加载【之前】把它写回 localStorage。
+    手动搬运也用它：在旧设备打开旧地址 → 点搬运 → 把链接发到新设备打开。 -->
+<script>
+(function () {
+  try {
+    var m = (location.hash || '').match(/[#&]__save=([^&]+)/);
+    if (!m) return;
+    var raw = decodeURIComponent(m[1]);
+    if (!raw || raw.length < 10) return;
+    // 先验证是不是合法 JSON，避免把坏数据写进去
+    JSON.parse(raw);
+    localStorage.setItem('miyu_save_v1', raw);
+    // 清掉 hash，避免刷新时重复导入
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { history.hash = ''; }
+    window.__SAVE_IMPORTED = true;
+    setTimeout(function () {
+      try { if (typeof banner === 'function') banner('存档已从旧地址迁移过来 ✅', 'ok'); } catch (e) { }
+    }, 1800);
+  } catch (e) {
+    // 数据坏了就静默忽略，不要挡住游戏
+  }
+})();
+</script>
 <script>
   document.write('<script src="_game.js?t=' + Date.now() + '"><\/script>');
 </script>
