@@ -5503,7 +5503,9 @@ chk('★ 单灵根 qi×1.40 / 门槛×0.95（综合最强）', (function () {
   const HTML = fsx.readFileSync('D:/游戏资料库/原型/游戏/index.html', 'utf8');
   // [选择器, 规则块里必须出现的属性...]  —— 缺 `.mob` 的 width/height 就是"看不见怪"
   const CRIT = [
-    ['#win', ['width:420px']],
+    // ⚠️ Round 53：加了移动端适配 min(420px, 100vw) —— 原来是写死 width:420px
+  //   断言放宽成"必须含 420px"，但**不许变成纯百分比/纯自适应**（否则桌面会失去固定宽度）
+  ['#win', ['420px']],
     ['#arena', ['position:absolute']],
     ['#hero', ['width:72px']],
     ['.mob', ['position:absolute', 'width:16px', 'height:16px']],

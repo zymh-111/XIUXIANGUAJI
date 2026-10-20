@@ -48,7 +48,11 @@
      ⚠️ 用 min(...,100%) 保证在矮视口里不溢出（body 是 flex 居中，溢出会被切） */
   #win{
     font-size:calc(13px * var(--fs,1));
-    width:420px; height:min(760px, 100%); position:relative;
+    /* ★★ Round 53：移动端适配 —— 宽度不再写死 420，而是「不超过屏宽」
+       ⚠️ 原来固定 420px：手机 375px 宽时浏览器会整体缩放到 73%
+          ⇒ 文字实际只剩 ~9.5px，读不清
+       ⇒ min(420px, 100vw)：窄屏铺满、宽屏保持 420 */
+    width:min(420px, 100vw); height:min(760px, 100%); position:relative;
     border-radius:9px; overflow:hidden; background:var(--ink);
     border:1px solid #ffffff17;
     box-shadow:0 26px 70px #000000e0,0 0 0 1px #00000090;
