@@ -5,58 +5,105 @@
 
    1. **文件清单不写死在这里**，而是读 `_precache.json`
       ⇒ 新增素材只要重跑 `_tools/make_pwa.js` 重新生成清单，sw.js 不用改。
-      ⚠️ 如果把清单写死在 sw.js 里，日后加素材必然忘记同步 ⇒ 离线时 404。
 
    2. **匹配缓存时要去掉 query string**
       ⚠️ `index.html` 里是 `document.write('<script src="_game.js?t=' + Date.now() + '">')`
-         —— 带时间戳防缓存。如果按完整 URL 匹配，每次 `?t=` 都不同
-         ⇒ 永远 miss ⇒ 缓存白做、离线打不开。
-      ⇒ 统一用 `new URL(req.url).pathname` 作 key。
+         —— 带时间戳防缓存。按完整 URL 匹配会永远 miss。
 
-   3. **导航请求走「网络优先，失败回落缓存」**
-      这样更新能拿到新版本；断网也能开。
+   3. **导航请求**走「网络优先，失败回落缓存」；静态资源走「缓存优先 + 后台更新」。
 
-   4. 静态资源走「缓存优先 + 后台更新」（stale-while-revalidate）
-      摸鱼游戏看重秒开，旧一版能接受，下次自动更新。
+   4. **不要在 install 里 cache.addAll 全部 250 个文件**
+      ⚠️ 只要有一个 404，addAll 整体 reject ⇒ SW 装不上 ⇒ PWA 失效。
 
-   5. **不要在 install 里 cache.addAll 全部 250 个文件**
-      ⚠️ 只要有一个文件 404，addAll 整体 reject ⇒ SW 装不上 ⇒ PWA 失效。
-      ⇒ 改成逐个 add，失败只记一笔，不影响安装。
+   5. ★★ 也不要「Promise.all 一次性并发全部」★★
+      ⚠️ 实测：257 个文件并发 ⇒ 手机/弱网被限流，SW 卡在 installing 几十秒
+         （2026-10-20 真机前实测只缓存了 55/257）
+      ⇒ 改成 **有限并发（6 条）+ 单请求超时（12s）**
+         任何一个文件失败/超时都只跳过它，不阻塞整体安装。
    ============================================================================ */
 
-const VERSION = 'v1';
+const VERSION = 'v2';                         // ★ 改动过缓存策略就升版本号
 const CACHE = 'mijinglu-' + VERSION;
 const PRECACHE_URL = './_precache.json';
 
-/* 必须成功的核心文件（这些拿不到就说明部署有问题，值得报错） */
 const CORE = ['./', './index.html', './_game.js'];
+
+/* 并发上限：手机同时开太多连接会被限流，6 条最稳 */
+const CONCURRENCY = 6;
+/* 单个文件超时（毫秒）。超时 = 跳过，不阻塞安装 */
+const FETCH_TIMEOUT = 12000;
+
+function fetchWithTimeout(url) {
+  return new Promise(function (resolve) {
+    let done = false;
+    const timer = setTimeout(function () {
+      if (!done) { done = true; resolve(null); }
+    }, FETCH_TIMEOUT);
+
+    fetch(new Request(url, { cache: 'reload' }))
+      .then(function (r) {
+        if (done) return;
+        done = true; clearTimeout(timer); resolve(r);
+      })
+      .catch(function () {
+        if (done) return;
+        done = true; clearTimeout(timer); resolve(null);
+      });
+  });
+}
+
+/* 有限并发跑一批任务 */
+async function runPool(items, worker, limit) {
+  let i = 0;
+  const runners = [];
+  for (let k = 0; k < Math.min(limit, items.length); k++) {
+    runners.push((async function () {
+      while (true) {
+        const idx = i++;
+        if (idx >= items.length) return;
+        try { await worker(items[idx], idx); } catch (e) { /* 单个失败忽略 */ }
+      }
+    })());
+  }
+  await Promise.all(runners);
+}
 
 self.addEventListener('install', function (ev) {
   ev.waitUntil((async function () {
     const cache = await caches.open(CACHE);
 
-    // ① 核心文件：失败就整体失败（部署有问题应该被发现）
-    for (const u of CORE) {
-      try { await cache.add(new Request(u, { cache: 'reload' })); }
-      catch (e) { /* 核心失败不阻塞，下面还有清单兜底 */ }
-    }
+    // ① 核心文件（失败不阻塞，清单里还有兜底）
+    await runPool(CORE, async function (u) {
+      const r = await fetchWithTimeout(u);
+      if (r && r.ok) {
+        try { await cache.put(new URL(u, self.location.href).pathname, r); } catch (e) { }
+      }
+    }, 3);
 
-    // ② 按清单逐个缓存：**单个失败不影响整体**
+    // ② 按清单逐个缓存（有限并发）
+    let files = [];
     try {
       const res = await fetch(PRECACHE_URL, { cache: 'no-store' });
       if (res.ok) {
         const list = await res.json();
-        const files = Array.isArray(list) ? list : (list.files || []);
-        await Promise.all(files.map(async function (f) {
-          try {
-            const url = typeof f === 'string' ? f : f.url;
-            const req = new Request(url, { cache: 'reload' });
-            const r = await fetch(req);
-            if (r.ok) await cache.put(new URL(url, self.location.href).pathname, r);
-          } catch (e) { /* 单个文件失败：忽略，不影响 SW 安装 */ }
-        }));
+        files = Array.isArray(list) ? list : (list.files || []);
       }
     } catch (e) { /* 清单拿不到：SW 仍装，只是离线内容少 */ }
+
+    let ok = 0, fail = 0;
+    await runPool(files, async function (f) {
+      const url = (typeof f === 'string') ? f : f.url;
+      const r = await fetchWithTimeout(url);
+      if (r && r.ok) {
+        try {
+          await cache.put(new URL(url, self.location.href).pathname, r);
+          ok++;
+        } catch (e) { fail++; }
+      } else fail++;
+    }, CONCURRENCY);
+
+    /* 方便排查：把结果挂在 SW 作用域上（可在 devtools 里看） */
+    self.__PRECACHE_RESULT = { ok: ok, fail: fail, total: files.length };
 
     self.skipWaiting();
   })());
@@ -64,7 +111,6 @@ self.addEventListener('install', function (ev) {
 
 self.addEventListener('activate', function (ev) {
   ev.waitUntil((async function () {
-    // 清掉旧版本缓存
     const keys = await caches.keys();
     await Promise.all(keys.map(function (k) {
       if (k !== CACHE && k.indexOf('mijinglu-') === 0) return caches.delete(k);
@@ -76,21 +122,18 @@ self.addEventListener('activate', function (ev) {
 self.addEventListener('fetch', function (ev) {
   const req = ev.request;
 
-  // 只处理 GET；POST（桌面启动器的 /save）直接放行
   if (req.method !== 'GET') return;
 
   let url;
   try { url = new URL(req.url); } catch (e) { return; }
-
-  // 非本站（比如 data: / blob:）放行
   if (url.origin !== self.location.origin) return;
 
-  // 桌面启动器的本地端点不缓存（手机上本来也不存在）
+  /* 桌面启动器的本地端点不缓存 */
   if (url.pathname === '/save' || url.pathname === '/load' || url.pathname === '/ping') return;
 
-  const key = url.pathname;   // ★ 去掉 query string（见文件头第 2 条）
+  const key = url.pathname;   // ★ 去掉 query string
 
-  // ① 导航请求（打开页面 / 刷新 / 从主屏点开）：网络优先
+  // ① 导航请求：网络优先
   if (req.mode === 'navigate') {
     ev.respondWith((async function () {
       try {
@@ -117,7 +160,6 @@ self.addEventListener('fetch', function (ev) {
     const cache = await caches.open(CACHE);
     const hit = await cache.match(key);
     if (hit) {
-      // 后台静默更新（不阻塞返回）
       fetch(req).then(function (r) {
         if (r && r.ok) cache.put(key, r.clone());
       }).catch(function () { });
@@ -128,13 +170,14 @@ self.addEventListener('fetch', function (ev) {
       if (fresh && fresh.ok) cache.put(key, fresh.clone());
       return fresh;
     } catch (e) {
-      // 音效/图片缺失时给个空响应，别让页面报错
       return new Response('', { status: 404, statusText: 'offline-miss' });
     }
   })());
 });
 
-/* 允许页面主动要求立刻更新（设置里可以加按钮） */
 self.addEventListener('message', function (ev) {
   if (ev.data === 'skipWaiting') self.skipWaiting();
+  if (ev.data === 'stats') {
+    ev.source.postMessage({ type: 'stats', result: self.__PRECACHE_RESULT || null });
+  }
 });
